@@ -5,9 +5,15 @@ description = "HTTP API for knowledge base documents and product config."
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115",
+  "kb-rag",
+  "psycopg[binary]>=3.2",
   "pydantic>=2.10",
+  "python-multipart>=0.0.12",
   "uvicorn>=0.32",
 ]
+
+[tool.uv.sources]
+kb-rag = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
