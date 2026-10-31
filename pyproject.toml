@@ -1,0 +1,47 @@
+[project]
+name = "kb-copilot"
+version = "0.0.0"
+description = "Knowledge base copilot monorepo."
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "httpx>=0.28",
+  "pyright>=1.1.390",
+  "pytest>=8.3",
+  "pyyaml>=6.0",
+  "ruff>=0.8",
+]
+
+[tool.uv]
+package = false
+default-groups = ["dev"]
+
+[tool.uv.workspace]
+members = ["services/api", "services/agent", "packages/rag", "evals"]
+
+[tool.pytest.ini_options]
+testpaths = [
+  "evals/tests",
+  "packages/rag/tests",
+  "services/agent/tests",
+  "services/api/tests",
+  "tests",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+src = ["evals", "packages", "scripts", "services", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pyright]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+include = ["evals", "packages", "scripts", "services", "tests"]
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
