@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Suspense } from "react";
 
 import { SessionView } from "@/components/session-view";
@@ -10,7 +11,7 @@ export default function Page({
   return (
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-lg px-6 py-16 text-sm text-muted-foreground">
+        <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-6 py-16 text-sm leading-6 text-muted-foreground">
           Loading session.
         </main>
       }
@@ -28,8 +29,14 @@ async function SessionRoute({
   const loaded = await loadProduct(apiUrl, id);
   if (loaded.status !== "ready") {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col gap-4 px-6 py-16">
-        <p className="text-sm text-foreground">
+      <main className="mx-auto flex min-h-dvh w-full max-w-lg min-w-0 flex-col gap-8 px-6 py-16">
+        <Link
+          className="text-sm underline underline-offset-4 focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]"
+          href="/"
+        >
+          New product
+        </Link>
+        <p className="text-pretty text-sm leading-6 text-foreground">
           {loaded.status === "missing" ? "Product not found." : loaded.message}
         </p>
       </main>

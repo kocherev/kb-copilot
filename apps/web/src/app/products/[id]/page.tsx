@@ -8,7 +8,7 @@ export default function Page({ params }: PageProps<"/products/[id]">) {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto w-full max-w-lg px-6 py-16 text-sm text-muted-foreground">
+        <main className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-6 py-16 text-sm leading-6 text-muted-foreground">
           Loading product.
         </main>
       }

@@ -30,7 +30,9 @@ export function ProductEditor({
       <Link className={linkClass} href="/">
         New product
       </Link>
-      {missing ? <p className="text-sm text-foreground">Product not found.</p> : null}
+      {missing ? (
+        <p className="text-pretty text-sm leading-6 text-foreground">Product not found.</p>
+      ) : null}
       {loadError ? (
         <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
           {loadError}
