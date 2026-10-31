@@ -104,6 +104,10 @@ test("missing product says it was not found", async () => {
   render(<ProductEditor apiUrl="http://localhost:8000" loaded={loaded} />);
 
   expect(await screen.findByText("Product not found.")).toBeDefined();
+  expect(screen.getByText("Product not found.").className).toMatch(/leading-6/);
+  expect(screen.getByRole("link", { name: "New product" }).getAttribute("href")).toBe(
+    "/",
+  );
   expect(screen.queryByLabelText("Name")).toBeNull();
 });
 

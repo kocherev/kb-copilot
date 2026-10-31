@@ -104,6 +104,10 @@ That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT
 
 The session page asks for the microphone and the screen. After the room connects, the transcript lists each turn. A cited answer shows `Source:` under the agent's line. The label is the file name, here `billing.md`.
 
+![Session page, then the transcript. The cited line reads Source: billing.md.](docs/demo.gif)
+
+The stills below are the same frames, so the citation stays readable.
+
 ![Session page for Acme before the room connects. The button reads Start session.](docs/session-start.png)
 
 ![Session transcript for Acme. The agent answers the refund question and the line under it reads Source: billing.md.](docs/session-transcript.png)
@@ -111,6 +115,14 @@ The session page asks for the microphone and the screen. After the room connects
 What you would hear for "How long do refunds take?": the indexed sentence is "Refunds take 5 business days after the review team approves the request." The worker speaks the answer with the configured TTS. The transcript adds `Source: billing.md`. The system prompt tells the agent not to read the source URL aloud.
 
 These pictures are the session components with that sample turn. They are not a recording of a live room. A live capture needs LiveKit credentials and a model key.
+
+What to say about this repo is in [Interview talking points](#interview-talking-points).
+
+## Interview talking points
+
+- Upload the product docs, set the refusal rules, and join a call with your microphone and your screen. The agent answers by voice from those docs.
+- When the docs contain the answer, the transcript shows `Source:` and the file name, as in `Source: billing.md`. When they do not, the agent says `That is not in the docs.`
+- `make eval` scores the 40 sample questions with no model key. It checks that the right page was found, that the answer cites it, and that the wording stays inside that page. The command fails when a score drops under `evals/thresholds.json`.
 
 ## Eval results
 

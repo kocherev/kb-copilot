@@ -11,6 +11,9 @@ test("transcript shows an empty state, one character, and a long string", () => 
   const { rerender } = render(<TranscriptPanel lines={[]} />);
 
   expect(screen.getByText("Waiting for speech.")).toBeDefined();
+  expect(
+    screen.getByText("A cited answer shows Source: and the file name."),
+  ).toBeDefined();
 
   rerender(
     <TranscriptPanel
@@ -19,6 +22,9 @@ test("transcript shows an empty state, one character, and a long string", () => 
   );
   expect(screen.getByText("A")).toBeDefined();
   expect(screen.queryByText("Waiting for speech.")).toBeNull();
+  expect(
+    screen.queryByText("A cited answer shows Source: and the file name."),
+  ).toBeNull();
   expect(screen.queryByRole("list", { name: "Sources" })).toBeNull();
 
   const long = "B".repeat(400);
@@ -49,6 +55,7 @@ test("transcript shows a cited source and a not-in-docs answer", () => {
   expect(screen.getByText("Refunds take 5 business days.")).toBeDefined();
   const citation = screen.getByText(`Source: ${"c".repeat(180)}.md`);
   expect(citation.className).toMatch(/anywhere/);
+  expect(citation.className).toMatch(/border-l-2/);
   expect(citation.getAttribute("title")).toBe(source);
   expect(screen.getByRole("list", { name: "Sources" })).toBeDefined();
 
