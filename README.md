@@ -1,14 +1,14 @@
 # kb-copilot
 
-Upload a knowledge base, index it, and talk with a support agent that can see your screen. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. Live sessions, the MCP server, and eval datasets are later changes.
+Upload a knowledge base, index it, and talk with a support agent. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. A session joins a LiveKit room with the microphone and a screen share, and the agent answers by voice. Retrieval, the MCP server, and eval datasets are later changes.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `apps/web` | Next.js app. Create a product, edit its config, and upload documents. The homepage button is Honest UI. |
-| `services/api` | FastAPI. `GET /health` returns `{"status":"ok"}`. Product config is stored in Postgres. |
-| `services/agent` | LiveKit Agents worker. It builds and stays idle. `render_system_prompt` turns product config into instructions. It does not join a room. |
+| `apps/web` | Next.js app. Create a product, edit its config, upload documents, and start a session. The homepage button is Honest UI. |
+| `services/api` | FastAPI. `GET /health` returns `{"status":"ok"}`. Product config is stored in Postgres. `POST /sessions` mints a LiveKit token and dispatches the agent. |
+| `services/agent` | LiveKit Agents worker. It joins a room when dispatched, with `product_id` in the job metadata. |
 | `services/mcp` | Empty home for a later tool server. |
 | `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
 | `evals` | `exact_match` only. No datasets. |
@@ -40,7 +40,7 @@ docker compose up --build
 
 Compose points the API at the `postgres` and `qdrant` hostnames. `.env` keeps `localhost` for commands you run on the host.
 
-The agent container is part of `docker compose up`. It prints one line and waits. It does not open a LiveKit session.
+The agent container is part of `docker compose up`. It registers with LiveKit and waits for a dispatch. It exits if `LIVEKIT_URL` or the API key pair is missing.
 
 ## Ingest
 
@@ -75,15 +75,35 @@ curl -s -X POST http://localhost:8000/products/<id>/documents \
 
 The web app at `/` creates a product. `/products/{id}` edits the four fields and uploads files for that id. A saved config shows the word Saved.
 
-`render_system_prompt` in `services/agent` includes the name, description, tone, and refusal rules. The worker still does not join a room. A directory upload such as `POST /products/demo/documents` still works without a product row.
+`render_system_prompt` in `services/agent` includes the name, description, tone, and refusal rules. A directory upload such as `POST /products/demo/documents` still works without a product row.
 
-## Optional LiveKit server
+## Live session
+
+`POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish. The API also dispatches the agent named `kb-support` with job metadata `{"product_id":"<uuid>"}`. A missing product returns 404 and does not dispatch. Missing LiveKit settings return 503.
+
+The worker loads that product from `GET /products/{id}` and uses it as the system prompt. It publishes a voice reply through STT, an LLM, and TTS. It subscribes to screen-share video when the browser publishes one. Each STT, LLM, and TTS metric is one JSON line on stdout, and each user or assistant turn is another JSON line with the per-turn delays.
+
+On a `*.livekit.cloud` URL the worker uses LiveKit Inference. On any other URL, including the Compose hostname `livekit`, it uses the OpenAI plugin and `OPENAI_API_KEY`. Retrieval is not called yet.
+
+The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`. The transcript lists speech as it arrives. Citations are a later change.
+
+### LiveKit Cloud
+
+Set `LIVEKIT_URL` and `LIVEKIT_AGENT_URL` to the same `wss://<project>.livekit.cloud` URL, and set the project key pair. Leave the `livekit` profile off.
 
 ```bash
-docker compose --profile livekit up
+docker compose up --build
 ```
 
-That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Those variables in `.env.example` are placeholders for a later non-dev deployment.
+### Self-hosted server
+
+```bash
+docker compose --profile livekit up --build
+```
+
+That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Its key pair is `devkey` / `secret`. Put those in `.env`, with `LIVEKIT_URL=ws://localhost:7880` and `LIVEKIT_AGENT_URL=ws://livekit:7880`. Set `OPENAI_API_KEY` as well. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL` because `localhost` inside that container is not the LiveKit server.
+
+Create a product in the web app, open Start session, allow the microphone and the screen, and speak. The agent container logs one JSON object per STT, LLM, and TTS segment.
 
 ## Tests and CI
 
