@@ -13,3 +13,5 @@ Edit docs, pull requests, commit messages, and comments before you finish.
 - Say what the reader can do or measure. "The health route returns 200" is a fact. "A delightful developer experience" is not.
 - Straight quotes.
 - No emoji in headings.
+
+Run this pass on the README, `AGENTS.md`, and skill prose before they are public. The eval table copies the `make eval` printout. A diagram names the paths that exist.
