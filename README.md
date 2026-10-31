@@ -1,14 +1,14 @@
 # kb-copilot
 
-Upload a knowledge base, index it, and talk with a support agent that can see your screen. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Live sessions, the MCP server, and eval datasets are later changes.
+Upload a knowledge base, index it, and talk with a support agent that can see your screen. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. Live sessions, the MCP server, and eval datasets are later changes.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| `apps/web` | Next.js app. The homepage uses a copied Honest UI button. |
-| `services/api` | FastAPI. `GET /health` returns `{"status":"ok"}`. |
-| `services/agent` | LiveKit Agents worker. It builds and stays idle. It does not join a room. |
+| `apps/web` | Next.js app. Create a product, edit its config, and upload documents. The homepage button is Honest UI. |
+| `services/api` | FastAPI. `GET /health` returns `{"status":"ok"}`. Product config is stored in Postgres. |
+| `services/agent` | LiveKit Agents worker. It builds and stays idle. `render_system_prompt` turns product config into instructions. It does not join a room. |
 | `services/mcp` | Empty home for a later tool server. |
 | `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
 | `evals` | `exact_match` only. No datasets. |
@@ -56,7 +56,28 @@ The job `status` becomes `indexed`. `status_log` records `queued`, then `indexin
 
 Chunks land in the Qdrant collection `kb_chunks`. Each payload has `product_id` and `source_url`. The dense vector is a local hash, so this step needs no model key. The sparse vector stores term counts, and Qdrant applies an IDF modifier to that vector. A file upload uses `upload://<name>` as `source_url`. A directory upload uses the file URI.
 
-### Optional LiveKit server
+## Product config
+
+`POST /products` stores the config. `GET /products/{id}` reads it. `PUT /products/{id}` replaces it. A blank field is rejected. The description must be one paragraph.
+
+```bash
+curl -s -X POST http://localhost:8000/products \
+  -H 'content-type: application/json' \
+  -d '{"name":"Acme","description":"Acme helps customers reset passwords.","tone":"calm and brief","refusal_rules":"Do not invent a refund policy."}'
+```
+
+Use the returned `id` to upload documents:
+
+```bash
+curl -s -X POST http://localhost:8000/products/<id>/documents \
+  -F files=@notes.md
+```
+
+The web app at `/` creates a product. `/products/{id}` edits the four fields and uploads files for that id. A saved config shows the word Saved.
+
+`render_system_prompt` in `services/agent` includes the name, description, tone, and refusal rules. The worker still does not join a room. A directory upload such as `POST /products/demo/documents` still works without a product row.
+
+## Optional LiveKit server
 
 ```bash
 docker compose --profile livekit up
