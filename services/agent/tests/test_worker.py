@@ -107,6 +107,9 @@ def test_self_hosted_voice_uses_openai_and_cloud_uses_inference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    # Inference reads these at construction. CI does not provide them.
+    monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
     from kb_agent.voice import build_voice
 
     local = build_voice("ws://livekit:7880")
