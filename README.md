@@ -1,6 +1,6 @@
 # kb-copilot
 
-Upload a knowledge base, index it, and talk with a support agent. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. A session joins a LiveKit room with the microphone and a screen share, and the agent answers by voice. Eval datasets are a later change.
+Upload a knowledge base, index it, and talk with a support agent. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. A session joins a LiveKit room with the microphone and a screen share, and the agent answers by voice. Offline evals for the demo docs run with `make eval`.
 
 ## Layout
 
@@ -11,7 +11,7 @@ Upload a knowledge base, index it, and talk with a support agent. Ingest writes 
 | `services/agent` | LiveKit Agents worker. It joins a room when dispatched, with `product_id` in the job metadata. |
 | `services/mcp` | MCP server for `search_kb` and `get_product`. Run notes are in `services/mcp/README.md`. |
 | `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
-| `evals` | `exact_match` only. No datasets. |
+| `evals` | Offline dataset, scorers, and the `make eval` threshold gate. See `evals/README.md`. |
 
 Working notes for changes live in `WORKING.md`. The hiring-theme checklist is `docs/jd-fit.md`.
 
@@ -111,6 +111,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs, on pull requests and on pushes
 
 - web lint, typecheck, unit tests, and `pnpm build`
 - Python lint, format check, typecheck, and unit tests
+- offline evals via `make eval`, failing when a score is below `evals/thresholds.json`
 - `docker compose config`
 - a gitleaks scan
 
@@ -120,7 +121,7 @@ Run the same checks locally:
 ./scripts/check.sh
 ```
 
-`check.sh` runs the lint, typecheck, test, and compose steps. It runs gitleaks when the binary is on your `PATH`. CI installs gitleaks itself.
+`check.sh` runs the lint, typecheck, test, eval, and compose steps. It runs gitleaks when the binary is on your `PATH`. CI installs gitleaks itself.
 
 One package at a time:
 

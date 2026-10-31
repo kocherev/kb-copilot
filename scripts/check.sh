@@ -13,6 +13,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run pyright
 uv run pytest
+uv run python -m kb_evals
 
 docker compose config --quiet
 

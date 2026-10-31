@@ -1301,6 +1301,16 @@ dev = [
 name = "kb-evals"
 version = "0.0.0"
 source = { editable = "evals" }
+dependencies = [
+    { name = "kb-agent" },
+    { name = "kb-rag" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "kb-agent", editable = "services/agent" },
+    { name = "kb-rag", editable = "packages/rag" },
+]
 
 [[package]]
 name = "kb-mcp"

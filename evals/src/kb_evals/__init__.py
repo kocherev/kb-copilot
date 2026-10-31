@@ -1,4 +1,4 @@
-"""Eval helpers. Datasets are not in this repository yet."""
+"""Offline evals for the demo knowledge base."""
 
 from kb_evals.score import exact_match
 
