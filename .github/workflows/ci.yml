@@ -41,6 +41,18 @@ jobs:
       - run: uv run pyright
       - run: uv run pytest
 
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen --all-packages --group dev
+      - run: make eval
+
   compose:
     runs-on: ubuntu-latest
     steps:
