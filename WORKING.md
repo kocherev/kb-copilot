@@ -1,6 +1,6 @@
 # Working notes
 
-Read this before changing the repository.
+Read this before changing the repository. The map of paths and commands is `AGENTS.md`.
 
 ## Order
 
@@ -57,6 +57,12 @@ Docs, pull requests, and commit messages follow `skills/unslop/SKILL.md`. Short 
 | `skills/prove-it/SKILL.md` | Before calling a change done |
 | `skills/tests/SKILL.md` | Writing or changing a test |
 | `skills/unslop/SKILL.md` | Docs, commits, and review text |
+| `skills/technical-writing/SKILL.md` | README and other public docs |
+| `skills/pr-hygiene/SKILL.md` | Branch, commit, and pull request |
+| `skills/prove-it-works/SKILL.md` | Unit tests plus the `make eval` table |
+| `skills/livekit-agent/SKILL.md` | Worker, dispatch, screen share, citations |
+| `skills/rag-index-query/SKILL.md` | Chunking, embeddings, and the Qdrant query |
+| `skills/typescript-best-practices/SKILL.md` | `apps/web` |
 | `skills/interface/SKILL.md` | Any UI change in this app |
 | `skills/make-interfaces-feel-better/SKILL.md` | UI polish: type, surfaces, motion, icons |
 | `skills/design-engineering/SKILL.md` | Motion and component feel |
