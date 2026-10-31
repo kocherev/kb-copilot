@@ -81,11 +81,11 @@ The web app at `/` creates a product. `/products/{id}` edits the four fields and
 
 `POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish. The API also dispatches the agent named `kb-support` with job metadata `{"product_id":"<uuid>"}`. A missing product returns 404 and does not dispatch. Missing LiveKit settings return 503.
 
-The worker loads that product from `GET /products/{id}` and uses it as the system prompt. It publishes a voice reply through STT, an LLM, and TTS. It subscribes to screen-share video when the browser publishes one. Each STT, LLM, and TTS metric is one JSON line on stdout, and each user or assistant turn is another JSON line with the per-turn delays.
+The worker loads that product from `GET /products/{id}` and uses it as the system prompt. It publishes a voice reply through STT, an LLM, and TTS. It subscribes to screen-share video when the browser publishes one. Each STT, LLM, and TTS metric is one JSON line on stdout, and each user or assistant turn is another JSON line with the per-turn delays. A knowledge lookup is another JSON line with `kind` set to `retrieval` and `duration_ms`.
 
-On a `*.livekit.cloud` URL the worker uses LiveKit Inference. On any other URL, including the Compose hostname `livekit`, it uses the OpenAI plugin and `OPENAI_API_KEY`. Retrieval is not called yet.
+On a `*.livekit.cloud` URL the worker uses LiveKit Inference. On any other URL, including the Compose hostname `livekit`, it uses the OpenAI plugin and `OPENAI_API_KEY`. Each product question calls `search_kb` against the Qdrant collection `kb_chunks`, filtered by `product_id`. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose). A matching passage is cited in the transcript. No matching passage produces `That is not in the docs.`
 
-The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`. The transcript lists speech as it arrives. Citations are a later change.
+The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`. The transcript lists speech as it arrives. A cited answer shows the source under that line.
 
 ### LiveKit Cloud
 

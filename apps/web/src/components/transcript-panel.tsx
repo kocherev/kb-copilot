@@ -1,4 +1,4 @@
-import type { TranscriptLine } from "@/lib/session";
+import { sourceLabel, type TranscriptLine } from "@/lib/session";
 
 export function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
   return (
@@ -11,9 +11,24 @@ export function TranscriptPanel({ lines }: { lines: TranscriptLine[] }) {
           {lines.map((line) => (
             <li key={line.id} className="min-w-0">
               <p className="text-sm font-medium text-foreground">{line.speaker}</p>
-              <p className="text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
-                {line.text}
-              </p>
+              {line.text ? (
+                <p className="text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
+                  {line.text}
+                </p>
+              ) : null}
+              {line.sources.length > 0 ? (
+                <ul aria-label="Sources" className="mt-1 flex list-none flex-col gap-1 p-0">
+                  {line.sources.map((source) => (
+                    <li
+                      key={source}
+                      title={source}
+                      className="text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]"
+                    >
+                      Source: {sourceLabel(source)}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </li>
           ))}
         </ol>
