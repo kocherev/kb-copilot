@@ -1146,11 +1146,15 @@ name = "kb-agent"
 version = "0.0.0"
 source = { editable = "services/agent" }
 dependencies = [
+    { name = "kb-rag" },
     { name = "livekit-agents", extra = ["openai"] },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "livekit-agents", extras = ["openai"], specifier = ">=1.8,<2" }]
+requires-dist = [
+    { name = "kb-rag", editable = "packages/rag" },
+    { name = "livekit-agents", extras = ["openai"], specifier = ">=1.8,<2" },
+]
 
 [[package]]
 name = "kb-api"

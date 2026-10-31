@@ -14,6 +14,7 @@ export type TranscriptLine = {
   id: string;
   speaker: string;
   text: string;
+  sources: string[];
 };
 
 export const sessionPublish = {
@@ -54,6 +55,34 @@ export function speakerLabel(identity: string): string {
   return identity === "user" ? "You" : "Agent";
 }
 
+export function sourceLabel(source: string): string {
+  const cleaned = source.trim();
+  const upload = /^upload:\/\/(.+)$/.exec(cleaned);
+  if (upload?.[1]) {
+    return upload[1];
+  }
+  const path = cleaned.split("?")[0]?.replace(/\/+$/, "") ?? cleaned;
+  const name = path.split("/").pop();
+  return name && name.length > 0 ? name : cleaned;
+}
+
+function splitAnswer(text: string): { text: string; sources: string[] } {
+  const sources: string[] = [];
+  const body: string[] = [];
+  for (const line of text.split("\n")) {
+    const match = /^Source:\s+(\S.*)$/.exec(line.trim());
+    const source = match?.[1]?.trim();
+    if (source) {
+      if (!sources.includes(source)) {
+        sources.push(source);
+      }
+      continue;
+    }
+    body.push(line);
+  }
+  return { text: body.join("\n").trim(), sources };
+}
+
 export function transcriptLines(
   items: {
     text: string;
@@ -62,10 +91,14 @@ export function transcriptLines(
   }[],
 ): TranscriptLine[] {
   return items
-    .filter((item) => item.text.length > 0)
-    .map((item) => ({
-      id: item.streamInfo.id,
-      speaker: speakerLabel(item.participantInfo.identity),
-      text: item.text,
-    }));
+    .map((item) => {
+      const answer = splitAnswer(item.text);
+      return {
+        id: item.streamInfo.id,
+        speaker: speakerLabel(item.participantInfo.identity),
+        text: answer.text,
+        sources: answer.sources,
+      };
+    })
+    .filter((line) => line.text.length > 0 || line.sources.length > 0);
 }
