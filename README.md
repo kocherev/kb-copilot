@@ -1,6 +1,6 @@
 # kb-copilot
 
-Upload a knowledge base, index it, and talk with a support agent. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. A session joins a LiveKit room with the microphone and a screen share, and the agent answers by voice. Retrieval, the MCP server, and eval datasets are later changes.
+Upload a knowledge base, index it, and talk with a support agent. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Product config is a name, a one-paragraph description, a tone, and refusal rules, stored in Postgres. A session joins a LiveKit room with the microphone and a screen share, and the agent answers by voice. Eval datasets are a later change.
 
 ## Layout
 
@@ -9,7 +9,7 @@ Upload a knowledge base, index it, and talk with a support agent. Ingest writes 
 | `apps/web` | Next.js app. Create a product, edit its config, upload documents, and start a session. The homepage button is Honest UI. |
 | `services/api` | FastAPI. `GET /health` returns `{"status":"ok"}`. Product config is stored in Postgres. `POST /sessions` mints a LiveKit token and dispatches the agent. |
 | `services/agent` | LiveKit Agents worker. It joins a room when dispatched, with `product_id` in the job metadata. |
-| `services/mcp` | Empty home for a later tool server. |
+| `services/mcp` | MCP server for `search_kb` and `get_product`. Run notes are in `services/mcp/README.md`. |
 | `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
 | `evals` | `exact_match` only. No datasets. |
 
@@ -129,6 +129,7 @@ pnpm --filter web test
 uv run pytest services/api/tests
 uv run pytest packages/rag/tests
 uv run pytest services/agent/tests
+uv run pytest services/mcp/tests
 uv run pytest evals/tests
 ```
 
