@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from kb_api.ingest import router
 from kb_api.products import router as products_router
+from kb_api.sessions import router as sessions_router
 from kb_api.settings import Settings, load_settings
 
 app = FastAPI(title="kb-copilot")
@@ -17,6 +18,7 @@ app.add_middleware(
 )
 app.include_router(router)
 app.include_router(products_router)
+app.include_router(sessions_router)
 
 
 class Health(BaseModel):

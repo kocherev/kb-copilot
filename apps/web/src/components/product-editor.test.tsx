@@ -57,6 +57,9 @@ test("saves config and uploads documents for that product", async () => {
   expect(screen.getByRole("link", { name: "New product" }).getAttribute("href")).toBe(
     "/",
   );
+  expect(screen.getByRole("link", { name: "Start session" }).getAttribute("href")).toBe(
+    `/products/${product.id}/session`,
+  );
 
   fireEvent.change(screen.getByLabelText("Name"), {
     target: { value: "Acme Care" },

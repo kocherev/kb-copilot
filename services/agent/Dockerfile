@@ -21,4 +21,4 @@ COPY services/agent services/agent
 
 RUN uv sync --frozen --no-dev --package kb-agent
 
-CMD ["python", "-m", "kb_agent"]
+CMD ["python", "-m", "kb_agent", "start"]

@@ -8,6 +8,9 @@ class Settings(BaseModel):
     qdrant_url: str
     data_root: str
     cors_origins: list[str]
+    livekit_url: str
+    livekit_api_key: str
+    livekit_api_secret: str
 
 
 def _csv(value: str) -> list[str]:
@@ -28,4 +31,7 @@ def load_settings() -> Settings:
                 "http://localhost:3000,http://127.0.0.1:3000",
             )
         ),
+        livekit_url=os.environ.get("LIVEKIT_URL", ""),
+        livekit_api_key=os.environ.get("LIVEKIT_API_KEY", ""),
+        livekit_api_secret=os.environ.get("LIVEKIT_API_SECRET", ""),
     )

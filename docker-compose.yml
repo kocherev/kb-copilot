@@ -41,6 +41,9 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       API_HOST: 0.0.0.0
       API_PORT: "8000"
+      LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -91,6 +94,16 @@ services:
     build:
       context: .
       dockerfile: services/agent/Dockerfile
+    environment:
+      # Browser-facing LIVEKIT_URL stays on the API. The agent uses the URL it can reach.
+      LIVEKIT_URL: ${LIVEKIT_AGENT_URL:-${LIVEKIT_URL:-ws://localhost:7880}}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      API_URL: http://api:8000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
 
   # Optional local media server. It is not started by `docker compose up`.
   # Enable it with: docker compose --profile livekit up

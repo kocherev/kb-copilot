@@ -46,6 +46,10 @@ def test_compose_defines_the_runtime_services() -> None:
     ]
     assert services["api"]["depends_on"]["qdrant"]["condition"] == "service_healthy"
     assert services["web"]["depends_on"]["api"]["condition"] == "service_healthy"
+    assert "LIVEKIT_URL" in services["api"]["environment"]
+    assert "LIVEKIT_URL" in services["agent"]["environment"]
+    assert "API_URL" in services["agent"]["environment"]
+    assert services["agent"]["depends_on"]["api"]["condition"] == "service_healthy"
 
 
 def test_env_example_lists_placeholders_only() -> None:
@@ -62,6 +66,7 @@ def test_env_example_lists_placeholders_only() -> None:
         "WEB_PORT",
         "NEXT_PUBLIC_API_URL",
         "LIVEKIT_URL",
+        "LIVEKIT_AGENT_URL",
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
         "OPENAI_API_KEY",
