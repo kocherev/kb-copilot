@@ -100,9 +100,12 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       API_URL: http://api:8000
+      QDRANT_URL: http://qdrant:6333
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       api:
+        condition: service_healthy
+      qdrant:
         condition: service_healthy
 
   # Optional local media server. It is not started by `docker compose up`.

@@ -122,6 +122,42 @@ test("start session posts the product and joins with mic and screen", async () =
   const spoken = screen.getByText("C".repeat(80));
   expect(spoken.className).toMatch(/anywhere/);
   expect(screen.getByText("Agent")).toBeDefined();
+  expect(screen.queryByRole("list", { name: "Sources" })).toBeNull();
+});
+
+test("session transcript shows a cited source from the agent", async () => {
+  transcriptions.current = [
+    {
+      text: "Refunds take 5 business days.\nSource: file:///docs/billing.md",
+      participantInfo: { identity: "agent-1" },
+      streamInfo: { id: "cited" },
+    },
+  ];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        url: "ws://localhost:7880",
+        token: "signed-token",
+        room: "kb-room",
+      }),
+    })),
+  );
+
+  render(
+    <SessionStart
+      apiUrl="http://localhost:8000"
+      productId={productId}
+      productName="Acme"
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Start session" }));
+
+  expect(await screen.findByText("Refunds take 5 business days.")).toBeDefined();
+  expect(screen.getByText("Source: billing.md")).toBeDefined();
+  expect(screen.getByRole("list", { name: "Sources" })).toBeDefined();
 });
 
 test("a refused session shows the error", async () => {

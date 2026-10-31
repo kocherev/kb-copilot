@@ -3,6 +3,7 @@ import { expect, test } from "vitest";
 import {
   sessionFromResponse,
   sessionPublish,
+  sourceLabel,
   transcriptLines,
 } from "@/lib/session";
 
@@ -39,6 +40,12 @@ test("session errors stay readable", () => {
   });
 });
 
+test("source label uses the file name", () => {
+  expect(sourceLabel("file:///docs/billing.md")).toBe("billing.md");
+  expect(sourceLabel("upload://notes.md")).toBe("notes.md");
+  expect(sourceLabel("notes.md")).toBe("notes.md");
+});
+
 test("transcript lines keep short and unbroken text", () => {
   const long = "A".repeat(400);
   const lines = transcriptLines([
@@ -60,7 +67,43 @@ test("transcript lines keep short and unbroken text", () => {
   ]);
 
   expect(lines).toEqual([
-    { id: "one", speaker: "You", text: "A" },
-    { id: "long", speaker: "Agent", text: long },
+    { id: "one", speaker: "You", text: "A", sources: [] },
+    { id: "long", speaker: "Agent", text: long, sources: [] },
+  ]);
+});
+
+test("transcript lines keep a cited source and drop an empty line", () => {
+  const source = `file:///docs/${"b".repeat(80)}.md`;
+  const lines = transcriptLines([
+    {
+      text: "   ",
+      participantInfo: { identity: "agent-1" },
+      streamInfo: { id: "blank" },
+    },
+    {
+      text: `Refunds take 5 business days.\nSource: ${source}\nSource: ${source}`,
+      participantInfo: { identity: "agent-1" },
+      streamInfo: { id: "cited" },
+    },
+    {
+      text: "That is not in the docs.",
+      participantInfo: { identity: "agent-1" },
+      streamInfo: { id: "missing" },
+    },
+  ]);
+
+  expect(lines).toEqual([
+    {
+      id: "cited",
+      speaker: "Agent",
+      text: "Refunds take 5 business days.",
+      sources: [source],
+    },
+    {
+      id: "missing",
+      speaker: "Agent",
+      text: "That is not in the docs.",
+      sources: [],
+    },
   ]);
 });

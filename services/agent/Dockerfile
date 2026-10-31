@@ -12,7 +12,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock ./
 COPY services/api/pyproject.toml services/api/pyproject.toml
 COPY services/agent/pyproject.toml services/agent/pyproject.toml
-COPY packages/rag/pyproject.toml packages/rag/pyproject.toml
+COPY packages/rag packages/rag
 COPY evals/pyproject.toml evals/pyproject.toml
 
 RUN uv sync --frozen --no-dev --package kb-agent --no-install-project
