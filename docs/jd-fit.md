@@ -4,7 +4,7 @@ This checklist maps hiring themes to the proof still left. Paths that already ex
 
 | Theme | Later proof | Scaffold |
 | --- | --- | --- |
-| Anthropic. Evals and reliable tool use | A checked-in eval that fails when answers drift | `search_kb` with tests in `services/agent`. `evals/` is still exact match only |
+| Anthropic. Evals and reliable tool use | A checked-in eval that fails when answers drift | `search_kb` with tests in `services/agent` and `services/mcp`. `evals/` is still exact match only |
 | OpenAI. A product a person can use | A call placed with a real model key | `apps/web` starts a session. `POST /sessions` returns a token. The worker speaks through STT, an LLM, and TTS |
 | xAI. A system that runs | Compose starts the store, the index, the API, the web app, and the worker together | `docker-compose.yml` |
 | Meta. Retrieval quality | Indexed documents and a measured score | `packages/rag`, `evals` |

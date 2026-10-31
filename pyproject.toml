@@ -19,7 +19,7 @@ package = false
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["services/api", "services/agent", "packages/rag", "evals"]
+members = ["services/api", "services/agent", "services/mcp", "packages/rag", "evals"]
 
 [tool.pytest.ini_options]
 testpaths = [
@@ -27,6 +27,7 @@ testpaths = [
   "packages/rag/tests",
   "services/agent/tests",
   "services/api/tests",
+  "services/mcp/tests",
   "tests",
 ]
 
@@ -37,6 +38,10 @@ src = ["evals", "packages", "scripts", "services", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.isort]
+# services/mcp is a directory, not the PyPI package named mcp.
+known-third-party = ["mcp"]
 
 [tool.pyright]
 pythonVersion = "3.12"
