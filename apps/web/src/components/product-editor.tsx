@@ -41,6 +41,12 @@ export function ProductEditor({
           <h1 className="text-balance text-2xl font-medium tracking-tight text-foreground [overflow-wrap:anywhere]">
             {product.name}
           </h1>
+          <Button
+            variant="outline"
+            render={<Link href={`/products/${product.id}/session`} />}
+          >
+            Start session
+          </Button>
           <ProductForm
             apiUrl={apiUrl}
             productId={product.id}

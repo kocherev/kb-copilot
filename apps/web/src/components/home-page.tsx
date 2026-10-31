@@ -14,7 +14,8 @@ export function HomePage({ apiUrl }: { apiUrl: string }) {
           documents it can answer from.
         </p>
         <p className="text-pretty text-sm leading-6 text-muted-foreground">
-          Live sessions are not connected yet.
+          Open a product and start a session. The browser joins with your
+          microphone and screen, and the agent answers by voice.
         </p>
       </div>
       <ProductForm

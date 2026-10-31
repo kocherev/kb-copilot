@@ -40,7 +40,7 @@ test("home page links to api health", () => {
   expect(screen.getByRole("link", { name: "API health" }).getAttribute("href")).toBe(
     "http://localhost:8000/health",
   );
-  expect(screen.getByText(/not connected yet/i)).toBeDefined();
+  expect(screen.getByText(/answers by voice/i)).toBeDefined();
   expect(screen.getByRole("button", { name: "Create product" })).toBeDefined();
 });
 
