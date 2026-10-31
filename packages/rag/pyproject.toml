@@ -5,6 +5,7 @@ description = "Indexing helpers for LlamaIndex and Qdrant."
 requires-python = ">=3.12"
 dependencies = [
   "llama-index-core>=0.14",
+  "pypdf>=5.1",
   "qdrant-client>=1.13",
 ]
 

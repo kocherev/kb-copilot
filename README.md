@@ -1,6 +1,6 @@
 # kb-copilot
 
-Upload a knowledge base, index it, and talk with a support agent that can see your screen. This repository is the skeleton. Ingest, live sessions, the MCP server, and eval datasets are later changes.
+Upload a knowledge base, index it, and talk with a support agent that can see your screen. Ingest writes hybrid chunks to Qdrant and tracks the job in Postgres. Live sessions, the MCP server, and eval datasets are later changes.
 
 ## Layout
 
@@ -10,7 +10,7 @@ Upload a knowledge base, index it, and talk with a support agent that can see yo
 | `services/api` | FastAPI. `GET /health` returns `{"status":"ok"}`. |
 | `services/agent` | LiveKit Agents worker. It builds and stays idle. It does not join a room. |
 | `services/mcp` | Empty home for a later tool server. |
-| `packages/rag` | LlamaIndex documents and Qdrant vector settings. No ingest pipeline. |
+| `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
 | `evals` | `exact_match` only. No datasets. |
 
 Working notes for changes live in `WORKING.md`. The hiring-theme checklist is `docs/jd-fit.md`.
@@ -41,6 +41,20 @@ docker compose up --build
 Compose points the API at the `postgres` and `qdrant` hostnames. `.env` keeps `localhost` for commands you run on the host.
 
 The agent container is part of `docker compose up`. It prints one line and waits. It does not open a LiveKit session.
+
+## Ingest
+
+Sample pages live in `demo/docs`. They are original text and use the MIT license in the repository root. Markdown, HTML, and PDF are accepted. `directory` must stay inside `KB_DATA_ROOT`.
+
+```bash
+curl -s -X POST http://localhost:8000/products/demo/documents \
+  -H 'content-type: application/json' \
+  -d '{"directory":"demo/docs"}'
+```
+
+The job `status` becomes `indexed`. `status_log` records `queued`, then `indexing`, then `indexed`. `GET /ingest-jobs/{id}` returns the same job.
+
+Chunks land in the Qdrant collection `kb_chunks`. Each payload has `product_id` and `source_url`. The dense vector is a local hash, so this step needs no model key. The sparse vector stores term counts, and Qdrant applies an IDF modifier to that vector. A file upload uses `upload://<name>` as `source_url`. A directory upload uses the file URI.
 
 ### Optional LiveKit server
 

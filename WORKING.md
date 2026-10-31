@@ -28,7 +28,7 @@ Do not cut validation on trust boundaries, error handling that prevents data los
 
 New logic with a branch, a loop, a parser, or a security check leaves one small test.
 
-Details are in `skills/ponytail/SKILL.md`. That note follows the MIT Ponytail rules at https://github.com/DietrichGebert/ponytail.
+Details are in `skills/ponytail/SKILL.md` and `skills/working-style/SKILL.md`. The ponytail note follows the MIT Ponytail rules at https://github.com/DietrichGebert/ponytail. Working style adds the named state, the check command, and role budgets.
 
 ## Proof
 
@@ -42,7 +42,7 @@ The homepage button is Honest UI, in `apps/web/src/components/ui`, with tokens i
 
 New primitives come from https://ds.asanshay.com/ before another kit.
 
-Before changing UI, read `skills/interface/SKILL.md`.
+Before changing UI, read `skills/interface/SKILL.md`, `skills/make-interfaces-feel-better/SKILL.md`, and `skills/design-engineering/SKILL.md`. `skills/design-catalog/SKILL.md` points at the rest of that index.
 
 ## Words
 
@@ -53,7 +53,11 @@ Docs, pull requests, and commit messages follow `skills/unslop/SKILL.md`. Short 
 | Path | When |
 | --- | --- |
 | `skills/ponytail/SKILL.md` | Sizing a diff |
+| `skills/working-style/SKILL.md` | Any code change. Named state, observable tests, role budgets |
 | `skills/prove-it/SKILL.md` | Before calling a change done |
 | `skills/tests/SKILL.md` | Writing or changing a test |
-| `skills/interface/SKILL.md` | Any UI change |
 | `skills/unslop/SKILL.md` | Docs, commits, and review text |
+| `skills/interface/SKILL.md` | Any UI change in this app |
+| `skills/make-interfaces-feel-better/SKILL.md` | UI polish: type, surfaces, motion, icons |
+| `skills/design-engineering/SKILL.md` | Motion and component feel |
+| `skills/design-catalog/SKILL.md` | Pointer to the design-engineering index |

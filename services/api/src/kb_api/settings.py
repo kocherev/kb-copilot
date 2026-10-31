@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class Settings(BaseModel):
     database_url: str
     qdrant_url: str
+    data_root: str
 
 
 def load_settings() -> Settings:
@@ -15,4 +16,5 @@ def load_settings() -> Settings:
             "postgresql://kb:replace-me@localhost:5432/kb",
         ),
         qdrant_url=os.environ.get("QDRANT_URL", "http://localhost:6333"),
+        data_root=os.environ.get("KB_DATA_ROOT", "."),
     )
