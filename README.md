@@ -13,7 +13,7 @@ Upload a knowledge base, index it, and talk with a support agent that can see yo
 | `packages/rag` | LlamaIndex documents and Qdrant vector settings. No ingest pipeline. |
 | `evals` | `exact_match` only. No datasets. |
 
-Working notes for changes live in `AGENTS.md`. The hiring-theme checklist is `docs/jd-fit.md`.
+Working notes for changes live in `WORKING.md`. The hiring-theme checklist is `docs/jd-fit.md`.
 
 The homepage button is Honest UI source in `apps/web/src/components/ui`. Later UI primitives come from [ds.asanshay.com](https://ds.asanshay.com/) first.
 

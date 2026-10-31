@@ -41,6 +41,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# Rewritten by next dev. The repo root holds the working notes.
-AGENTS.md

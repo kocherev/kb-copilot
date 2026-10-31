@@ -28,7 +28,7 @@ Do not cut validation on trust boundaries, error handling that prevents data los
 
 New logic with a branch, a loop, a parser, or a security check leaves one small test.
 
-Details are in `.agents/skills/ponytail/SKILL.md`. That note follows the MIT Ponytail rules at https://github.com/DietrichGebert/ponytail.
+Details are in `skills/ponytail/SKILL.md`. That note follows the MIT Ponytail rules at https://github.com/DietrichGebert/ponytail.
 
 ## Proof
 
@@ -42,18 +42,18 @@ The homepage button is Honest UI, in `apps/web/src/components/ui`, with tokens i
 
 New primitives come from https://ds.asanshay.com/ before another kit.
 
-Before changing UI, read `.agents/skills/interface/SKILL.md`.
+Before changing UI, read `skills/interface/SKILL.md`.
 
 ## Words
 
-Docs, pull requests, and commit messages follow `.agents/skills/unslop/SKILL.md`. Short sentences. Sentence-case headings. No filler.
+Docs, pull requests, and commit messages follow `skills/unslop/SKILL.md`. Short sentences. Sentence-case headings. No filler.
 
 ## Skills
 
 | Path | When |
 | --- | --- |
-| `.agents/skills/ponytail/SKILL.md` | Sizing a diff |
-| `.agents/skills/prove-it/SKILL.md` | Before calling a change done |
-| `.agents/skills/tests/SKILL.md` | Writing or changing a test |
-| `.agents/skills/interface/SKILL.md` | Any UI change |
-| `.agents/skills/unslop/SKILL.md` | Docs, commits, and review text |
+| `skills/ponytail/SKILL.md` | Sizing a diff |
+| `skills/prove-it/SKILL.md` | Before calling a change done |
+| `skills/tests/SKILL.md` | Writing or changing a test |
+| `skills/interface/SKILL.md` | Any UI change |
+| `skills/unslop/SKILL.md` | Docs, commits, and review text |
