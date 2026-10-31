@@ -4,7 +4,7 @@ This checklist maps hiring themes to the proof still left. Paths that already ex
 
 | Theme | Later proof | Scaffold |
 | --- | --- | --- |
-| Anthropic. Evals and reliable tool use | A score table in the project README | `make eval` fails below `evals/thresholds.json` |
+| Anthropic. Evals and reliable tool use | A live model judge is still later | Score table in `README.md`. `make eval` fails below `evals/thresholds.json` |
 | OpenAI. A product a person can use | A call placed with a real model key | `apps/web` starts a session. `POST /sessions` returns a token. The worker speaks through STT, an LLM, and TTS |
 | xAI. A system that runs | Compose starts the store, the index, the API, the web app, and the worker together | `docker-compose.yml` |
 | Meta. Retrieval quality | A denser embedding than the local hash | `packages/rag`. `make eval` prints hit@k and MRR |
