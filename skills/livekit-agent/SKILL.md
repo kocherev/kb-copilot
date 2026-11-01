@@ -34,14 +34,16 @@ The browser publishes the microphone and the screen, not the camera. `sessionPub
 
 `session_room_options` turns video input on so the worker can subscribe to screen-share video. `watch_screen_share` logs `{"event":"screen_share","subscribed":true}` when the track source is screen share and the kind is video.
 
+On a Cloud host those frames are pushed into the realtime model. The OpenAI pipeline does not consume them. The page draws a highlight from `hud` messages (`point_at`) and a Thinking label from agent state. That overlay stays in the browser. It does not move the operating-system pointer.
+
 ## Voice
 
 `build_voice` picks the provider from `LIVEKIT_URL`.
 
-- Host `livekit.cloud` or `*.livekit.cloud`: LiveKit Inference. `OPENAI_API_KEY` can stay empty.
-- Any other host, including Compose `livekit`: the OpenAI plugin. Set `OPENAI_API_KEY`.
+- Host `livekit.cloud` or `*.livekit.cloud`: LiveKit Inference realtime. The model id is `google/gemini-3.8-live-extended-thinking`, voice `Puck`, reasoning effort `low`. If `session.start` fails, try `google/gemini-3.8-live`, then `google/gemini-live`. `OPENAI_API_KEY` can stay empty. Client VAD commits the turn so `search_kb` still runs before the reply. A miss speaks `That is not in the docs.` through the Inference TTS and does not ask the realtime model to answer.
+- Any other host, including Compose `livekit`: the OpenAI plugin. Set `OPENAI_API_KEY`. Screen frames are not sent to that model.
 
-STT, LLM, and TTS metrics are JSON lines on stdout (`kind` `component`). Each user or assistant turn adds a line with the per-turn delays.
+STT, LLM, TTS, and realtime metrics are JSON lines on stdout (`kind` `component`). A realtime line can include `image_tokens`. Each user or assistant turn adds a line with the per-turn delays.
 
 The container command is `python -m kb_agent start`. It exits when `LIVEKIT_URL` or the key pair is missing. The dev server in the `livekit` Compose profile does not read the env file. Its key pair is `devkey` / `secret`. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`.
 

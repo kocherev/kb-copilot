@@ -57,12 +57,14 @@ def test_settings_read_livekit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIVEKIT_URL", "wss://example.livekit.cloud")
     monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
     monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
+    monkeypatch.delenv("QDRANT_API_KEY", raising=False)
 
     settings = load_settings()
 
     assert settings.livekit_url == "wss://example.livekit.cloud"
     assert settings.livekit_api_key == "test-key"
     assert settings.livekit_api_secret == "test-secret-placeholder-32bytes!"
+    assert settings.qdrant_api_key == ""
 
 
 def test_session_token_carries_the_room_and_dispatch_metadata(

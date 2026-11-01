@@ -1,9 +1,14 @@
 import json
 from collections.abc import Mapping
 
-from livekit.agents.metrics import LLMMetrics, STTMetrics, TTSMetrics
+from livekit.agents.metrics import (
+    LLMMetrics,
+    RealtimeModelMetrics,
+    STTMetrics,
+    TTSMetrics,
+)
 
-ComponentMetric = STTMetrics | LLMMetrics | TTSMetrics
+ComponentMetric = STTMetrics | LLMMetrics | TTSMetrics | RealtimeModelMetrics
 
 
 def log_json(record: Mapping[str, object]) -> None:
@@ -27,6 +32,18 @@ def component_latency(metric: object) -> dict[str, object] | None:
         }
         if metric.speech_id:
             record["speech_id"] = metric.speech_id
+        return record
+    if isinstance(metric, RealtimeModelMetrics):
+        record = {
+            "kind": "component",
+            "segment": "realtime",
+            "duration_ms": _ms(metric.duration),
+            "input_tokens": metric.input_tokens,
+            "output_tokens": metric.output_tokens,
+            "image_tokens": metric.input_token_details.image_tokens,
+        }
+        if metric.ttft >= 0:
+            record["ttft_ms"] = _ms(metric.ttft)
         return record
     if isinstance(metric, TTSMetrics):
         record = {
