@@ -1,7 +1,13 @@
 import json
 
 from kb_agent.latency import component_latency, log_json, turn_latency
-from livekit.agents.metrics import LLMMetrics, STTMetrics, TTSMetrics, VADMetrics
+from livekit.agents.metrics import (
+    LLMMetrics,
+    RealtimeModelMetrics,
+    STTMetrics,
+    TTSMetrics,
+    VADMetrics,
+)
 
 
 def test_component_latency_logs_stt_llm_and_tts(capsys) -> None:
@@ -66,6 +72,36 @@ def test_component_latency_logs_stt_llm_and_tts(capsys) -> None:
         )
         is None
     )
+
+
+def test_component_latency_logs_realtime_image_tokens() -> None:
+    metric = RealtimeModelMetrics(
+        label="realtime",
+        request_id="rt-1",
+        timestamp=1.0,
+        duration=0.4,
+        ttft=0.2,
+        input_tokens=100,
+        output_tokens=20,
+        total_tokens=120,
+        input_token_details=RealtimeModelMetrics.InputTokenDetails(
+            image_tokens=30,
+            audio_tokens=70,
+        ),
+        output_token_details=RealtimeModelMetrics.OutputTokenDetails(audio_tokens=20),
+    )
+
+    record = component_latency(metric)
+
+    assert record == {
+        "kind": "component",
+        "segment": "realtime",
+        "duration_ms": 400,
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "image_tokens": 30,
+        "ttft_ms": 200,
+    }
 
 
 def test_turn_latency_logs_stt_llm_and_tts_segments(capsys) -> None:

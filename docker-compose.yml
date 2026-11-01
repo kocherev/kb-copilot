@@ -37,6 +37,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-replace-me}@postgres:5432/${POSTGRES_DB:-kb}
       QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       KB_DATA_ROOT: /app
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       API_HOST: 0.0.0.0
@@ -101,6 +102,7 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       API_URL: http://api:8000
       QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       api:

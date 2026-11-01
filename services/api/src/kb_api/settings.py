@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class Settings(BaseModel):
     database_url: str
     qdrant_url: str
+    qdrant_api_key: str
     data_root: str
     cors_origins: list[str]
     livekit_url: str
@@ -24,6 +25,7 @@ def load_settings() -> Settings:
             "postgresql://kb:replace-me@localhost:5432/kb",
         ),
         qdrant_url=os.environ.get("QDRANT_URL", "http://localhost:6333"),
+        qdrant_api_key=os.environ.get("QDRANT_API_KEY", ""),
         data_root=os.environ.get("KB_DATA_ROOT", "."),
         cors_origins=_csv(
             os.environ.get(

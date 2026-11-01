@@ -107,9 +107,10 @@ def test_agent_tool_is_search_kb_and_cites_or_refuses(
 ) -> None:
     agent = _agent(_client())
 
-    assert [tool.id for tool in agent.tools] == ["search_kb"]
+    assert [tool.id for tool in agent.tools] == ["point_at", "search_kb"]
     assert agent.search_kb.id == "search_kb"
     assert agent.search_kb.info.flags & ToolFlag.IGNORE_ON_ENTER
+    assert agent.point_at.info.flags & ToolFlag.IGNORE_ON_ENTER
 
     cited = _run(agent.search_kb(None, REFUND_QUESTION))  # type: ignore[arg-type]
     cited_log = json.loads(capsys.readouterr().out.strip().splitlines()[-1])

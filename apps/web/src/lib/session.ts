@@ -23,6 +23,66 @@ export const sessionPublish = {
   screen: true,
 } as const;
 
+export const HUD_TOPIC = "hud";
+
+export type HudPoint = {
+  x: number;
+  y: number;
+  label: string;
+};
+
+export type HudState = {
+  thinking: boolean;
+  point: HudPoint | null;
+};
+
+export const emptyHud: HudState = { thinking: false, point: null };
+
+function unit(value: number): number {
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 1) {
+    return 1;
+  }
+  return value;
+}
+
+export function applyHudMessage(state: HudState, raw: string): HudState {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return state;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return state;
+  }
+  const record = parsed as Record<string, unknown>;
+  if (record.kind === "thinking" && typeof record.active === "boolean") {
+    return { ...state, thinking: record.active };
+  }
+  if (
+    record.kind === "point" &&
+    typeof record.x === "number" &&
+    Number.isFinite(record.x) &&
+    typeof record.y === "number" &&
+    Number.isFinite(record.y) &&
+    typeof record.label === "string" &&
+    record.label.trim().length > 0
+  ) {
+    return {
+      ...state,
+      point: {
+        x: unit(record.x),
+        y: unit(record.y),
+        label: record.label.trim(),
+      },
+    };
+  }
+  return state;
+}
+
 export function sessionFromResponse(status: number, body: unknown): SessionLoad {
   if (status === 404) {
     return { status: "error", message: "Product not found." };
