@@ -29,7 +29,11 @@ def get_job_store() -> JobStore:
 
 
 def get_qdrant() -> QdrantClient:
-    return QdrantClient(url=load_settings().qdrant_url)
+    settings = load_settings()
+    return QdrantClient(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key or None,
+    )
 
 
 def resolve_directory(data_root: str, directory: str) -> Path:

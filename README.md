@@ -55,7 +55,7 @@ docker compose up --build
 
 Compose points the API at the `postgres` and `qdrant` hostnames. `.env` keeps `localhost` for commands you run on the host. The API container waits with `scripts/wait_for_http.py`, which checks the status code only.
 
-`.env.example` sets the LiveKit key pair to `replace-me`. The web app, API, Postgres, and Qdrant still start. The worker joins a room only after `LIVEKIT_URL` and a real key pair are set. It exits when either value is missing. Spoken replies need a model key as well. The two setups are below.
+`.env.example` sets the LiveKit key pair to `replace-me`. The web app, API, Postgres, and Qdrant still start. The worker joins a room only after `LIVEKIT_URL` and a real key pair are set. It exits when either value is missing. On a `*.livekit.cloud` URL, LiveKit Inference uses that key pair and `OPENAI_API_KEY` can stay empty. On any other URL, spoken replies need `OPENAI_API_KEY`. The two setups are below.
 
 Create a product and index the sample pages. Those pages are original text under the MIT license in `LICENSE`.
 
@@ -102,19 +102,23 @@ That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT
 
 ## Demo
 
-The session page asks for the microphone and the screen. After the room connects, the transcript lists each turn. A cited answer shows `Source:` under the agent's line. The label is the file name, here `billing.md`.
+The session page asks for the microphone and the screen. After the room connects, the shared picture is shown on the page. While the agent thinks, a Thinking label appears on that picture. When the agent calls `point_at`, a ring and a short label mark a spot. That highlight is drawn in the browser, on the preview. It is not an operating-system cursor. The worker does not move the mouse, and it does not click. The frames sent to the model are the shared screen without that highlight.
+
+The transcript lists each turn. A cited answer shows `Source:` under the agent's line. The label is the file name, here `billing.md`.
 
 ![Session page, then the transcript. The cited line reads Source: billing.md.](docs/demo.gif)
 
-The stills below are the same frames, so the citation stays readable.
+The stills below are the session components with a sample turn, so the citation stays readable. They are component frames, not a recording of a Cloud room.
+
+One Cloud session recorded the live page. The preview showed the shared refund page. The caller asked how long refunds take and which button to press. The transcript answered with the indexed sentence, "Refunds take 5 business days after the review team approves the request.", and the line under it was `Source: billing.md`. That reply also asked the caller to share the screen. The realtime usage for the turn reported `image_tokens` as 0. The capture shows the citation. It does not show the model using the picture. `point_at` was not called, so no ring was drawn. The sentence under the preview still says the highlight does not move the mouse. A later plugin room shared that same page and closed before a reply. Its realtime lines stayed at `image_tokens` 0.
 
 ![Session page for Acme before the room connects. The button reads Start session.](docs/session-start.png)
 
 ![Session transcript for Acme. The agent answers the refund question and the line under it reads Source: billing.md.](docs/session-transcript.png)
 
-What you would hear for "How long do refunds take?": the indexed sentence is "Refunds take 5 business days after the review team approves the request." The worker speaks the answer with the configured TTS. The transcript adds `Source: billing.md`. The system prompt tells the agent not to read the source URL aloud.
+What you would hear for "How long do refunds take?": the indexed sentence is "Refunds take 5 business days after the review team approves the request." On LiveKit Cloud the worker speaks with Gemini Live. The transcript adds `Source: billing.md`. The system prompt tells the agent not to read the source URL aloud.
 
-These pictures are the session components with that sample turn. They are not a recording of a live room. A live capture needs LiveKit credentials and a model key.
+A Cloud room needs `LIVEKIT_URL` on `*.livekit.cloud` and that project's key pair. `OPENAI_API_KEY` can stay empty on that host.
 
 What to say about this repo is in [Interview talking points](#interview-talking-points).
 
@@ -122,7 +126,7 @@ What to say about this repo is in [Interview talking points](#interview-talking-
 
 - Upload the product docs, set the refusal rules, and join a call with your microphone and your screen. The agent answers by voice from those docs.
 - When the docs contain the answer, the transcript shows `Source:` and the file name, as in `Source: billing.md`. When they do not, the agent says `That is not in the docs.`
-- `make eval` scores the 40 sample questions with no model key. It checks that the right page was found, that the answer cites it, and that the wording stays inside that page. The command fails when a score drops under `evals/thresholds.json`.
+- `make eval` scores the 40 sample questions with no model key and no LiveKit room. It checks that the right page was found and that the answer cites it. Faithfulness is a text overlap check against the retrieved passage, described in `evals/README.md`. It is not a live model judging its own answer. The command fails when a score drops under `evals/thresholds.json`.
 
 ## Eval results
 
@@ -135,7 +139,7 @@ What to say about this repo is in [Interview talking points](#interview-talking-
 | citation_rate | 1.000 | 1.000 |
 | faithfulness | 1.000 | 1.000 |
 
-`k` is 5, from `evals/thresholds.json`. Hit rate, MRR, citation rate, and faithfulness are defined in `evals/README.md`. The run does not call a paid model. When retrieval returns a passage, the scored text is the dataset `answer` plus the same `Source:` suffix the transcript uses. When it returns nothing, the text is `That is not in the docs.`
+`k` is 5, from `evals/thresholds.json`. Hit rate, MRR, citation rate, and faithfulness are defined in `evals/README.md`. The run does not call a paid model and does not open a room. When retrieval returns a passage, the scored text is the dataset `answer` plus the same `Source:` suffix the transcript uses. When it returns nothing, the text is `That is not in the docs.` Faithfulness asks whether those sentences appear in the retrieved passage. It does not ask a model whether a spoken answer was faithful.
 
 ## MCP
 
@@ -206,13 +210,15 @@ The web app at `/` creates a product. `/products/{id}` edits the four fields and
 
 `POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish the microphone and the screen. The API dispatches the agent named `kb-support` with job metadata `{"product_id":"<uuid>"}`. Missing LiveKit settings return 503.
 
-The worker loads that product from `GET /products/{id}` and uses it as the system prompt. On a `*.livekit.cloud` URL it uses LiveKit Inference. On any other URL, including the Compose hostname `livekit`, it uses the OpenAI plugin and `OPENAI_API_KEY`.
+The worker loads that product from `GET /products/{id}` and uses it as the system prompt. On a `*.livekit.cloud` URL it uses LiveKit Inference. The realtime model is `google/gemini-3.8-live-extended-thinking` with voice `Puck` and reasoning effort `low`. If that session fails to start, the worker tries `google/gemini-3.8-live`, then `google/gemini-live`. `google/gemini-live` is an alias of `google/gemini-3.8-live`. The worker samples screen-share frames, about one a second while the caller speaks and about one every three seconds otherwise. That Inference session sends each frame as an OpenAI `input_image` item. Gemini Live counts a picture when the frame arrives as a video blob, which is what the Gemini plugin sends. A Cloud Inference room answered from the docs and reported `image_tokens` 0, `input_tokens` 11965, and `output_tokens` 925. A later Cloud room used that plugin with one socket (`max_retry` 0) and server activity detection left on. The screen share subscribed. The greeting logged `generate_reply timed out waiting for generation_created event`. The socket then closed with `1008 None. BidiGenerateContent session is already connected to an existing client`. The realtime lines before the close were `image_tokens` 0, `input_tokens` 0, `output_tokens` 0, and `duration_ms` 0. That room did not finish a vision turn. `OPENAI_API_KEY` can stay empty. On any other URL, including the Compose hostname `livekit`, the worker uses the OpenAI plugin and `OPENAI_API_KEY`. That pipeline does not receive the frames. A local media server is not required for the Cloud path, and this repo does not ask you to run one for a Cloud session.
 
-Each product question calls `search_kb` against `kb_chunks`, filtered by `product_id`. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose). A matching passage is cited in the transcript. No matching passage produces `That is not in the docs.`
+Each product question calls `search_kb` against `kb_chunks`, filtered by `product_id`. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose). The API and the worker pass `QDRANT_API_KEY` when it is set. An empty value leaves local Qdrant without a key. A matching passage is cited in the transcript. No matching passage produces `That is not in the docs.` On the Cloud path that sentence is spoken by the Inference TTS. The realtime model is not asked to invent a replacement.
 
-The worker subscribes to screen-share video when the browser publishes one. Each STT, LLM, and TTS metric is one JSON line on stdout, and each user or assistant turn is another JSON line with the per-turn delays. A knowledge lookup is another JSON line with `kind` set to `retrieval` and `duration_ms`.
+`point_at` publishes a JSON message on the `hud` topic. The session page draws it on the shared-screen preview. The same page shows Thinking while the agent state is thinking. Neither mark leaves the browser.
 
-The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`.
+The worker subscribes to screen-share video when the browser publishes one. Each STT, LLM, TTS, or realtime metric is one JSON line on stdout, and each user or assistant turn is another JSON line with the per-turn delays. A realtime line includes `image_tokens` when the model reports them. A knowledge lookup is another JSON line with `kind` set to `retrieval` and `duration_ms`.
+
+The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`. A dispatch failure returns HTTP 502 with `Could not dispatch the agent`, and the page shows that text. The response does not include a token.
 
 ## Checks
 

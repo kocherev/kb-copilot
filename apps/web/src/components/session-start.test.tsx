@@ -41,8 +41,12 @@ vi.mock("@livekit/components-react", () => ({
     </div>
   ),
   RoomAudioRenderer: () => <div data-testid="agent-audio" />,
+  VideoTrack: () => <div data-testid="shared-video" />,
   useConnectionState: () => "connected",
+  useDataChannel: () => undefined,
+  useTracks: () => [],
   useTranscriptions: () => transcriptions.current,
+  useVoiceAssistant: () => ({ state: "listening" }),
   TrackToggle: ({
     "aria-label": label,
   }: {
@@ -119,6 +123,10 @@ test("start session posts the product and joins with mic and screen", async () =
   expect(screen.getByTestId("agent-audio")).toBeDefined();
   expect(screen.getByRole("button", { name: "Microphone" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Screen share" })).toBeDefined();
+  expect(screen.getByText("Share your screen so the agent can see it.")).toBeDefined();
+  expect(
+    screen.getByText("The highlight is drawn on this preview. It does not move your mouse."),
+  ).toBeDefined();
   const spoken = screen.getByText("C".repeat(80));
   expect(spoken.className).toMatch(/anywhere/);
   expect(screen.getByText("Agent")).toBeDefined();
@@ -158,6 +166,26 @@ test("session transcript shows a cited source from the agent", async () => {
   expect(await screen.findByText("Refunds take 5 business days.")).toBeDefined();
   expect(screen.getByText("Source: billing.md")).toBeDefined();
   expect(screen.getByRole("list", { name: "Sources" })).toBeDefined();
+});
+
+test("a dispatch failure shows the error", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
+      ok: false,
+      status: 502,
+      json: async () => ({ detail: "Could not dispatch the agent" }),
+    })),
+  );
+  render(
+    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Start session" }));
+
+  expect(await screen.findByRole("alert")).toBeDefined();
+  expect(screen.getByRole("alert").textContent).toBe("Could not dispatch the agent");
+  expect(screen.queryByText("In the room")).toBeNull();
 });
 
 test("a refused session shows the error", async () => {

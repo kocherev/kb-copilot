@@ -7,13 +7,16 @@ from livekit.agents import (
     ChatMessage,
     ModelSettings,
     RunContext,
+    StopResponse,
     function_tool,
+    get_job_context,
     llm,
 )
 from livekit.agents.llm.tool_context import ToolFlag
 from livekit.agents.types import FlushSentinel, TimedString
 from qdrant_client import QdrantClient
 
+from kb_agent.hud import point_payload, publish_hud
 from kb_agent.latency import log_json
 from kb_agent.retrieve import (
     NOT_IN_DOCS,
@@ -60,6 +63,33 @@ class SupportAgent(Agent):
         self._remember(found)
         return tool_text(found)
 
+    @function_tool(flags=ToolFlag.IGNORE_ON_ENTER)
+    async def point_at(
+        self,
+        context: RunContext,
+        x: float,
+        y: float,
+        label: str,
+    ) -> str:
+        """Highlight a control on the shared screen.
+
+        x and y are fractions from 0 to 1, measured from the top left of the
+        picture you see. This draws a highlight on the session preview. It does
+        not move the mouse or click.
+
+        Args:
+            x: Horizontal position. 0 is the left edge and 1 is the right edge.
+            y: Vertical position. 0 is the top edge and 1 is the bottom edge.
+            label: Short name of the control, such as Review status.
+        """
+        del context
+        payload = point_payload(x, y, label)
+        await publish_hud(get_job_context().room, payload)
+        return (
+            "Highlight shown on the session preview. "
+            "The user still clicks. You did not move the mouse."
+        )
+
     async def on_user_turn_completed(
         self,
         turn_ctx: ChatContext,
@@ -76,6 +106,11 @@ class SupportAgent(Agent):
         self._remember(found)
         if not found.hits:
             self._refuse = True
+            if isinstance(self.llm, llm.RealtimeModel):
+                # Realtime audio does not pass through llm_node. Speak the
+                # exact refusal with TTS, then skip the model reply.
+                self.session.say(NOT_IN_DOCS)
+                raise StopResponse()
             return
         turn_ctx.add_message(
             role="assistant",
