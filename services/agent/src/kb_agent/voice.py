@@ -116,6 +116,11 @@ def _cloud_voice(model_id: str) -> VoiceStack:
     effort = "low" if model_id == EXTENDED_THINKING else None
     speech = inference.STT(model=CLOUD_STT, language="en")
     spoken = inference.TTS(model=CLOUD_TTS, voice=CLOUD_TTS_VOICE)
+    # shortcut: push_video on this class sends an OpenAI input_image item.
+    # Gemini bills a frame from a video blob. A Cloud room here reported
+    # image_tokens 0. The Gemini plugin, which sends the blob, then failed
+    # connect with 1008 "session is already connected to an existing client".
+    # Revisit when Inference forwards a video blob or that plugin can connect.
     model = inference.RealtimeModel(
         model=model_id,
         voice=CLOUD_VOICE,

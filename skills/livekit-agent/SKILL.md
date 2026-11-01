@@ -34,7 +34,7 @@ The browser publishes the microphone and the screen, not the camera. `sessionPub
 
 `session_room_options` turns video input on so the worker can subscribe to screen-share video. `watch_screen_share` logs `{"event":"screen_share","subscribed":true}` when the track source is screen share and the kind is video.
 
-On a Cloud host those frames are pushed into the realtime model. The OpenAI pipeline does not consume them. The page draws a highlight from `hud` messages (`point_at`) and a Thinking label from agent state. That overlay stays in the browser. It does not move the operating-system pointer.
+On a Cloud host those frames are pushed into the Inference realtime model as OpenAI `input_image` items. A measured Cloud turn reported `image_tokens` 0. The Gemini plugin sends a video blob instead, and its connect failed with `1008` because a session was already connected. The OpenAI pipeline does not consume the frames. The page draws a highlight from `hud` messages (`point_at`) and a Thinking label from agent state. That overlay stays in the browser. It does not move the operating-system pointer.
 
 ## Voice
 
