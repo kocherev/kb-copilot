@@ -341,3 +341,88 @@ def test_concurrent_starts_are_each_counted_once(database_url: str) -> None:
         return sorted(statuses)
 
     assert asyncio.run(race()) == [201] * 5 + [429] * 3
+
+
+def start_session(http: TestClient, headers: dict[str, str]) -> str:
+    product_id = create_product(http, headers)
+    return http.post(
+        "/sessions", json={"product_id": product_id}, headers=headers
+    ).json()["room"]
+
+
+def test_desktop_token_is_rpc_only_and_short_lived(
+    http: TestClient, dispatcher: RecordingDispatcher, as_user, rows
+) -> None:
+    headers = as_user(user="user-a", org="org-a")
+    room = start_session(http, headers)
+
+    granted = http.post(f"/sessions/{room}/desktop-token", headers=headers)
+
+    assert granted.status_code == 200
+    body = granted.json()
+    assert body["url"] == "ws://localhost:7880"
+    claims = TokenVerifier("test-key", SECRET).verify(body["token"])
+    assert claims.identity == "desktop:user-a"
+    assert claims.video is not None
+    assert claims.video.room_join is True
+    assert claims.video.room == room
+    assert claims.video.can_publish is False
+    assert claims.video.can_publish_data is True
+    assert claims.video.can_subscribe is False
+    decoded = jwt.decode(body["token"], SECRET, algorithms=["HS256"])
+    assert decoded["exp"] - decoded["nbf"] == 600
+    assert [row["action"] for row in rows("audit_log")].count(
+        "session.desktop_token"
+    ) == 1
+
+
+def test_desktop_token_is_only_for_the_session_owner(
+    http: TestClient, dispatcher: RecordingDispatcher, as_user
+) -> None:
+    room = start_session(http, as_user(user="user-a", org="org-a"))
+    others = [
+        as_user(user="user-b", org="org-a"),
+        as_user(user="user-a", org="org-b"),
+    ]
+
+    stranger = [http.post(f"/sessions/{room}/desktop-token", headers=h) for h in others]
+    unknown = http.post(
+        "/sessions/kb-nothing/desktop-token", headers=as_user(user="user-a")
+    )
+    anonymous = http.post(f"/sessions/{room}/desktop-token")
+
+    assert [response.status_code for response in stranger] == [404, 404]
+    assert unknown.status_code == 404
+    assert anonymous.status_code == 401
+
+
+def test_desktop_token_needs_a_signed_in_user(
+    http: TestClient, dispatcher: RecordingDispatcher, as_user
+) -> None:
+    owner = as_user(user="user-a", org="org-a")
+    room = start_session(http, owner)
+    secret = http.post("/api-keys", json={"name": "CI"}, headers=owner).json()["secret"]
+
+    machine = http.post(
+        f"/sessions/{room}/desktop-token",
+        headers={"authorization": f"Bearer {secret}"},
+    )
+
+    assert machine.status_code == 403
+
+
+def test_desktop_token_without_livekit_config_is_unavailable(
+    http: TestClient,
+    dispatcher: RecordingDispatcher,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers = as_user()
+    room = start_session(http, headers)
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "replace-me")
+    load_settings.cache_clear()
+
+    unavailable = http.post(f"/sessions/{room}/desktop-token", headers=headers)
+
+    assert unavailable.status_code == 503
+    assert "token" not in unavailable.json()
