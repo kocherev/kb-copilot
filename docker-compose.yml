@@ -32,6 +32,18 @@ services:
       retries: 20
       start_period: 5s
 
+  # Applies the API's Alembic migrations once, then exits.
+  migrate:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    command: ["alembic", "-c", "services/api/alembic.ini", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-replace-me}@postgres:5432/${POSTGRES_DB:-kb}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build:
       context: .
@@ -39,6 +51,12 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-replace-me}@postgres:5432/${POSTGRES_DB:-kb}
+      # The API verifies Better Auth JWTs against the web app's key set.
+      AUTH_JWKS_URL: http://web:3000/api/auth/jwks
+      AUTH_ISSUER: ${BETTER_AUTH_URL:-http://localhost:3000}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace-me}
+      SESSION_RATE_LIMIT: ${SESSION_RATE_LIMIT:-10}
+      LIVEKIT_TOKEN_TTL_SECONDS: ${LIVEKIT_TOKEN_TTL_SECONDS:-900}
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       KB_DATA_ROOT: /app
@@ -53,8 +71,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       qdrant:
         condition: service_healthy
     healthcheck:
@@ -81,9 +99,15 @@ services:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
       # Server components fetch the API over the Compose network.
       API_INTERNAL_URL: http://api:8000
+      # Better Auth tables live in the same Postgres. The web app migrates them on start.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-replace-me}@postgres:5432/${POSTGRES_DB:-kb}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-replace-me}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
+      postgres:
+        condition: service_healthy
       api:
         condition: service_healthy
     healthcheck:
@@ -109,6 +133,7 @@ services:
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
       API_URL: http://api:8000
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace-me}
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
