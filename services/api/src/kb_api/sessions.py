@@ -16,7 +16,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kb_api.audit import audit
-from kb_api.auth import AUTH_ERRORS, ErrorBody, Principal, get_principal
+from kb_api.auth import (
+    AUTH_ERRORS,
+    ErrorBody,
+    Principal,
+    UserPrincipal,
+    get_principal,
+    require_user,
+)
 from kb_api.db import LiveSessionRow, RateLimitRow, get_db, get_sessionmaker
 from kb_api.products import NOT_FOUND, load_owned_product
 from kb_api.settings import PLACEHOLDERS, Settings, load_settings
@@ -26,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_NAME = "kb-support"
 WINDOW_SECONDS = 60
+DESKTOP_TOKEN_TTL = timedelta(minutes=10)
 
 
 class SessionCreate(BaseModel):
@@ -36,6 +44,11 @@ class SessionGrant(BaseModel):
     url: str
     token: str
     room: str
+
+
+class DesktopGrant(BaseModel):
+    url: str
+    token: str
 
 
 class LiveSession(BaseModel):
@@ -96,6 +109,25 @@ def participant_token(settings: Settings, room: str, identity: str) -> str:
                 room=room,
                 can_publish=True,
                 can_subscribe=True,
+            )
+        )
+        .to_jwt()
+    )
+
+
+def desktop_token(settings: Settings, room: str, user_id: str) -> str:
+    """Token for the desktop helper: RPC only, no media in or out."""
+    return (
+        api.AccessToken(settings.livekit_api_key, settings.livekit_api_secret)
+        .with_identity(f"desktop:{user_id}")
+        .with_ttl(DESKTOP_TOKEN_TTL)
+        .with_grants(
+            api.VideoGrants(
+                room_join=True,
+                room=room,
+                can_publish=False,
+                can_publish_data=True,
+                can_subscribe=False,
             )
         )
         .to_jwt()
@@ -242,3 +274,35 @@ async def list_sessions(
         .limit(100)
     )
     return [LiveSession.model_validate(row) for row in rows]
+
+
+@router.post(
+    "/sessions/{room}/desktop-token",
+    responses={
+        404: {"model": ErrorBody, "description": "No such session for this user"},
+        503: {"model": ErrorBody, "description": "LiveKit is not configured"},
+    },
+)
+async def create_desktop_token(
+    room: str,
+    principal: Annotated[UserPrincipal, Depends(require_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DesktopGrant:
+    session = await db.scalar(
+        select(LiveSessionRow).where(
+            LiveSessionRow.org_id == principal.org_id,
+            LiveSessionRow.user_id == principal.user_id,
+            LiveSessionRow.room == room,
+        )
+    )
+    if session is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    settings = load_settings()
+    if not livekit_ready(settings):
+        raise HTTPException(status_code=503, detail="LiveKit is not configured")
+    audit(db, principal, "session.desktop_token", f"session:{session.id}")
+    await db.commit()
+    return DesktopGrant(
+        url=settings.livekit_url,
+        token=desktop_token(settings, room, principal.user_id),
+    )

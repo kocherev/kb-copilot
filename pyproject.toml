@@ -19,10 +19,11 @@ package = false
 default-groups = ["dev"]
 
 [tool.uv.workspace]
-members = ["services/api", "services/agent", "services/mcp", "packages/rag", "evals"]
+members = ["apps/desktop", "services/api", "services/agent", "services/mcp", "packages/rag", "evals"]
 
 [tool.pytest.ini_options]
 testpaths = [
+  "apps/desktop/tests",
   "evals/tests",
   "packages/rag/tests",
   "services/agent/tests",
@@ -47,6 +48,6 @@ known-third-party = ["mcp"]
 pythonVersion = "3.12"
 venvPath = "."
 venv = ".venv"
-include = ["evals", "packages", "scripts", "services", "tests"]
+include = ["apps", "evals", "packages", "scripts", "services", "tests"]
 typeCheckingMode = "basic"
 reportMissingTypeStubs = false
