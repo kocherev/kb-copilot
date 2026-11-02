@@ -1,12 +1,13 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-kb}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-replace-me}
       POSTGRES_DB: ${POSTGRES_DB:-kb}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -17,8 +18,9 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.20.0
+    restart: unless-stopped
     ports:
-      - "6333:6333"
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
     volumes:
       - qdrant-data:/qdrant/storage
       # /readyz is plain text. The script checks the HTTP status line, not a JSON body.
@@ -34,6 +36,7 @@ services:
     build:
       context: .
       dockerfile: services/api/Dockerfile
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-replace-me}@postgres:5432/${POSTGRES_DB:-kb}
       QDRANT_URL: http://qdrant:6333
@@ -42,7 +45,9 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       API_HOST: 0.0.0.0
       API_PORT: "8000"
+      # The browser joins LIVEKIT_URL. Dispatch runs inside this container.
       LIVEKIT_URL: ${LIVEKIT_URL:-ws://localhost:7880}
+      LIVEKIT_API_URL: ${LIVEKIT_API_URL:-${LIVEKIT_AGENT_URL:-${LIVEKIT_URL:-ws://localhost:7880}}}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
     ports:
@@ -71,8 +76,11 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      # Server components fetch the API over the Compose network.
+      API_INTERNAL_URL: http://api:8000
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
@@ -115,6 +123,7 @@ services:
   livekit:
     image: livekit/livekit-server:v1.13.11
     profiles: ["livekit"]
+    restart: unless-stopped
     command: ["--dev", "--bind", "0.0.0.0"]
     ports:
       - "7880:7880"

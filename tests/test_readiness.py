@@ -54,14 +54,34 @@ def test_compose_defines_the_runtime_services() -> None:
     assert services["agent"]["depends_on"]["qdrant"]["condition"] == "service_healthy"
 
 
+def test_compose_containers_reach_each_other_by_service_name() -> None:
+    services = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+
+    assert services["web"]["environment"]["API_INTERNAL_URL"] == "http://api:8000"
+    assert services["api"]["environment"]["LIVEKIT_API_URL"].startswith(
+        "${LIVEKIT_API_URL:-"
+    )
+
+
+def test_compose_stores_listen_on_loopback_only() -> None:
+    services = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+
+    assert services["postgres"]["ports"] == ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    assert services["qdrant"]["ports"] == ["127.0.0.1:${QDRANT_PORT:-6333}:6333"]
+    for name in ("postgres", "qdrant", "api", "web", "livekit"):
+        assert services[name]["restart"] == "unless-stopped"
+
+
 def test_env_example_lists_placeholders_only() -> None:
     required = {
         "POSTGRES_USER",
         "POSTGRES_PASSWORD",
         "POSTGRES_DB",
+        "POSTGRES_PORT",
         "DATABASE_URL",
         "QDRANT_URL",
         "QDRANT_API_KEY",
+        "QDRANT_PORT",
         "KB_DATA_ROOT",
         "API_HOST",
         "API_PORT",
@@ -69,6 +89,7 @@ def test_env_example_lists_placeholders_only() -> None:
         "NEXT_PUBLIC_API_URL",
         "LIVEKIT_URL",
         "LIVEKIT_AGENT_URL",
+        "LIVEKIT_API_URL",
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
         "OPENAI_API_KEY",
