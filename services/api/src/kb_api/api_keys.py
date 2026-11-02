@@ -13,7 +13,7 @@ from kb_api.audit import audit
 from kb_api.auth import (
     AUTH_ERRORS,
     ErrorBody,
-    Principal,
+    UserPrincipal,
     hash_key,
     new_api_key,
     require_user,
@@ -50,7 +50,7 @@ class ApiKeyCreated(ApiKey):
 @router.post("/api-keys", status_code=201)
 async def create_api_key(
     body: ApiKeyCreate,
-    principal: Annotated[Principal, Depends(require_user)],
+    principal: Annotated[UserPrincipal, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ApiKeyCreated:
     prefix, token = new_api_key()
@@ -68,7 +68,7 @@ async def create_api_key(
 
 @router.get("/api-keys")
 async def list_api_keys(
-    principal: Annotated[Principal, Depends(require_user)],
+    principal: Annotated[UserPrincipal, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ApiKey]:
     rows = await db.scalars(
@@ -86,7 +86,7 @@ async def list_api_keys(
 )
 async def revoke_api_key(
     key_id: UUID,
-    principal: Annotated[Principal, Depends(require_user)],
+    principal: Annotated[UserPrincipal, Depends(require_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     row = await db.scalar(

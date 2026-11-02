@@ -4,6 +4,7 @@ import time
 from collections.abc import Iterator
 
 import httpx
+import jwt
 import pytest
 import uvicorn
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -44,6 +45,47 @@ def test_bad_tokens_are_rejected(http: TestClient, sign) -> None:
     assert no_org.json() == {"detail": "no active organization"}
 
 
+def test_tokens_for_another_audience_or_issuer_are_rejected(
+    http: TestClient, sign
+) -> None:
+    other_audience = http.get("/me", headers=bearer(sign(audience="other-api")))
+    other_issuer = http.get("/me", headers=bearer(sign(issuer="http://evil.test")))
+    unsigned = http.get("/me", headers=bearer(sign(unsigned=True)))
+
+    assert other_audience.status_code == 401
+    assert other_issuer.status_code == 401
+    assert unsigned.status_code == 401
+
+
+def test_unknown_key_ids_do_not_refetch_the_key_set_every_time(
+    http: TestClient, sign, jwks_fetches: list[str]
+) -> None:
+    assert http.get("/me", headers=bearer(sign())).status_code == 200
+    fetched = len(jwks_fetches)
+
+    for index in range(5):
+        response = http.get("/me", headers=bearer(sign(kid=f"unknown-{index}")))
+        assert response.status_code == 401
+
+    assert len(jwks_fetches) == fetched
+
+
+def test_a_slow_key_set_times_out() -> None:
+    from kb_api.auth import jwks_client
+
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    sock.listen()
+    client = jwks_client(f"http://127.0.0.1:{sock.getsockname()[1]}/jwks", timeout=0.2)
+    started = time.monotonic()
+
+    with pytest.raises(jwt.PyJWKClientConnectionError):
+        client.get_jwk_set()
+
+    assert time.monotonic() - started < 2
+    sock.close()
+
+
 def test_api_key_acts_for_its_org_until_revoked(
     http: TestClient, as_user, rows
 ) -> None:
@@ -64,6 +106,9 @@ def test_api_key_acts_for_its_org_until_revoked(
     assert [item["id"] for item in listed] == [key["id"]]
     assert "secret" not in listed[0]
     assert listed[0]["last_used_at"] is not None
+    http.get("/products", headers=machine)
+    used_again = http.get("/api-keys", headers=owner).json()[0]["last_used_at"]
+    assert used_again == listed[0]["last_used_at"]
     stored = rows("api_keys")
     assert key["secret"] not in {str(value) for value in stored[0].values()}
 

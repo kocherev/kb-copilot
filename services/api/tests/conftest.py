@@ -37,12 +37,19 @@ def signing_key() -> Ed25519PrivateKey:
 
 
 @pytest.fixture(scope="session")
-def jwks_url(signing_key: Ed25519PrivateKey) -> Iterator[str]:
+def jwks_fetches() -> list[str]:
+    """Paths the test JWKS server has served, in order."""
+    return []
+
+
+@pytest.fixture(scope="session")
+def jwks_url(signing_key: Ed25519PrivateKey, jwks_fetches: list[str]) -> Iterator[str]:
     public = json.loads(OKPAlgorithm.to_jwk(signing_key.public_key()))
     body = json.dumps({"keys": [{**public, "kid": KID, "alg": "EdDSA"}]}).encode()
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:
+            jwks_fetches.append(self.path)
             self.send_response(200)
             self.send_header("content-type", "application/json")
             self.send_header("content-length", str(len(body)))
@@ -67,16 +74,22 @@ def sign(signing_key: Ed25519PrivateKey) -> Signer:
         org: str | None = "org-a",
         key: Ed25519PrivateKey = signing_key,
         expires_in: int = 300,
+        issuer: str = ISSUER,
+        audience: str = AUDIENCE,
+        kid: str = KID,
+        unsigned: bool = False,
     ) -> str:
         claims: dict[str, object] = {
             "sub": user,
-            "iss": ISSUER,
-            "aud": AUDIENCE,
+            "iss": issuer,
+            "aud": audience,
             "exp": int(time.time()) + expires_in,
         }
         if org is not None:
             claims["org_id"] = org
-        return jwt.encode(claims, key, algorithm="EdDSA", headers={"kid": KID})
+        if unsigned:
+            return jwt.encode(claims, "", algorithm="none", headers={"kid": kid})
+        return jwt.encode(claims, key, algorithm="EdDSA", headers={"kid": kid})
 
     return mint
 

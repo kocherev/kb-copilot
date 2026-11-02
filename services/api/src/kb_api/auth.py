@@ -5,13 +5,14 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kb_api.db import ApiKeyRow, get_db, utcnow
@@ -20,6 +21,10 @@ from kb_api.settings import PLACEHOLDERS, load_settings
 AUDIENCE = "kb-api"
 API_KEY_PREFIX = "kb_"
 JWT_ALGORITHMS = ["EdDSA", "ES256", "RS256"]
+# Callers choose the kid, so an unknown kid may refetch the key set only this often.
+JWKS_REFETCH_COOLDOWN_SECONDS = 30.0
+JWKS_TIMEOUT_SECONDS = 3.0
+LAST_USED_RESOLUTION = timedelta(seconds=60)
 
 bearer = HTTPBearer(auto_error=False)
 internal_header = APIKeyHeader(
@@ -45,6 +50,11 @@ class Principal:
 
 
 @dataclass(frozen=True)
+class UserPrincipal(Principal):
+    user_id: str
+
+
+@dataclass(frozen=True)
 class InternalCaller:
     """The agent service. It reads products across orgs and nothing else."""
 
@@ -52,6 +62,15 @@ class InternalCaller:
 def unauthorized(detail: str) -> HTTPException:
     return HTTPException(
         status_code=401, detail=detail, headers={"WWW-Authenticate": "Bearer"}
+    )
+
+
+def jwks_client(url: str, timeout: float = JWKS_TIMEOUT_SECONDS) -> jwt.PyJWKClient:
+    return jwt.PyJWKClient(
+        url,
+        lifespan=300,
+        timeout=timeout,
+        cooldown_duration=JWKS_REFETCH_COOLDOWN_SECONDS,
     )
 
 
@@ -76,7 +95,19 @@ async def principal_from_api_key(db: AsyncSession, token: str) -> Principal:
     )
     if key is None or not hmac.compare_digest(key.sha256, hash_key(token)):
         raise unauthorized("invalid API key")
-    key.last_used_at = utcnow()
+    now = utcnow()
+    await db.execute(
+        update(ApiKeyRow)
+        .where(
+            ApiKeyRow.id == key.id,
+            or_(
+                ApiKeyRow.last_used_at.is_(None),
+                ApiKeyRow.last_used_at < now - LAST_USED_RESOLUTION,
+            ),
+        )
+        .values(last_used_at=now)
+        .execution_options(synchronize_session=False)
+    )
     await db.commit()
     return Principal(org_id=key.org_id, actor=f"api_key:{key.id}", user_id=None)
 
@@ -118,10 +149,12 @@ async def get_principal(
 
 async def require_user(
     principal: Annotated[Principal, Depends(get_principal)],
-) -> Principal:
+) -> UserPrincipal:
     if principal.user_id is None:
         raise HTTPException(status_code=403, detail="sign in as a user")
-    return principal
+    return UserPrincipal(
+        org_id=principal.org_id, actor=principal.actor, user_id=principal.user_id
+    )
 
 
 async def get_reader(
