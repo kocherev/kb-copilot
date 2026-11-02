@@ -3,18 +3,11 @@ import logging
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from uuid import UUID
 
+import jwt
 import pytest
 from fastapi.testclient import TestClient
-from kb_api.main import app
-from kb_api.products import MemoryProductStore, get_product_store
-from kb_api.sessions import (
-    AGENT_NAME,
-    AgentDispatch,
-    Dispatcher,
-    get_dispatcher,
-)
+from kb_api.sessions import AGENT_NAME, AgentDispatch, Dispatcher, get_dispatcher
 from kb_api.settings import load_settings
 from livekit.api import TokenVerifier
 
@@ -24,6 +17,7 @@ VALID = {
     "tone": "calm and brief",
     "refusal_rules": "Do not invent a refund policy.",
 }
+SECRET = "test-secret-placeholder-32bytes!"
 
 
 class RecordingDispatcher:
@@ -39,128 +33,183 @@ class FailingDispatcher:
         raise RuntimeError(request.room)
 
 
-def _override(store: MemoryProductStore, dispatcher: Dispatcher) -> TestClient:
-    app.dependency_overrides[get_product_store] = lambda: store
+def use_dispatcher(dispatcher: Dispatcher) -> None:
+    from kb_api.main import app
+
     app.dependency_overrides[get_dispatcher] = lambda: dispatcher
-    return TestClient(app)
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch):
+def livekit_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIVEKIT_URL", "ws://localhost:7880")
     monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
-    store = MemoryProductStore()
-    dispatcher = RecordingDispatcher()
-    http = _override(store, dispatcher)
-    yield http, dispatcher
-    app.dependency_overrides.clear()
+    monkeypatch.setenv("LIVEKIT_API_SECRET", SECRET)
+    load_settings.cache_clear()
+
+
+@pytest.fixture
+def dispatcher(livekit_env: None, http: TestClient) -> RecordingDispatcher:
+    recording = RecordingDispatcher()
+    use_dispatcher(recording)
+    return recording
+
+
+def create_product(http: TestClient, headers: dict[str, str]) -> str:
+    created = http.post("/products", json=VALID, headers=headers)
+    assert created.status_code == 201
+    return created.json()["id"]
 
 
 def test_settings_read_livekit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LIVEKIT_URL", "wss://example.livekit.cloud")
     monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", SECRET)
     monkeypatch.delenv("QDRANT_API_KEY", raising=False)
 
     settings = load_settings()
 
     assert settings.livekit_url == "wss://example.livekit.cloud"
     assert settings.livekit_api_key == "test-key"
-    assert settings.livekit_api_secret == "test-secret-placeholder-32bytes!"
+    assert settings.livekit_api_secret == SECRET
     assert settings.qdrant_api_key == ""
+    assert settings.livekit_token_ttl_seconds == 900
+    assert settings.session_rate_limit == 10
 
 
-def test_session_token_carries_the_room_and_dispatch_metadata(
-    client: tuple[TestClient, RecordingDispatcher],
+def test_session_token_carries_the_user_room_and_dispatch_metadata(
+    http: TestClient, dispatcher: RecordingDispatcher, as_user, rows
 ) -> None:
-    http, dispatcher = client
-    created = http.post("/products", json=VALID)
-    assert created.status_code == 201
-    product_id = created.json()["id"]
-    UUID(product_id)
+    headers = as_user(user="user-a", org="org-a")
+    product_id = create_product(http, headers)
 
-    started = http.post("/sessions", json={"product_id": product_id})
+    started = http.post("/sessions", json={"product_id": product_id}, headers=headers)
 
     assert started.status_code == 201
     body = started.json()
     assert body["url"] == "ws://localhost:7880"
     assert body["room"].startswith("kb-")
-    claims = TokenVerifier("test-key", "test-secret-placeholder-32bytes!").verify(
-        body["token"]
-    )
-    assert claims.identity == "user"
+    claims = TokenVerifier("test-key", SECRET).verify(body["token"])
+    assert claims.identity == "user:user-a"
     assert claims.video is not None
     assert claims.video.room_join is True
     assert claims.video.room == body["room"]
     assert claims.video.can_publish is True
     assert claims.video.can_subscribe is True
-    assert len(dispatcher.requests) == 1
-    dispatch = dispatcher.requests[0]
+    [dispatch] = dispatcher.requests
     assert dispatch.agent_name == AGENT_NAME == "kb-support"
     assert dispatch.room == body["room"]
     assert json.loads(dispatch.metadata) == {"product_id": product_id}
 
+    listed = http.get("/sessions", headers=headers).json()
+    assert [(item["room"], item["product_id"], item["user_id"]) for item in listed] == [
+        (body["room"], product_id, "user-a")
+    ]
+    assert http.get("/sessions", headers=as_user(org="org-b")).json() == []
+    actions = [row["action"] for row in rows("audit_log")]
+    assert actions.count("session.create") == 1
 
-def test_missing_product_does_not_dispatch(
-    client: tuple[TestClient, RecordingDispatcher],
+
+def test_token_ttl_comes_from_settings(
+    http: TestClient,
+    dispatcher: RecordingDispatcher,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    http, dispatcher = client
+    headers = as_user()
+    product_id = create_product(http, headers)
+
+    def ttl() -> int:
+        token = http.post(
+            "/sessions", json={"product_id": product_id}, headers=headers
+        ).json()["token"]
+        claims = jwt.decode(token, SECRET, algorithms=["HS256"])
+        return claims["exp"] - claims["nbf"]
+
+    assert ttl() == 900
+    monkeypatch.setenv("LIVEKIT_TOKEN_TTL_SECONDS", "120")
+    load_settings.cache_clear()
+    assert ttl() == 120
+
+
+def test_session_starts_are_rate_limited_per_org(
+    http: TestClient,
+    dispatcher: RecordingDispatcher,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SESSION_RATE_LIMIT", "2")
+    load_settings.cache_clear()
+    org_a = as_user(org="org-a")
+    org_b = as_user(user="user-b", org="org-b")
+    product_a = create_product(http, org_a)
+    product_b = create_product(http, org_b)
+
+    statuses = [
+        http.post("/sessions", json={"product_id": product_a}, headers=org_a)
+        for _ in range(3)
+    ]
+
+    assert [response.status_code for response in statuses] == [201, 201, 429]
+    limited = statuses[-1]
+    assert limited.json() == {"detail": "too many sessions, try again shortly"}
+    assert 1 <= int(limited.headers["retry-after"]) <= 60
+    assert len(dispatcher.requests) == 2
+    other = http.post("/sessions", json={"product_id": product_b}, headers=org_b)
+    assert other.status_code == 201
+
+
+def test_missing_or_foreign_product_does_not_dispatch(
+    http: TestClient, dispatcher: RecordingDispatcher, as_user
+) -> None:
+    foreign = create_product(http, as_user(org="org-b"))
+    headers = as_user(org="org-a")
 
     missing = http.post(
         "/sessions",
         json={"product_id": "00000000-0000-0000-0000-000000000000"},
+        headers=headers,
     )
+    other_org = http.post("/sessions", json={"product_id": foreign}, headers=headers)
+    rejected = http.post("/sessions", json={"product_id": "demo"}, headers=headers)
 
     assert missing.status_code == 404
     assert missing.json()["detail"] == "product not found"
-    assert dispatcher.requests == []
-    rejected = http.post("/sessions", json={"product_id": "demo"})
+    assert other_org.status_code == 404
     assert rejected.status_code == 422
     assert dispatcher.requests == []
 
 
-def test_missing_livekit_config_does_not_dispatch(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("LIVEKIT_URL", raising=False)
-    monkeypatch.delenv("LIVEKIT_API_KEY", raising=False)
-    monkeypatch.delenv("LIVEKIT_API_SECRET", raising=False)
-    store = MemoryProductStore()
-    dispatcher = RecordingDispatcher()
-    http = _override(store, dispatcher)
-    created = http.post("/products", json=VALID)
-    assert created.status_code == 201
-
-    started = http.post("/sessions", json={"product_id": created.json()["id"]})
-
-    assert started.status_code == 503
-    assert started.json()["detail"] == "LiveKit is not configured"
-    assert dispatcher.requests == []
-    app.dependency_overrides.clear()
-
-
 @pytest.mark.parametrize(
-    ("key", "secret"),
-    [("replace-me", "replace-me"), ("test-key", ""), ("", "test-secret")],
+    ("url", "key", "secret"),
+    [
+        ("", "", ""),
+        ("ws://localhost:7880", "replace-me", "replace-me"),
+        ("ws://localhost:7880", "test-key", ""),
+        ("ws://localhost:7880", "", "test-secret"),
+    ],
 )
-def test_placeholder_livekit_config_is_not_configured(
-    monkeypatch: pytest.MonkeyPatch, key: str, secret: str
+def test_missing_livekit_config_does_not_dispatch(
+    http: TestClient,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+    url: str,
+    key: str,
+    secret: str,
 ) -> None:
-    monkeypatch.setenv("LIVEKIT_URL", "ws://localhost:7880")
+    monkeypatch.setenv("LIVEKIT_URL", url)
     monkeypatch.setenv("LIVEKIT_API_KEY", key)
     monkeypatch.setenv("LIVEKIT_API_SECRET", secret)
-    store = MemoryProductStore()
-    dispatcher = RecordingDispatcher()
-    http = _override(store, dispatcher)
-    created = http.post("/products", json=VALID)
+    load_settings.cache_clear()
+    recording = RecordingDispatcher()
+    use_dispatcher(recording)
+    headers = as_user()
+    product_id = create_product(http, headers)
 
-    started = http.post("/sessions", json={"product_id": created.json()["id"]})
+    started = http.post("/sessions", json={"product_id": product_id}, headers=headers)
 
     assert started.status_code == 503
     assert started.json()["detail"] == "LiveKit is not configured"
-    assert dispatcher.requests == []
-    app.dependency_overrides.clear()
+    assert recording.requests == []
 
 
 @pytest.fixture
@@ -187,38 +236,38 @@ def livekit_api() -> Iterator[tuple[str, list[str]]]:
 
 
 def test_dispatch_uses_the_server_side_livekit_url(
-    monkeypatch: pytest.MonkeyPatch, livekit_api: tuple[str, list[str]]
+    http: TestClient,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+    livekit_api: tuple[str, list[str]],
 ) -> None:
     api_url, paths = livekit_api
     monkeypatch.setenv("LIVEKIT_URL", "ws://browser-only.invalid:7880")
     monkeypatch.setenv("LIVEKIT_API_URL", api_url)
     monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
-    store = MemoryProductStore()
-    app.dependency_overrides[get_product_store] = lambda: store
-    http = TestClient(app)
-    created = http.post("/products", json=VALID)
+    monkeypatch.setenv("LIVEKIT_API_SECRET", SECRET)
+    load_settings.cache_clear()
+    headers = as_user()
+    product_id = create_product(http, headers)
 
-    started = http.post("/sessions", json={"product_id": created.json()["id"]})
+    started = http.post("/sessions", json={"product_id": product_id}, headers=headers)
 
     assert started.status_code == 201
     assert started.json()["url"] == "ws://browser-only.invalid:7880"
     assert paths == ["/twirp/livekit.AgentDispatchService/CreateDispatch"]
-    app.dependency_overrides.clear()
 
 
 def test_dispatch_failure_does_not_return_a_token(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    http: TestClient,
+    livekit_env: None,
+    as_user,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setenv("LIVEKIT_URL", "ws://localhost:7880")
-    monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
-    store = MemoryProductStore()
-    http = _override(store, FailingDispatcher())
-    created = http.post("/products", json=VALID)
-    assert created.status_code == 201
+    use_dispatcher(FailingDispatcher())
+    headers = as_user()
+    product_id = create_product(http, headers)
 
-    started = http.post("/sessions", json={"product_id": created.json()["id"]})
+    started = http.post("/sessions", json={"product_id": product_id}, headers=headers)
 
     assert started.status_code == 502
     assert started.json()["detail"] == "Could not dispatch the agent"
@@ -227,4 +276,4 @@ def test_dispatch_failure_does_not_return_a_token(
     assert record.levelno == logging.ERROR
     assert record.exc_info is not None
     assert isinstance(record.exc_info[1], RuntimeError)
-    app.dependency_overrides.clear()
+    assert http.get("/sessions", headers=headers).json() == []

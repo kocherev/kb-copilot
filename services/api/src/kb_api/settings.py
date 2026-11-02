@@ -4,8 +4,11 @@ from typing import Annotated
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode
 
+PLACEHOLDERS = {"", "replace-me"}
+
 
 class Settings(BaseSettings):
+    # Ingest still connects with psycopg, so this stays a plain postgresql:// URL.
     database_url: str = "postgresql://kb:replace-me@localhost:5432/kb"
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
@@ -20,6 +23,11 @@ class Settings(BaseSettings):
     livekit_api_url: str = ""
     livekit_api_key: str = ""
     livekit_api_secret: str = ""
+    livekit_token_ttl_seconds: int = Field(default=900, gt=0)
+    internal_api_token: str = ""
+    auth_jwks_url: str = "http://localhost:3000/api/auth/jwks"
+    auth_issuer: str = "http://localhost:3000"
+    session_rate_limit: int = Field(default=10, gt=0)
 
     @field_validator("cors_origins", mode="before")
     @classmethod
@@ -27,6 +35,13 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [part.strip() for part in value.split(",") if part.strip()]
         return value
+
+    @property
+    def async_database_url(self) -> str:
+        scheme, _, rest = self.database_url.partition("://")
+        if scheme in ("postgres", "postgresql"):
+            return f"postgresql+asyncpg://{rest}"
+        return self.database_url
 
 
 @lru_cache
