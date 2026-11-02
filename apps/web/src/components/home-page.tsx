@@ -1,6 +1,4 @@
 import { ProductForm } from "@/components/product-form";
-import { Button } from "@/components/ui/button";
-import { apiPath } from "@/lib/api";
 
 export function HomePage({ apiUrl }: { apiUrl: string }) {
   return (
@@ -23,9 +21,6 @@ export function HomePage({ apiUrl }: { apiUrl: string }) {
         submitLabel="Create product"
         formLabel="Create product"
       />
-      <Button variant="outline" render={<a href={apiPath(apiUrl, "/health")} />}>
-        API health
-      </Button>
     </main>
   );
 }

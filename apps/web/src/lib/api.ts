@@ -1,3 +1,14 @@
+import { productFromResponse, type ProductLoad } from "@/lib/product";
+
+export function publicApiUrl(): string {
+  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+}
+
+// Inside Compose the browser's API URL points at the web container itself.
+export function serverApiUrl(): string {
+  return process.env.API_INTERNAL_URL ?? publicApiUrl();
+}
+
 export function apiPath(apiUrl: string, path: string): string {
   return `${apiUrl.replace(/\/+$/, "")}${path}`;
 }
@@ -19,4 +30,13 @@ export function errorDetail(body: unknown, fallback: string): string {
     return detail;
   }
   return fallback;
+}
+
+export async function loadProduct(id: string): Promise<ProductLoad> {
+  try {
+    const response = await fetch(apiPath(serverApiUrl(), `/products/${id}`));
+    return productFromResponse(response.status, await readJson(response));
+  } catch {
+    return { status: "error", message: "Could not load the product." };
+  }
 }

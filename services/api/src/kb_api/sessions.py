@@ -1,6 +1,7 @@
 """Mint a participant token and dispatch the support agent."""
 
 import json
+import logging
 from typing import Protocol
 from uuid import UUID, uuid4
 
@@ -12,6 +13,7 @@ from kb_api.products import ProductStore, get_product_store
 from kb_api.settings import Settings, load_settings
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 AGENT_NAME = "kb-support"
 
@@ -53,11 +55,16 @@ class LiveKitDispatcher:
             )
 
 
+PLACEHOLDERS = {"", "replace-me"}
+
+
 def livekit_ready(settings: Settings) -> bool:
-    url = settings.livekit_url
-    key = settings.livekit_api_key
-    secret = settings.livekit_api_secret
-    return bool(url and key and secret)
+    values = (
+        settings.livekit_url,
+        settings.livekit_api_key,
+        settings.livekit_api_secret,
+    )
+    return all(value.strip() not in PLACEHOLDERS for value in values)
 
 
 def participant_token(settings: Settings, room: str, identity: str) -> str:
@@ -80,7 +87,7 @@ def participant_token(settings: Settings, room: str, identity: str) -> str:
 def get_dispatcher() -> Dispatcher:
     settings = load_settings()
     return LiveKitDispatcher(
-        settings.livekit_url,
+        settings.livekit_api_url or settings.livekit_url,
         settings.livekit_api_key,
         settings.livekit_api_secret,
     )
@@ -114,6 +121,7 @@ async def create_session(
             )
         )
     except Exception as exc:
+        logger.exception("Agent dispatch failed for room %s", room)
         raise HTTPException(
             status_code=502,
             detail="Could not dispatch the agent",

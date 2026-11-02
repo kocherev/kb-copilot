@@ -1,39 +1,34 @@
-import os
+from functools import lru_cache
+from typing import Annotated
 
-from pydantic import BaseModel
-
-
-class Settings(BaseModel):
-    database_url: str
-    qdrant_url: str
-    qdrant_api_key: str
-    data_root: str
-    cors_origins: list[str]
-    livekit_url: str
-    livekit_api_key: str
-    livekit_api_secret: str
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode
 
 
-def _csv(value: str) -> list[str]:
-    return [part.strip() for part in value.split(",") if part.strip()]
+class Settings(BaseSettings):
+    database_url: str = "postgresql://kb:replace-me@localhost:5432/kb"
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str = ""
+    data_root: str = Field(default=".", validation_alias="KB_DATA_ROOT")
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    livekit_url: str = ""
+    # Server-side LiveKit API calls. In Compose the browser URL is not reachable
+    # from the API container, so this can point at the internal host instead.
+    livekit_api_url: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _csv(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [part.strip() for part in value.split(",") if part.strip()]
+        return value
 
 
+@lru_cache
 def load_settings() -> Settings:
-    return Settings(
-        database_url=os.environ.get(
-            "DATABASE_URL",
-            "postgresql://kb:replace-me@localhost:5432/kb",
-        ),
-        qdrant_url=os.environ.get("QDRANT_URL", "http://localhost:6333"),
-        qdrant_api_key=os.environ.get("QDRANT_API_KEY", ""),
-        data_root=os.environ.get("KB_DATA_ROOT", "."),
-        cors_origins=_csv(
-            os.environ.get(
-                "CORS_ORIGINS",
-                "http://localhost:3000,http://127.0.0.1:3000",
-            )
-        ),
-        livekit_url=os.environ.get("LIVEKIT_URL", ""),
-        livekit_api_key=os.environ.get("LIVEKIT_API_KEY", ""),
-        livekit_api_secret=os.environ.get("LIVEKIT_API_SECRET", ""),
-    )
+    return Settings()
