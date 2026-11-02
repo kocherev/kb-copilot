@@ -17,6 +17,13 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Before migrations, the API created products itself with a TEXT id and no
+    # org. Keep those rows under another name instead of failing or dropping them.
+    inspector = sa.inspect(op.get_bind())
+    if inspector.has_table("products") and "org_id" not in {
+        column["name"] for column in inspector.get_columns("products")
+    }:
+        op.rename_table("products", "products_legacy")
     op.create_table(
         "api_keys",
         sa.Column("id", sa.Uuid(), nullable=False),
