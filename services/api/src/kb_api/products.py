@@ -4,7 +4,9 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
+from kb_rag import RetrievalSettings
 from pydantic import BaseModel, ConfigDict, StringConstraints
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,8 @@ from kb_api.auth import (
     get_principal,
     get_reader,
 )
-from kb_api.db import ProductRow, get_db
+from kb_api.db import DocumentRow, ProductRow, get_db
+from kb_api.jobs import get_qdrant, get_retrieval_settings, remove_chunks
 
 NOT_FOUND: dict[int | str, dict[str, object]] = {
     404: {"model": ErrorBody, "description": "No such product in this org"}
@@ -146,12 +149,25 @@ async def update_product(
     return Product.model_validate(row)
 
 
-@router.delete("/products/{product_id}", status_code=204, responses=NOT_FOUND)
+@router.delete(
+    "/products/{product_id}",
+    status_code=204,
+    responses={
+        **NOT_FOUND,
+        409: {"model": ErrorBody, "description": "A document is still indexing"},
+    },
+)
 async def delete_product(
     row: Annotated[ProductRow, Depends(owned_product)],
     principal: Annotated[Principal, Depends(get_principal)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    qdrant: Annotated[AsyncQdrantClient, Depends(get_qdrant)],
+    settings: Annotated[RetrievalSettings, Depends(get_retrieval_settings)],
 ) -> Response:
+    documents = await db.scalars(
+        select(DocumentRow).where(DocumentRow.product_id == row.id)
+    )
+    await remove_chunks(qdrant, settings, row.id, documents.all())
     audit(db, principal, "product.delete", f"product:{row.id}", {"name": row.name})
     await db.delete(row)
     await db.commit()

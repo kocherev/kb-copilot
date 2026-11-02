@@ -5,11 +5,13 @@ from typing import Annotated, Literal
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from kb_api.api_keys import router as api_keys_router
 from kb_api.auth import AUTH_ERRORS, UserPrincipal, jwks_client, require_user
-from kb_api.ingest import router
+from kb_api.ingest import router as ingest_router
+from kb_api.jobs import fail_interrupted
 from kb_api.products import router as products_router
 from kb_api.sessions import router as sessions_router
 from kb_api.settings import load_settings
@@ -21,7 +23,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine(settings.async_database_url, pool_pre_ping=True)
     app.state.sessions = async_sessionmaker(engine, expire_on_commit=False)
     app.state.jwks = jwks_client(settings.auth_jwks_url)
+    app.state.qdrant = AsyncQdrantClient(
+        url=settings.qdrant_url, api_key=settings.qdrant_api_key or None
+    )
+    # ponytail: assumes one API process. With several, a restart would fail
+    # the jobs another process is still running; a worker with leases fixes that.
+    await fail_interrupted(app.state.sessions)
     yield
+    await app.state.qdrant.close()
     await engine.dispose()
 
 
@@ -32,7 +41,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["authorization", "content-type"],
 )
-app.include_router(router)
+app.include_router(ingest_router)
 app.include_router(products_router)
 app.include_router(sessions_router)
 app.include_router(api_keys_router)

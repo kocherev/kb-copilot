@@ -4,7 +4,15 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine, inspect, text
 
-API_TABLES = {"products", "api_keys", "audit_log", "live_sessions", "rate_limit_hits"}
+API_TABLES = {
+    "products",
+    "api_keys",
+    "audit_log",
+    "live_sessions",
+    "rate_limit_hits",
+    "ingest_jobs",
+    "documents",
+}
 ALEMBIC = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
 
 
@@ -56,8 +64,8 @@ def test_upgrade_keeps_a_products_table_from_before_migrations(
 def test_models_match_the_migrations_and_ignore_other_tables(
     sync_engine: Engine,
 ) -> None:
-    # Stand-ins for Better Auth and ingest tables, unless the database has them.
-    created = {"member", "ingest_jobs"} - tables(sync_engine)
+    # A stand-in for a Better Auth table, unless the database has it.
+    created = {"member"} - tables(sync_engine)
     with sync_engine.begin() as connection:
         for table in created:
             connection.execute(text(f"CREATE TABLE {table} (id TEXT PRIMARY KEY)"))
@@ -67,3 +75,28 @@ def test_models_match_the_migrations_and_ignore_other_tables(
         with sync_engine.begin() as connection:
             for table in created:
                 connection.execute(text(f"DROP TABLE {table}"))
+
+
+def test_upgrade_keeps_ingest_jobs_from_before_migrations(sync_engine: Engine) -> None:
+    command.downgrade(ALEMBIC, "base")
+    with sync_engine.begin() as connection:
+        connection.execute(
+            text("CREATE TABLE ingest_jobs (id TEXT PRIMARY KEY, product_id TEXT)")
+        )
+        connection.execute(text("INSERT INTO ingest_jobs VALUES ('job-1', 'old-1')"))
+
+    try:
+        command.upgrade(ALEMBIC, "head")
+        with sync_engine.connect() as connection:
+            legacy = connection.execute(
+                text("SELECT id, product_id FROM ingest_jobs_legacy")
+            ).all()
+            columns = {
+                column["name"]
+                for column in inspect(connection).get_columns("ingest_jobs")
+            }
+    finally:
+        with sync_engine.begin() as connection:
+            connection.execute(text("DROP TABLE IF EXISTS ingest_jobs_legacy"))
+    assert [tuple(row) for row in legacy] == [("job-1", "old-1")]
+    assert {"status", "chunk_count", "error"} <= columns

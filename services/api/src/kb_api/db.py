@@ -6,7 +6,15 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import Request
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -72,6 +80,42 @@ class LiveSessionRow(Base):
     room: Mapped[str] = mapped_column(Text)
     user_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class IngestJobRow(Base):
+    """One upload request. Its documents are indexed in the background."""
+
+    __tablename__ = "ingest_jobs"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    product_id: Mapped[UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(Text)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class DocumentRow(Base):
+    __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("product_id", "source"),)
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    product_id: Mapped[UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE")
+    )
+    source: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    job_id: Mapped[UUID] = mapped_column(
+        ForeignKey("ingest_jobs.id", ondelete="CASCADE")
+    )
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
 
 class RateLimitRow(Base):

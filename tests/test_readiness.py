@@ -82,7 +82,6 @@ def test_env_example_lists_placeholders_only() -> None:
         "QDRANT_URL",
         "QDRANT_API_KEY",
         "QDRANT_PORT",
-        "KB_DATA_ROOT",
         "API_HOST",
         "API_PORT",
         "WEB_PORT",
