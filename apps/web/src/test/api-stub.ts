@@ -40,7 +40,8 @@ export function stubApi(reply: (call: ApiCall) => ApiReply): ApiCall[] {
             };
       calls.push(call);
       const { status, body, text } = reply(call);
-      return new Response(text ?? JSON.stringify(body ?? null), {
+      // A 204 cannot carry a body.
+      return new Response(status === 204 ? null : (text ?? JSON.stringify(body ?? null)), {
         status,
         headers: { "content-type": "application/json" },
       });
