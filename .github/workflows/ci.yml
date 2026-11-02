@@ -28,6 +28,20 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kb
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: kb_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kb -d kb_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.3
@@ -40,6 +54,33 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pyright
       - run: uv run pytest
+      - name: API tests on Postgres
+        run: uv run pytest services/api/tests
+        env:
+          KB_TEST_DATABASE_URL: postgresql+asyncpg://kb:test-only@localhost:5432/kb_test
+
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen --all-packages --group dev
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: OpenAPI client is up to date
+        run: |
+          pnpm openapi
+          git diff --exit-code apps/web/openapi.json apps/web/src/lib/api/schema.d.ts
 
   evals:
     runs-on: ubuntu-latest
@@ -70,14 +111,16 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --frozen --all-packages --group dev
-      - name: Use the dev LiveKit key pair
+      - name: Use the dev LiveKit key pair and throwaway auth secrets
         run: |
           cp .env.example .env
           sed -i -e 's/^LIVEKIT_API_KEY=.*/LIVEKIT_API_KEY=devkey/' \
-            -e 's/^LIVEKIT_API_SECRET=.*/LIVEKIT_API_SECRET=secret/' .env
+            -e 's/^LIVEKIT_API_SECRET=.*/LIVEKIT_API_SECRET=secret/' \
+            -e "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=$(openssl rand -hex 32)/" \
+            -e "s/^INTERNAL_API_TOKEN=.*/INTERNAL_API_TOKEN=$(openssl rand -hex 16)/" .env
       - run: docker compose --profile livekit up -d --build --wait postgres qdrant api web livekit
       - run: uv run python scripts/smoke.py
-      - run: uv run pytest services/api/tests/test_products_live.py services/api/tests/test_ingest_live.py
+      - run: uv run pytest services/api/tests/test_ingest_live.py
         env:
           KB_LIVE_STORES: "1"
           DATABASE_URL: postgresql://kb:replace-me@localhost:5432/kb

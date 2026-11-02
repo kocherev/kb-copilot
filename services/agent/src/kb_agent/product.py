@@ -1,7 +1,8 @@
 import json
+import os
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from kb_agent.prompt import ProductPrompt, render_system_prompt
 
@@ -24,9 +25,11 @@ def product_url(api_url: str, product_id: str) -> str:
 
 
 def fetch_product(api_url: str, product_id: str) -> ProductPrompt:
-    request_url = product_url(api_url, product_id)
+    token = os.environ.get("INTERNAL_API_TOKEN", "")
+    headers = {"X-Internal-Token": token} if token else {}
+    request = Request(product_url(api_url, product_id), headers=headers)
     try:
-        with urlopen(request_url, timeout=10) as response:
+        with urlopen(request, timeout=10) as response:
             body = json.loads(response.read().decode())
     except HTTPError as exc:
         raise ValueError(f"product config returned {exc.code}") from exc
