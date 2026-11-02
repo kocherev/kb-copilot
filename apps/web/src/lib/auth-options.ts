@@ -21,8 +21,8 @@ export const authOptions = {
       jwt: {
         issuer: baseURL,
         audience: API_AUDIENCE,
-        definePayload: ({ user, session }) => ({
-          email: user.email,
+        // The API scopes every request to this org.
+        definePayload: ({ session }) => ({
           org_id: session.activeOrganizationId ?? null,
         }),
       },
