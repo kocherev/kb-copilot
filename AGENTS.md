@@ -49,7 +49,7 @@ Self-hosted media server:
 docker compose --profile livekit up --build
 ```
 
-The dev LiveKit process uses API key `devkey` and API secret `secret`. Spoken replies on that URL need `OPENAI_API_KEY`. A `*.livekit.cloud` URL uses LiveKit Inference and does not use that key. The agent container exits when `LIVEKIT_URL` or the key pair is missing. The web app and the API still come up.
+The dev LiveKit process uses API key `devkey` and API secret `secret`. Spoken replies on that URL need `OPENAI_API_KEY`. A `*.livekit.cloud` URL uses LiveKit Inference and does not use that key. A placeholder key pair such as `replace-me` counts as missing. `POST /sessions` then returns 503, and the agent container keeps retrying. The web app and the API still come up.
 
 One package at a time:
 
@@ -73,8 +73,6 @@ uv run pytest evals/tests
 - Dense vectors are a local token hash. A model embedding is a separate change. Re-score with `make eval` before editing the README table.
 - Do not put a secret, a live password, or a filled-in `.env` in a commit. `.env.example` stays placeholders.
 - The homepage button in `apps/web/src/components/ui/button.tsx` is Honest UI. Leave it. New primitives come from https://ds.asanshay.com/ first. Details are in `skills/interface/SKILL.md`.
-- Consented computer actions are out of scope.
-- Docs, commits, and CI do not name the editor or the coding agent that produced a change.
 
 ## Evals before a pull request
 
@@ -90,8 +88,7 @@ Skills live in `skills/`. `.agents/skills` points at that same directory. Read t
 | --- | --- |
 | `skills/working-style/SKILL.md` | Any code change. Named state, observable tests, role budgets. |
 | `skills/ponytail/SKILL.md` | Sizing a diff. |
-| `skills/prove-it/SKILL.md` | What counts as done. |
-| `skills/prove-it-works/SKILL.md` | Unit tests, `make eval`, and the score table in the pull request. |
+| `skills/prove-it-works/SKILL.md` | What counts as done. Unit tests, `make eval`, and the score table in the pull request. |
 | `skills/tests/SKILL.md` | Writing or changing a test. |
 | `skills/livekit-agent/SKILL.md` | The worker, dispatch, screen share, voice, or citations. |
 | `skills/rag-index-query/SKILL.md` | Readers, chunking, embeddings, or the Qdrant query. |
@@ -99,7 +96,6 @@ Skills live in `skills/`. `.agents/skills` points at that same directory. Read t
 | `skills/interface/SKILL.md` | Any UI change. |
 | `skills/make-interfaces-feel-better/SKILL.md` | Type, surfaces, motion, icons. |
 | `skills/design-engineering/SKILL.md` | Motion and component feel. |
-| `skills/design-catalog/SKILL.md` | Pointer to the design-engineering index. |
 | `skills/technical-writing/SKILL.md` | README and other public docs. |
 | `skills/unslop/SKILL.md` | Docs, commits, and review text. |
 | `skills/pr-hygiene/SKILL.md` | Branch, commit, pull request, secrets. |

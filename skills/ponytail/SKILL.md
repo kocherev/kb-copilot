@@ -1,3 +1,10 @@
+---
+name: ponytail
+description: >
+  Pick the smallest complete change. Skip what nobody asked for, reuse what
+  exists, and leave one small test. Use when sizing a diff.
+---
+
 # Smaller diffs
 
 Based on the Ponytail rules, MIT, https://github.com/DietrichGebert/ponytail.
@@ -14,8 +21,6 @@ Take the first option that fully works:
 6. Otherwise write the minimum that works.
 
 Finish every part the task needs, including callers and tests your change breaks. Deletion beats a new wrapper. Comment only a why the code cannot show, in one line.
-
-A shortcut with a known limit gets a comment in this form: `shortcut: <limit>. Revisit when <condition>.`
 
 Lazy code without its check is unfinished. A branch, a loop, a parser, money, security, or a new script leaves one small test.
 

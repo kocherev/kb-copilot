@@ -53,9 +53,9 @@ docker compose up --build
 
 `/readyz` returns plain text and HTTP 200. Do not parse that body as JSON.
 
-Compose points the API at the `postgres` and `qdrant` hostnames. `.env` keeps `localhost` for commands you run on the host. The API container waits with `scripts/wait_for_http.py`, which checks the status code only.
+Compose points the API at the `postgres` and `qdrant` hostnames. `.env` keeps `localhost` for commands you run on the host. The API container waits with `scripts/wait_for_http.py`, which checks the status code only. The browser calls the API at `NEXT_PUBLIC_API_URL`. The web server reads products through `API_INTERNAL_URL`, which is `http://api:8000` in Compose.
 
-`.env.example` sets the LiveKit key pair to `replace-me`. The web app, API, Postgres, and Qdrant still start. The worker joins a room only after `LIVEKIT_URL` and a real key pair are set. It exits when either value is missing. On a `*.livekit.cloud` URL, LiveKit Inference uses that key pair and `OPENAI_API_KEY` can stay empty. On any other URL, spoken replies need `OPENAI_API_KEY`. The two setups are below.
+`.env.example` sets the LiveKit key pair to `replace-me`. The web app, API, Postgres, and Qdrant still start. A placeholder counts as missing, so `POST /sessions` returns 503 with `LiveKit is not configured`. The worker keeps retrying until `LIVEKIT_URL` and a real key pair are set. The two setups are below.
 
 Create a product and index the sample pages. Those pages are original text under the MIT license in `LICENSE`.
 
@@ -86,7 +86,7 @@ make eval
 
 ### LiveKit Cloud
 
-Set `LIVEKIT_URL` and `LIVEKIT_AGENT_URL` to the same `wss://<project>.livekit.cloud` URL, and set that project's key pair. Leave `OPENAI_API_KEY` empty. The worker uses LiveKit Inference on a `*.livekit.cloud` host. Leave the `livekit` profile off.
+Set `LIVEKIT_URL`, `LIVEKIT_AGENT_URL`, and `LIVEKIT_API_URL` to the same `wss://<project>.livekit.cloud` URL, and set that project's key pair. Leave `OPENAI_API_KEY` empty. Leave the `livekit` profile off.
 
 ```bash
 docker compose up --build
@@ -98,35 +98,21 @@ docker compose up --build
 docker compose --profile livekit up --build
 ```
 
-That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Its key pair is `devkey` / `secret`. Put those in `.env`, with `LIVEKIT_URL=ws://localhost:7880` and `LIVEKIT_AGENT_URL=ws://livekit:7880`. Set `OPENAI_API_KEY` as well. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL` because `localhost` inside that container is not the LiveKit server.
+That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Its key pair is `devkey` / `secret`. Put those in `.env`, with `LIVEKIT_URL=ws://localhost:7880`, `LIVEKIT_AGENT_URL=ws://livekit:7880`, and `LIVEKIT_API_URL=http://livekit:7880`. Set `OPENAI_API_KEY` as well. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`, and the API dispatches through `LIVEKIT_API_URL`, because `localhost` inside a container is not the LiveKit server.
 
 ## Demo
 
-The session page asks for the microphone and the screen. After the room connects, the shared picture is shown on the page. While the agent thinks, a Thinking label appears on that picture. When the agent calls `point_at`, a ring and a short label mark a spot. That highlight is drawn in the browser, on the preview. It is not an operating-system cursor. The worker does not move the mouse, and it does not click. The frames sent to the model are the shared screen without that highlight.
+The session page asks for the microphone and the screen, then shows the shared screen. A Thinking label appears while the agent thinks. When the agent calls `point_at`, the page draws a ring and a short label on that preview. The highlight stays in the browser. The worker does not move the mouse or click.
 
-The transcript lists each turn. A cited answer shows `Source:` under the agent's line. The label is the file name, here `billing.md`.
+The transcript lists each turn. A cited answer shows `Source:` and the file name under the agent's line.
+
+The GIF and the stills render the session components with a sample turn. They are not a recording of a live room.
 
 ![Session page, then the transcript. The cited line reads Source: billing.md.](docs/demo.gif)
-
-The stills below are the session components with a sample turn, so the citation stays readable. They are component frames, not a recording of a Cloud room.
-
-One Cloud session recorded the live page. The preview showed the shared refund page. The caller asked how long refunds take and which button to press. The transcript answered with the indexed sentence, "Refunds take 5 business days after the review team approves the request.", and the line under it was `Source: billing.md`. That reply also asked the caller to share the screen. The realtime usage for the turn reported `image_tokens` as 0. The capture shows the citation. It does not show the model using the picture. `point_at` was not called, so no ring was drawn. The sentence under the preview still says the highlight does not move the mouse. A later plugin room shared that same page and closed before a reply. Its realtime lines stayed at `image_tokens` 0.
 
 ![Session page for Acme before the room connects. The button reads Start session.](docs/session-start.png)
 
 ![Session transcript for Acme. The agent answers the refund question and the line under it reads Source: billing.md.](docs/session-transcript.png)
-
-What you would hear for "How long do refunds take?": the indexed sentence is "Refunds take 5 business days after the review team approves the request." On LiveKit Cloud the worker speaks with Gemini Live. The transcript adds `Source: billing.md`. The system prompt tells the agent not to read the source URL aloud.
-
-A Cloud room needs `LIVEKIT_URL` on `*.livekit.cloud` and that project's key pair. `OPENAI_API_KEY` can stay empty on that host.
-
-What to say about this repo is in [Interview talking points](#interview-talking-points).
-
-## Interview talking points
-
-- Upload the product docs, set the refusal rules, and join a call with your microphone and your screen. The agent answers by voice from those docs.
-- When the docs contain the answer, the transcript shows `Source:` and the file name, as in `Source: billing.md`. When they do not, the agent says `That is not in the docs.`
-- `make eval` scores the 40 sample questions with no model key and no LiveKit room. It checks that the right page was found and that the answer cites it. Faithfulness is a text overlap check against the retrieved passage, described in `evals/README.md`. It is not a live model judging its own answer. The command fails when a score drops under `evals/thresholds.json`.
 
 ## Eval results
 
@@ -145,29 +131,7 @@ What to say about this repo is in [Interview talking points](#interview-talking-
 
 `services/mcp` speaks MCP over stdio. `search_kb` uses the same retrieval function as the agent. `get_product` reads `GET /products/{id}`.
 
-Start the stack from the quickstart, then point the client at this repo. Stdout is the protocol. The longer notes, including the tool arguments, are in `services/mcp/README.md`.
-
-```json
-{
-  "mcpServers": {
-    "kb-copilot": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "/absolute/path/to/kb-copilot",
-        "--package",
-        "kb-mcp",
-        "kb-mcp"
-      ],
-      "env": {
-        "QDRANT_URL": "http://localhost:6333",
-        "API_URL": "http://localhost:8000"
-      }
-    }
-  }
-}
-```
+The client config and the tool arguments are in `services/mcp/README.md`.
 
 ## Layout
 
@@ -180,11 +144,11 @@ Start the stack from the quickstart, then point the client at this repo. Stdout 
 | `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
 | `evals` | Golden questions, scorers, and the threshold gate. |
 
-The command map for changes is `AGENTS.md`. The hiring-theme checklist is `docs/jd-fit.md`.
+The command map for changes is `AGENTS.md`.
 
 ## Ingest
 
-Markdown, HTML, and PDF are accepted. A file upload uses `upload://<name>` as `source_url`. A directory upload uses the file URI.
+Markdown, plain text, HTML, and PDF are accepted. A file upload uses `upload://<name>` as `source_url`. A directory upload uses the file URI.
 
 ```bash
 curl -s -X POST http://localhost:8000/products/demo/documents \
@@ -208,9 +172,9 @@ The web app at `/` creates a product. `/products/{id}` edits the four fields and
 
 ## Live session
 
-`POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish the microphone and the screen. The API dispatches the agent named `kb-support` with job metadata `{"product_id":"<uuid>"}`. Missing LiveKit settings return 503.
+`POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish the microphone and the screen. The API dispatches the agent named `kb-support` through `LIVEKIT_API_URL`, with job metadata `{"product_id":"<uuid>"}`. Missing or placeholder LiveKit settings return 503 with `LiveKit is not configured`.
 
-The worker loads that product from `GET /products/{id}` and uses it as the system prompt. On a `*.livekit.cloud` URL it uses LiveKit Inference. The realtime model is `google/gemini-3.8-live-extended-thinking` with voice `Puck` and reasoning effort `low`. If that session fails to start, the worker tries `google/gemini-3.8-live`, then `google/gemini-live`. `google/gemini-live` is an alias of `google/gemini-3.8-live`. The worker samples screen-share frames, about one a second while the caller speaks and about one every three seconds otherwise. That Inference session sends each frame as an OpenAI `input_image` item. Gemini Live counts a picture when the frame arrives as a video blob, which is what the Gemini plugin sends. A Cloud Inference room answered from the docs and reported `image_tokens` 0, `input_tokens` 11965, and `output_tokens` 925. A later Cloud room used that plugin with one socket (`max_retry` 0) and server activity detection left on. The screen share subscribed. The greeting logged `generate_reply timed out waiting for generation_created event`. The socket then closed with `1008 None. BidiGenerateContent session is already connected to an existing client`. The realtime lines before the close were `image_tokens` 0, `input_tokens` 0, `output_tokens` 0, and `duration_ms` 0. That room did not finish a vision turn. `OPENAI_API_KEY` can stay empty. On any other URL, including the Compose hostname `livekit`, the worker uses the OpenAI plugin and `OPENAI_API_KEY`. That pipeline does not receive the frames. A local media server is not required for the Cloud path, and this repo does not ask you to run one for a Cloud session.
+The worker loads that product from `GET /products/{id}` and uses it as the system prompt. On a `*.livekit.cloud` URL it uses Gemini Live through LiveKit Inference. On any other URL, including the Compose hostname `livekit`, it uses the OpenAI plugin and needs `OPENAI_API_KEY`. Neither path sends the screen share to the model yet, because LiveKit Inference does not pass video to realtime models and the OpenAI pipeline does not use video.
 
 Each product question calls `search_kb` against `kb_chunks`, filtered by `product_id`. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose). The API and the worker pass `QDRANT_API_KEY` when it is set. An empty value leaves local Qdrant without a key. A matching passage is cited in the transcript. No matching passage produces `That is not in the docs.` On the Cloud path that sentence is spoken by the Inference TTS. The realtime model is not asked to invent a replacement.
 

@@ -24,12 +24,10 @@ The architecture diagram names `apps/web`, `services/api`, `services/agent`, `se
 
 The eval table copies `make eval`. When the printout changes, replace the numbers from that printout.
 
-Demo pictures show the session screen. If they are not a live recording, say that, and say that a live capture needs LiveKit credentials and a model key.
+Demo pictures show the session screen. If they are not a live recording, say that.
 
 ## Sentences
 
 Public prose follows `skills/unslop/SKILL.md`. Sentence-case headings. One idea per sentence. Name the command, the status code, or the file.
 
 Do not add a personal claim. The license statement points at `LICENSE`. Sample pages in `demo/docs` are original and use that same MIT license.
-
-Do not name an editor or a coding agent in the README, a skill, or a commit message.

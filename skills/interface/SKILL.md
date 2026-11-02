@@ -1,10 +1,16 @@
+---
+name: interface
+description: >
+  Rules for UI changes in apps/web. Primitive sources, the Honest UI button,
+  motion limits, and focus. Use before any visual change.
+---
+
 # Interface
 
 Sources to read before changing UI:
 
 - https://emilkowal.ski/skill
-- https://jakubkurz.com/skills
-- https://jakubkurz.com/writing/details-that-make-interfaces-feel-better
+- https://jakub.kr/writing/details-that-make-interfaces-feel-better
 
 Rules for this app:
 
