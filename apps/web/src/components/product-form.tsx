@@ -101,7 +101,11 @@ export function ProductForm({
         {
           method: productId ? "PUT" : "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(draft),
+          // The API keeps the description to one paragraph.
+          body: JSON.stringify({
+            ...draft,
+            description: draft.description.replace(/\s*[\r\n]+\s*/g, " "),
+          }),
         },
       );
       const body = await readJson(response);

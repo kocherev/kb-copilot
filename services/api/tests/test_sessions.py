@@ -1,4 +1,8 @@
 import json
+import logging
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from uuid import UUID
 
 import pytest
@@ -136,8 +140,75 @@ def test_missing_livekit_config_does_not_dispatch(
     app.dependency_overrides.clear()
 
 
+@pytest.mark.parametrize(
+    ("key", "secret"),
+    [("replace-me", "replace-me"), ("test-key", ""), ("", "test-secret")],
+)
+def test_placeholder_livekit_config_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch, key: str, secret: str
+) -> None:
+    monkeypatch.setenv("LIVEKIT_URL", "ws://localhost:7880")
+    monkeypatch.setenv("LIVEKIT_API_KEY", key)
+    monkeypatch.setenv("LIVEKIT_API_SECRET", secret)
+    store = MemoryProductStore()
+    dispatcher = RecordingDispatcher()
+    http = _override(store, dispatcher)
+    created = http.post("/products", json=VALID)
+
+    started = http.post("/sessions", json={"product_id": created.json()["id"]})
+
+    assert started.status_code == 503
+    assert started.json()["detail"] == "LiveKit is not configured"
+    assert dispatcher.requests == []
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def livekit_api() -> Iterator[tuple[str, list[str]]]:
+    paths: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers["content-length"]))
+            paths.append(self.path)
+            self.send_response(200)
+            self.send_header("content-length", "0")
+            self.end_headers()
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}", paths
+    server.shutdown()
+    server.server_close()
+
+
+def test_dispatch_uses_the_server_side_livekit_url(
+    monkeypatch: pytest.MonkeyPatch, livekit_api: tuple[str, list[str]]
+) -> None:
+    api_url, paths = livekit_api
+    monkeypatch.setenv("LIVEKIT_URL", "ws://browser-only.invalid:7880")
+    monkeypatch.setenv("LIVEKIT_API_URL", api_url)
+    monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
+    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
+    store = MemoryProductStore()
+    app.dependency_overrides[get_product_store] = lambda: store
+    http = TestClient(app)
+    created = http.post("/products", json=VALID)
+
+    started = http.post("/sessions", json={"product_id": created.json()["id"]})
+
+    assert started.status_code == 201
+    assert started.json()["url"] == "ws://browser-only.invalid:7880"
+    assert paths == ["/twirp/livekit.AgentDispatchService/CreateDispatch"]
+    app.dependency_overrides.clear()
+
+
 def test_dispatch_failure_does_not_return_a_token(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setenv("LIVEKIT_URL", "ws://localhost:7880")
     monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
@@ -152,4 +223,8 @@ def test_dispatch_failure_does_not_return_a_token(
     assert started.status_code == 502
     assert started.json()["detail"] == "Could not dispatch the agent"
     assert "token" not in started.json()
+    [record] = [r for r in caplog.records if r.name == "kb_api.sessions"]
+    assert record.levelno == logging.ERROR
+    assert record.exc_info is not None
+    assert isinstance(record.exc_info[1], RuntimeError)
     app.dependency_overrides.clear()

@@ -31,15 +31,13 @@ function fillCreateForm() {
   });
 }
 
-test("home page links to api health", () => {
+test("home page explains the flow without operator links", () => {
   render(<HomePage apiUrl="http://localhost:8000/" />);
 
   expect(
     screen.getByRole("heading", { level: 1, name: "Knowledge base copilot" }),
   ).toBeDefined();
-  expect(screen.getByRole("link", { name: "API health" }).getAttribute("href")).toBe(
-    "http://localhost:8000/health",
-  );
+  expect(screen.queryByRole("link", { name: "API health" })).toBeNull();
   expect(screen.getByText(/answers by voice/i)).toBeDefined();
   expect(screen.getByRole("button", { name: "Create product" })).toBeDefined();
 });
@@ -157,5 +155,38 @@ test("create survives a response that is not a product", async () => {
 
   expect((await screen.findByRole("alert")).textContent).toBe(
     "Could not save the product.",
+  );
+});
+
+test("a description typed on several lines is saved as one paragraph", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const sent = JSON.parse(String(init?.body)) as typeof draft;
+      if (/[\r\n]/.test(sent.description)) {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: "description must be one paragraph" }),
+        };
+      }
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({ id: "11111111-1111-4111-8111-111111111111", ...sent }),
+      };
+    }),
+  );
+  render(<HomePage apiUrl="http://localhost:8000" />);
+  fillCreateForm();
+  fireEvent.change(screen.getByLabelText("Description"), {
+    target: { value: "Acme resets passwords.\r\n\n  It also unlocks accounts." },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create product" }));
+
+  expect((await screen.findByRole("status")).textContent).toBe("Saved");
+  expect(screen.getByLabelText("Description")).toHaveProperty(
+    "value",
+    "Acme resets passwords. It also unlocks accounts.",
   );
 });
