@@ -3,18 +3,18 @@ import { expect, test } from "vitest";
 import {
   applyHudMessage,
   emptyHud,
-  sessionFromResponse,
+  sessionLoad,
   sessionPublish,
   sourceLabel,
   transcriptLines,
 } from "@/lib/session";
 
 test("session response keeps the livekit url token and room", () => {
-  const ready = sessionFromResponse(201, {
-    url: "ws://localhost:7880",
-    token: "signed-token",
-    room: "kb-room",
-  });
+  const ready = sessionLoad(
+    201,
+    { url: "ws://localhost:7880", token: "signed-token", room: "kb-room" },
+    undefined,
+  );
 
   expect(ready).toEqual({
     status: "ready",
@@ -43,19 +43,18 @@ test("hud messages move the preview highlight", () => {
 });
 
 test("session errors stay readable", () => {
-  expect(sessionFromResponse(404, { detail: "product not found" })).toEqual({
+  expect(sessionLoad(404, undefined, { detail: "product not found" })).toEqual({
     status: "error",
     message: "Product not found.",
   });
-  expect(sessionFromResponse(503, { detail: "LiveKit is not configured" })).toEqual({
+  expect(sessionLoad(503, undefined, { detail: "LiveKit is not configured" })).toEqual({
     status: "error",
     message: "LiveKit is not configured",
   });
-  expect(sessionFromResponse(502, { detail: "Could not dispatch the agent" })).toEqual({
-    status: "error",
-    message: "Could not dispatch the agent",
-  });
-  expect(sessionFromResponse(201, { url: "" })).toEqual({
+  expect(
+    sessionLoad(429, undefined, { detail: "too many sessions, try again shortly" }),
+  ).toEqual({ status: "error", message: "too many sessions, try again shortly" });
+  expect(sessionLoad(500, undefined, null)).toEqual({
     status: "error",
     message: "Could not start the session.",
   });
@@ -77,7 +76,7 @@ test("transcript lines keep short and unbroken text", () => {
     },
     {
       text: "A",
-      participantInfo: { identity: "user" },
+      participantInfo: { identity: "user:user-a" },
       streamInfo: { id: "one" },
     },
     {

@@ -6,8 +6,15 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { ProductForm } from "@/components/product-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { apiPath, errorDetail, readJson } from "@/lib/api";
-import { indexedLabel, type Product, type ProductLoad } from "@/lib/product";
+import {
+  apiPath,
+  browserToken,
+  errorDetail,
+  readJson,
+  type IngestJob,
+  type Product,
+} from "@/lib/api/client";
+import { indexedLabel, type ProductLoad } from "@/lib/product";
 
 const linkClass =
   "text-sm underline underline-offset-4 focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]";
@@ -94,13 +101,13 @@ function UploadDocuments({
     try {
       const response = await fetch(
         apiPath(apiUrl, `/products/${productId}/documents`),
-        { method: "POST", body },
+        {
+          method: "POST",
+          headers: { authorization: `Bearer ${await browserToken()}` },
+          body,
+        },
       );
-      const payload = (await readJson(response)) as {
-        status?: string;
-        chunk_count?: number;
-        error?: string | null;
-      } | null;
+      const payload = (await readJson(response)) as Partial<IngestJob> | null;
       if (!response.ok) {
         setError(errorDetail(payload, "Could not upload documents."));
         return;

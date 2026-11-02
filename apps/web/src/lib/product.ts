@@ -1,53 +1,29 @@
-import { errorDetail } from "@/lib/api";
-
-export type ProductDraft = {
-  name: string;
-  description: string;
-  tone: string;
-  refusal_rules: string;
-};
-
-export type Product = ProductDraft & {
-  id: string;
-};
+import { errorDetail, type Product, type ProductWrite } from "@/lib/api/client";
 
 export type ProductLoad =
   | { status: "ready"; product: Product }
   | { status: "missing" }
   | { status: "error"; message: string };
 
-export const emptyDraft: ProductDraft = {
+export const emptyDraft: ProductWrite = {
   name: "",
   description: "",
   tone: "",
   refusal_rules: "",
 };
 
-export function isProduct(body: unknown): body is Product {
-  if (typeof body !== "object" || body === null) {
-    return false;
-  }
-  const record = body as Record<string, unknown>;
-  return (
-    typeof record.id === "string" &&
-    typeof record.name === "string" &&
-    typeof record.description === "string" &&
-    typeof record.tone === "string" &&
-    typeof record.refusal_rules === "string"
-  );
-}
-
-export function productFromResponse(status: number, body: unknown): ProductLoad {
+export function productLoad(
+  status: number,
+  product: Product | undefined,
+  error: unknown,
+): ProductLoad {
   if (status === 404) {
     return { status: "missing" };
   }
-  if (status < 200 || status >= 300 || !isProduct(body)) {
-    return {
-      status: "error",
-      message: errorDetail(body, "Could not load the product."),
-    };
+  if (product === undefined) {
+    return { status: "error", message: errorDetail(error, "Could not load the product.") };
   }
-  return { status: "ready", product: body };
+  return { status: "ready", product };
 }
 
 export function indexedLabel(count: number): string {

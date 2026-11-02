@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 
 import { ProductEditor } from "@/components/product-editor";
 import type { ProductLoad } from "@/lib/product";
+import { TEST_JWT, stubApi } from "@/test/api-stub";
 
 const product = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -17,33 +18,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function jsonResponse(body: unknown, status = 200) {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  };
-}
-
 test("saves config and uploads documents for that product", async () => {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    if (init?.method === "PUT") {
-      expect(url).toBe(`http://localhost:8000/products/${product.id}`);
-      return jsonResponse({ ...product, ...JSON.parse(String(init.body)) });
-    }
-    expect(url).toBe(`http://localhost:8000/products/${product.id}/documents`);
-    const form = init?.body as FormData;
-    expect(form.getAll("files")).toHaveLength(1);
-    expect((form.get("files") as File).name).toBe("notes.md");
-    return jsonResponse({
-      status: "indexed",
-      chunk_count: 2,
-      error: null,
-      product_id: product.id,
-    });
-  });
-  vi.stubGlobal("fetch", fetchMock);
+  const calls = stubApi((call) =>
+    call.method === "PUT"
+      ? { status: 200, body: { ...product, ...(call.json as object) } }
+      : {
+          status: 201,
+          body: { status: "indexed", chunk_count: 2, error: null, product_id: product.id },
+        },
+  );
   render(
     <ProductEditor
       apiUrl="http://localhost:8000"
@@ -70,9 +53,10 @@ test("saves config and uploads documents for that product", async () => {
     await screen.findByRole("heading", { level: 1, name: "Acme Care" }),
   ).toBeDefined();
   expect(screen.getByText("Saved")).toBeDefined();
-  const put = fetchMock.mock.calls.find((call) => call[1]?.method === "PUT");
-  expect(String(put?.[0])).toBe(`http://localhost:8000/products/${product.id}`);
-  expect(JSON.parse(String(put?.[1]?.body))).toMatchObject({
+  const [put] = calls;
+  expect(put?.url).toBe(`http://localhost:8000/products/${product.id}`);
+  expect(put?.authorization).toBe(`Bearer ${TEST_JWT}`);
+  expect(put?.json).toMatchObject({
     name: "Acme Care",
     description: product.description,
     tone: product.tone,
@@ -93,10 +77,12 @@ test("saves config and uploads documents for that product", async () => {
   fireEvent.click(upload);
 
   expect(await screen.findByText("Indexed 2 chunks.")).toBeDefined();
-  const posted = fetchMock.mock.calls.find((call) =>
-    String(call[0]).endsWith("/documents"),
-  );
-  expect(posted?.[1]?.method).toBe("POST");
+  const posted = calls[1];
+  expect(posted?.method).toBe("POST");
+  expect(posted?.url).toBe(`http://localhost:8000/products/${product.id}/documents`);
+  expect(posted?.authorization).toBe(`Bearer ${TEST_JWT}`);
+  expect(posted?.form?.getAll("files")).toHaveLength(1);
+  expect((posted?.form?.get("files") as File).name).toBe("notes.md");
 });
 
 test("missing product says it was not found", async () => {
@@ -112,18 +98,10 @@ test("missing product says it was not found", async () => {
 });
 
 test("a failed upload shows the job error", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(init?.method).toBe("POST");
-      expect(String(input)).toContain("/documents");
-      return jsonResponse({
-        status: "failed",
-        chunk_count: 0,
-        error: "broken.pdf has no text",
-      });
-    }),
-  );
+  stubApi(() => ({
+    status: 201,
+    body: { status: "failed", chunk_count: 0, error: "broken.pdf has no text" },
+  }));
   render(
     <ProductEditor
       apiUrl="http://localhost:8000"

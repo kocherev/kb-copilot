@@ -9,6 +9,7 @@
     "lint": "pnpm --filter web lint",
     "typecheck": "pnpm --filter web typecheck",
     "test": "pnpm --filter web test",
-    "build": "pnpm --filter web build"
+    "build": "pnpm --filter web build",
+    "openapi": "uv run python -m kb_api.openapi > apps/web/openapi.json && pnpm --filter web generate:api"
   }
 }
