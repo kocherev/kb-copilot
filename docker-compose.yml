@@ -150,10 +150,12 @@ services:
     profiles: ["livekit"]
     restart: unless-stopped
     command: ["--dev", "--bind", "0.0.0.0"]
+    # Host ports can move so two stacks fit on one machine. Media over the
+    # remapped UDP port needs the default 7882.
     ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "7882:7882/udp"
+      - "${LIVEKIT_PORT:-7880}:7880"
+      - "${LIVEKIT_TCP_PORT:-7881}:7881"
+      - "${LIVEKIT_UDP_PORT:-7882}:7882/udp"
 
 volumes:
   postgres-data:
