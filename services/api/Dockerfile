@@ -39,6 +39,8 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     FASTEMBED_CACHE_PATH=/home/app/.cache/fastembed
 
 COPY --from=builder /app/.venv /app/.venv
+COPY services/api/alembic.ini services/api/alembic.ini
+COPY services/api/alembic services/api/alembic
 COPY demo demo
 COPY scripts/wait_for_http.py scripts/wait_for_http.py
 

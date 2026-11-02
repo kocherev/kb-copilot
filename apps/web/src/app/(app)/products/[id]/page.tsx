@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 
 import { ProductEditor } from "@/components/product-editor";
-import { loadProduct, publicApiUrl } from "@/lib/api";
+import { publicApiUrl } from "@/lib/api/client";
+import { loadProduct } from "@/lib/api/server";
 
 export default function Page({ params }: PageProps<"/products/[id]">) {
   return (

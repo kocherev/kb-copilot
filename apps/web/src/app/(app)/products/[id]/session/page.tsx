@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { SessionView } from "@/components/session-view";
-import { loadProduct, publicApiUrl } from "@/lib/api";
+import { publicApiUrl } from "@/lib/api/client";
+import { loadProduct } from "@/lib/api/server";
 
 export default function Page({
   params,

@@ -4,15 +4,22 @@ version = "0.0.0"
 description = "HTTP API for knowledge base documents and product config."
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.14",
+  "asyncpg>=0.30",
   "fastapi>=0.115",
   "kb-rag",
   "livekit-api>=1.2,<2",
   "psycopg[binary]>=3.2",
   "pydantic>=2.10",
   "pydantic-settings>=2.7",
+  "pyjwt[crypto]>=2.15",
   "python-multipart>=0.0.12",
+  "sqlalchemy[asyncio]>=2.0.36",
   "uvicorn>=0.32",
 ]
+
+[dependency-groups]
+dev = ["aiosqlite>=0.20"]
 
 [tool.uv.sources]
 kb-rag = { workspace = true }
