@@ -56,12 +56,14 @@ def test_upgrade_keeps_a_products_table_from_before_migrations(
 def test_models_match_the_migrations_and_ignore_other_tables(
     sync_engine: Engine,
 ) -> None:
+    # Stand-ins for Better Auth and ingest tables, unless the database has them.
+    created = {"member", "ingest_jobs"} - tables(sync_engine)
     with sync_engine.begin() as connection:
-        connection.execute(text("CREATE TABLE member (id TEXT PRIMARY KEY)"))
-        connection.execute(text("CREATE TABLE ingest_jobs (id TEXT PRIMARY KEY)"))
+        for table in created:
+            connection.execute(text(f"CREATE TABLE {table} (id TEXT PRIMARY KEY)"))
     try:
         command.check(ALEMBIC)
     finally:
         with sync_engine.begin() as connection:
-            connection.execute(text("DROP TABLE member"))
-            connection.execute(text("DROP TABLE ingest_jobs"))
+            for table in created:
+                connection.execute(text(f"DROP TABLE {table}"))
