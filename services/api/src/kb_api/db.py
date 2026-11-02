@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import Request
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -87,3 +87,8 @@ class RateLimitRow(Base):
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
     async with request.app.state.sessions() as session:
         yield session
+
+
+def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
+    """For work that must commit apart from the request's own transaction."""
+    return request.app.state.sessions

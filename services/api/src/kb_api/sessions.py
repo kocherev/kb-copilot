@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Annotated, Protocol
 from uuid import UUID, uuid4
@@ -10,14 +11,13 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from livekit import api
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import delete, select
-from sqlalchemy.dialects.postgresql import insert as postgres_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from kb_api.audit import audit
 from kb_api.auth import AUTH_ERRORS, ErrorBody, Principal, get_principal
-from kb_api.db import LiveSessionRow, RateLimitRow, get_db
+from kb_api.db import LiveSessionRow, RateLimitRow, get_db, get_sessionmaker
 from kb_api.products import NOT_FOUND, load_owned_product
 from kb_api.settings import PLACEHOLDERS, Settings, load_settings
 
@@ -111,33 +111,64 @@ def get_dispatcher() -> Dispatcher:
     )
 
 
-async def take_session_slot(db: AsyncSession, org_id: str, limit: int) -> None:
-    """Count one session start in this org's current minute, or raise 429."""
-    now = time.time()
+def get_clock() -> Callable[[], float]:
+    return time.time
+
+
+Sessions = async_sessionmaker[AsyncSession]
+
+
+async def take_session_slot(
+    sessions: Sessions, org_id: str, limit: int, now: float
+) -> int:
+    """Count one session start in this org's current minute, or raise 429.
+
+    The counter commits in its own transaction. Returns the window so a failed
+    dispatch can give the slot back.
+    """
     window = int(now // WINDOW_SECONDS)
-    insert = (
-        postgres_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+    bump = (
+        update(RateLimitRow)
+        .where(RateLimitRow.org_id == org_id, RateLimitRow.window == window)
+        .values(hits=RateLimitRow.hits + 1)
+        .returning(RateLimitRow.hits)
     )
-    statement = insert(RateLimitRow).values(org_id=org_id, window=window, hits=1)
-    hits = await db.scalar(
-        statement.on_conflict_do_update(
-            index_elements=[RateLimitRow.org_id, RateLimitRow.window],
-            set_={"hits": RateLimitRow.hits + 1},
-        ).returning(RateLimitRow.hits)
-    )
-    await db.execute(
-        delete(RateLimitRow).where(
-            RateLimitRow.org_id == org_id, RateLimitRow.window < window
-        )
-    )
-    await db.commit()
-    if hits is not None and hits > limit:
+    async with sessions() as db:
+        hits = (await db.execute(bump)).scalar_one_or_none()
+        if hits is None:
+            try:
+                db.add(RateLimitRow(org_id=org_id, window=window, hits=1))
+                # The first start of a minute also drops the org's older windows.
+                await db.execute(
+                    delete(RateLimitRow).where(
+                        RateLimitRow.org_id == org_id, RateLimitRow.window < window
+                    )
+                )
+                await db.commit()
+                hits = 1
+            except IntegrityError:
+                # A concurrent request opened this window first.
+                await db.rollback()
+                hits = (await db.execute(bump)).scalar_one()
+        await db.commit()
+    if hits > limit:
         retry_after = max(1, int((window + 1) * WINDOW_SECONDS - now))
         raise HTTPException(
             status_code=429,
             detail="too many sessions, try again shortly",
             headers={"Retry-After": str(retry_after)},
         )
+    return window
+
+
+async def refund_session_slot(sessions: Sessions, org_id: str, window: int) -> None:
+    async with sessions() as db:
+        await db.execute(
+            update(RateLimitRow)
+            .where(RateLimitRow.org_id == org_id, RateLimitRow.window == window)
+            .values(hits=RateLimitRow.hits - 1)
+        )
+        await db.commit()
 
 
 @router.post(
@@ -154,13 +185,17 @@ async def create_session(
     body: SessionCreate,
     principal: Annotated[Principal, Depends(get_principal)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    sessions: Annotated[Sessions, Depends(get_sessionmaker)],
     dispatcher: Annotated[Dispatcher, Depends(get_dispatcher)],
+    clock: Annotated[Callable[[], float], Depends(get_clock)],
 ) -> SessionGrant:
     product = await load_owned_product(db, principal.org_id, body.product_id)
     settings = load_settings()
     if not livekit_ready(settings):
         raise HTTPException(status_code=503, detail="LiveKit is not configured")
-    await take_session_slot(db, principal.org_id, settings.session_rate_limit)
+    window = await take_session_slot(
+        sessions, principal.org_id, settings.session_rate_limit, clock()
+    )
     room = f"kb-{uuid4()}"
     grant = SessionGrant(
         url=settings.livekit_url,
@@ -177,6 +212,7 @@ async def create_session(
         )
     except Exception as exc:
         logger.exception("Agent dispatch failed for room %s", room)
+        await refund_session_slot(sessions, principal.org_id, window)
         raise HTTPException(
             status_code=502,
             detail="Could not dispatch the agent",

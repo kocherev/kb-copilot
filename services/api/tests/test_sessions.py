@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import threading
@@ -7,7 +8,13 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import jwt
 import pytest
 from fastapi.testclient import TestClient
-from kb_api.sessions import AGENT_NAME, AgentDispatch, Dispatcher, get_dispatcher
+from kb_api.sessions import (
+    AGENT_NAME,
+    AgentDispatch,
+    Dispatcher,
+    get_clock,
+    get_dispatcher,
+)
 from kb_api.settings import load_settings
 from livekit.api import TokenVerifier
 
@@ -37,6 +44,12 @@ def use_dispatcher(dispatcher: Dispatcher) -> None:
     from kb_api.main import app
 
     app.dependency_overrides[get_dispatcher] = lambda: dispatcher
+
+
+def freeze_clock(now: float) -> None:
+    from kb_api.main import app
+
+    app.dependency_overrides[get_clock] = lambda: lambda: now
 
 
 @pytest.fixture
@@ -139,6 +152,7 @@ def test_session_starts_are_rate_limited_per_org(
 ) -> None:
     monkeypatch.setenv("SESSION_RATE_LIMIT", "2")
     load_settings.cache_clear()
+    freeze_clock(60 * 1_000_000 + 15)
     org_a = as_user(org="org-a")
     org_b = as_user(user="user-b", org="org-b")
     product_a = create_product(http, org_a)
@@ -152,10 +166,13 @@ def test_session_starts_are_rate_limited_per_org(
     assert [response.status_code for response in statuses] == [201, 201, 429]
     limited = statuses[-1]
     assert limited.json() == {"detail": "too many sessions, try again shortly"}
-    assert 1 <= int(limited.headers["retry-after"]) <= 60
+    assert limited.headers["retry-after"] == "45"
     assert len(dispatcher.requests) == 2
     other = http.post("/sessions", json={"product_id": product_b}, headers=org_b)
     assert other.status_code == 201
+    freeze_clock(60 * 1_000_001)
+    next_minute = http.post("/sessions", json={"product_id": product_a}, headers=org_a)
+    assert next_minute.status_code == 201
 
 
 def test_missing_or_foreign_product_does_not_dispatch(
@@ -277,3 +294,50 @@ def test_dispatch_failure_does_not_return_a_token(
     assert record.exc_info is not None
     assert isinstance(record.exc_info[1], RuntimeError)
     assert http.get("/sessions", headers=headers).json() == []
+
+
+def test_failed_dispatch_gives_the_rate_limit_slot_back(
+    http: TestClient,
+    livekit_env: None,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SESSION_RATE_LIMIT", "1")
+    load_settings.cache_clear()
+    freeze_clock(60 * 1_000_000)
+    headers = as_user()
+    product_id = create_product(http, headers)
+    use_dispatcher(FailingDispatcher())
+
+    failed = [
+        http.post("/sessions", json={"product_id": product_id}, headers=headers)
+        for _ in range(3)
+    ]
+    use_dispatcher(RecordingDispatcher())
+    started = http.post("/sessions", json={"product_id": product_id}, headers=headers)
+
+    assert [response.status_code for response in failed] == [502, 502, 502]
+    assert started.status_code == 201
+
+
+def test_concurrent_starts_are_each_counted_once(database_url: str) -> None:
+    from fastapi import HTTPException
+    from kb_api.sessions import take_session_slot
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    async def race() -> list[int]:
+        engine = create_async_engine(load_settings().async_database_url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+
+        async def start() -> int:
+            try:
+                await take_session_slot(sessions, "org-a", 5, 60 * 1_000_000)
+            except HTTPException as exc:
+                return exc.status_code
+            return 201
+
+        statuses = await asyncio.gather(*(start() for _ in range(8)))
+        await engine.dispose()
+        return sorted(statuses)
+
+    assert asyncio.run(race()) == [201] * 5 + [429] * 3
