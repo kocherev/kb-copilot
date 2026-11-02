@@ -31,15 +31,13 @@ function fillCreateForm() {
   });
 }
 
-test("home page links to api health", () => {
+test("home page explains the flow without operator links", () => {
   render(<HomePage apiUrl="http://localhost:8000/" />);
 
   expect(
     screen.getByRole("heading", { level: 1, name: "Knowledge base copilot" }),
   ).toBeDefined();
-  expect(screen.getByRole("link", { name: "API health" }).getAttribute("href")).toBe(
-    "http://localhost:8000/health",
-  );
+  expect(screen.queryByRole("link", { name: "API health" })).toBeNull();
   expect(screen.getByText(/answers by voice/i)).toBeDefined();
   expect(screen.getByRole("button", { name: "Create product" })).toBeDefined();
 });
