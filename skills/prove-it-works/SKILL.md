@@ -7,7 +7,12 @@ description: >
 
 # Prove it works
 
-Read `skills/prove-it/SKILL.md` and `skills/tests/SKILL.md`. A change is done when a command you can rerun shows the behavior.
+A change is done when a command you can rerun shows the behavior. Read `skills/tests/SKILL.md` before writing the test.
+
+- Call the route, render the screen, or parse the file. "It typechecks" is a separate check.
+- Keep the check in the repo when it can run without a private account.
+- Prefer a test over a one-time manual step when the behavior is local.
+- If a check did not run, name the command and why it did not run.
 
 ## Always
 
@@ -29,4 +34,4 @@ Web-only copy and styles still go through `./scripts/check.sh`. You do not need 
 
 ## What to assert
 
-Hit the route, render the screen, or parse the file. For the session UI, rendered transcript text and the `Source:` label are the check. For ingest, the job status and the Qdrant payload are the check. A green import is not done.
+For the session UI, rendered transcript text and the `Source:` label are the check. For ingest, the job status and the Qdrant payload are the check. A green import is not done.
