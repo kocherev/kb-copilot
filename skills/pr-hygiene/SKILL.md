@@ -1,13 +1,13 @@
 ---
 name: pr-hygiene
 description: >
-  Branch, commit, and pull request habits. Small diffs, no secrets, no
-  editor or agent names in history. Use before committing or opening a PR.
+  Branch, commit, and pull request habits. Small diffs and no secrets.
+  Use before committing or opening a PR.
 ---
 
 # Pull request hygiene
 
-Branch from `main`. Keep the branch name short and specific, as in `feat/docs-skills`. Do not put an editor name or a coding-agent name in the branch, the commit, the diff, or CI.
+Branch from `main`. Keep the branch name short and specific, as in `feat/docs-skills`.
 
 One behavior per pull request. Land it on `main`. Do not force-push a branch someone else is using.
 
@@ -15,7 +15,7 @@ One behavior per pull request. Land it on `main`. Do not force-push a branch som
 
 The subject is an imperative sentence. A conventional prefix (`feat:`, `fix:`, `docs:`) matches the earlier history. Later commits drop the prefix when the sentence is already specific. Either form is fine.
 
-Do not add a trailer that names an editor or an agent. Do not commit `.env`, a key, a token, or a live password. `.env.example` stays placeholders.
+Do not commit `.env`, a key, a token, or a live password. `.env.example` stays placeholders.
 
 ## Body
 

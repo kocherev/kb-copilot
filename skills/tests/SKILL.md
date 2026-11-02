@@ -1,3 +1,10 @@
+---
+name: tests
+description: >
+  Write tests that assert what a caller can observe. Use when writing or
+  changing a test.
+---
+
 # Tests
 
 Assert what a caller can observe. Status codes, response bodies, rendered text, link targets, and rejected input are observable. A test that restates the current function body will stay green after a silent behavior change.

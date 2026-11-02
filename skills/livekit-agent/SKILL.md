@@ -12,7 +12,7 @@ The worker is `services/agent`. The browser session is `apps/web`. The token and
 
 ## Dispatch
 
-The agent name is `kb-support` in both `services/agent/src/kb_agent/worker.py` and `services/api/src/kb_api/sessions.py`. `POST /sessions` sends job metadata `{"product_id":"<uuid>"}`. A missing product returns 404 and does not dispatch. Missing LiveKit settings return 503.
+The agent name is `kb-support` in both `services/agent/src/kb_agent/worker.py` and `services/api/src/kb_api/sessions.py`. `POST /sessions` sends job metadata `{"product_id":"<uuid>"}`. A missing product returns 404 and does not dispatch. Missing LiveKit settings return 503 with `LiveKit is not configured`. A placeholder such as `replace-me` counts as missing. The API dispatches through `LIVEKIT_API_URL`: `http://livekit:7880` for the self-hosted profile, the same `wss://` URL as `LIVEKIT_URL` on Cloud.
 
 The worker reads `product_id` from that metadata and loads the system prompt with `GET /products/{id}`. `render_system_prompt` includes the name, description, tone, and refusal rules. Config is data. Do not hard-code a product.
 
@@ -34,18 +34,18 @@ The browser publishes the microphone and the screen, not the camera. `sessionPub
 
 `session_room_options` turns video input on so the worker can subscribe to screen-share video. `watch_screen_share` logs `{"event":"screen_share","subscribed":true}` when the track source is screen share and the kind is video.
 
-On a Cloud host those frames are pushed into the Inference realtime model as OpenAI `input_image` items. A measured Cloud turn reported `image_tokens` 0. The Gemini plugin sends a video blob instead. A Cloud room with one socket (`max_retry` 0) and server activity detection left on still closed. The greeting logged `generate_reply timed out waiting for generation_created event`, then `1008 None. BidiGenerateContent session is already connected to an existing client`. `image_tokens` stayed 0. The OpenAI pipeline does not consume the frames. The page draws a highlight from `hud` messages (`point_at`) and a Thinking label from agent state. That overlay stays in the browser. It does not move the operating-system pointer.
+The model does not see those frames yet. LiveKit Inference does not pass video to realtime models, and the OpenAI pipeline does not consume video. The page draws a highlight from `hud` messages (`point_at`) and a Thinking label from agent state. That overlay stays in the browser. It does not move the operating-system pointer.
 
 ## Voice
 
 `build_voice` picks the provider from `LIVEKIT_URL`.
 
-- Host `livekit.cloud` or `*.livekit.cloud`: LiveKit Inference realtime. The model id is `google/gemini-3.8-live-extended-thinking`, voice `Puck`, reasoning effort `low`. If `session.start` fails, try `google/gemini-3.8-live`, then `google/gemini-live`. `OPENAI_API_KEY` can stay empty. Client VAD commits the turn so `search_kb` still runs before the reply. A miss speaks `That is not in the docs.` through the Inference TTS and does not ask the realtime model to answer. The Gemini plugin is not the Cloud path: a single-socket connect still closed with `1008` before a vision turn.
+- Host `livekit.cloud` or `*.livekit.cloud`: LiveKit Inference realtime. The model id is `google/gemini-3.8-live-extended-thinking`, voice `Puck`, reasoning effort `low`. If `session.start` fails, try `google/gemini-3.8-live`, then `google/gemini-live`. `OPENAI_API_KEY` can stay empty. Client VAD commits the turn so `search_kb` still runs before the reply. A miss speaks `That is not in the docs.` through the Inference TTS and does not ask the realtime model to answer.
 - Any other host, including Compose `livekit`: the OpenAI plugin. Set `OPENAI_API_KEY`. Screen frames are not sent to that model.
 
 STT, LLM, TTS, and realtime metrics are JSON lines on stdout (`kind` `component`). A realtime line can include `image_tokens`. Each user or assistant turn adds a line with the per-turn delays.
 
-The container command is `python -m kb_agent start`. It exits when `LIVEKIT_URL` or the key pair is missing. The dev server in the `livekit` Compose profile does not read the env file. Its key pair is `devkey` / `secret`. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`.
+The container command is `python -m kb_agent start`. It cannot register with LiveKit until `LIVEKIT_URL` and a real key pair are set. It keeps retrying instead of exiting. The dev server in the `livekit` Compose profile does not read the env file. Its key pair is `devkey` / `secret`. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`.
 
 ## Checks
 

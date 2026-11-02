@@ -1,3 +1,10 @@
+---
+name: unslop
+description: >
+  Plain-writing pass for docs, pull requests, commit messages, and comments.
+  Use before publishing prose.
+---
+
 # Plain writing
 
 Edit docs, pull requests, commit messages, and comments before you finish.

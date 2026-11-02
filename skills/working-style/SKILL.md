@@ -8,7 +8,7 @@ description: >
 
 # Working style
 
-Use this with `skills/ponytail`. Ponytail picks the smallest complete change. This file says how to shape that change and how to check it. The two apply together. ponytail-mode is the source of the sequencing and verification rules. pstack is the source of the per-role budget.
+Use this with `skills/ponytail`. Ponytail picks the smallest complete change. This file says how to shape that change and how to check it. The two apply together.
 
 ## Before code
 
@@ -35,7 +35,7 @@ When a change is split across people or helpers, give each role its own reasonin
 - Review of a diff uses a higher budget, and it is a separate pass from the one that wrote the diff.
 - Mechanical edits use a lower budget.
 
-Record the split in the pull request when you used one. Do not write a vendor model name into this repository.
+Record the split in the pull request when you used one.
 
 ## Prose
 
