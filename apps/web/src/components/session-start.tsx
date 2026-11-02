@@ -18,16 +18,15 @@ import { useState } from "react";
 import { ScreenHud } from "@/components/screen-hud";
 import { TranscriptPanel } from "@/components/transcript-panel";
 import { Button } from "@/components/ui/button";
-import { apiPath, readJson } from "@/lib/api";
+import { browserApi, type SessionGrant } from "@/lib/api/client";
 import {
   HUD_TOPIC,
   applyHudMessage,
   emptyHud,
-  sessionFromResponse,
+  sessionLoad,
   sessionPublish,
   transcriptLines,
   type HudState,
-  type SessionGrant,
 } from "@/lib/session";
 
 const linkClass =
@@ -50,12 +49,10 @@ export function SessionStart({
     setPending(true);
     setError(null);
     try {
-      const response = await fetch(apiPath(apiUrl, "/sessions"), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ product_id: productId }),
+      const { data, error, response } = await browserApi(apiUrl).POST("/sessions", {
+        body: { product_id: productId },
       });
-      const loaded = sessionFromResponse(response.status, await readJson(response));
+      const loaded = sessionLoad(response.status, data, error);
       if (loaded.status === "error") {
         setError(loaded.message);
         return;

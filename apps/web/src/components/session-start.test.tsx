@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { SessionStart } from "@/components/session-start";
+import { TEST_JWT, stubApi } from "@/test/api-stub";
 
 const transcriptions = vi.hoisted(() => ({
   current: [] as {
@@ -77,23 +78,10 @@ test("start session posts the product and joins with mic and screen", async () =
       streamInfo: { id: "line-1" },
     },
   ];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("http://localhost:8000/sessions");
-      expect(init?.method).toBe("POST");
-      expect(JSON.parse(String(init?.body))).toEqual({ product_id: productId });
-      return {
-        ok: true,
-        status: 201,
-        json: async () => ({
-          url: "ws://localhost:7880",
-          token: "signed-token",
-          room: "kb-room",
-        }),
-      };
-    }),
-  );
+  const calls = stubApi(() => ({
+    status: 201,
+    body: { url: "ws://localhost:7880", token: "signed-token", room: "kb-room" },
+  }));
 
   render(
     <SessionStart
@@ -113,6 +101,15 @@ test("start session posts the product and joins with mic and screen", async () =
   fireEvent.click(screen.getByRole("button", { name: "Start session" }));
 
   const room = await screen.findByText("In the room");
+  expect(calls).toEqual([
+    {
+      method: "POST",
+      url: "http://localhost:8000/sessions",
+      authorization: `Bearer ${TEST_JWT}`,
+      json: { product_id: productId },
+      form: null,
+    },
+  ]);
   const root = room.parentElement;
   expect(root?.getAttribute("data-url")).toBe("ws://localhost:7880");
   expect(root?.getAttribute("data-token")).toBe("signed-token");
@@ -141,18 +138,10 @@ test("session transcript shows a cited source from the agent", async () => {
       streamInfo: { id: "cited" },
     },
   ];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: true,
-      status: 201,
-      json: async () => ({
-        url: "ws://localhost:7880",
-        token: "signed-token",
-        room: "kb-room",
-      }),
-    })),
-  );
+  stubApi(() => ({
+    status: 201,
+    body: { url: "ws://localhost:7880", token: "signed-token", room: "kb-room" },
+  }));
 
   render(
     <SessionStart
@@ -169,14 +158,7 @@ test("session transcript shows a cited source from the agent", async () => {
 });
 
 test("a dispatch failure shows the error", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: false,
-      status: 502,
-      json: async () => ({ detail: "Could not dispatch the agent" }),
-    })),
-  );
+  stubApi(() => ({ status: 502, body: { detail: "Could not dispatch the agent" } }));
   render(
     <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" />,
   );
@@ -189,14 +171,7 @@ test("a dispatch failure shows the error", async () => {
 });
 
 test("a refused session shows the error", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: false,
-      status: 404,
-      json: async () => ({ detail: "product not found" }),
-    })),
-  );
+  stubApi(() => ({ status: 404, body: { detail: "product not found" } }));
   render(
     <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="A" />,
   );

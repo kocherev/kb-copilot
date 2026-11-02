@@ -1,10 +1,4 @@
-import { errorDetail } from "@/lib/api";
-
-export type SessionGrant = {
-  url: string;
-  token: string;
-  room: string;
-};
+import { errorDetail, type SessionGrant } from "@/lib/api/client";
 
 export type SessionLoad =
   | { status: "ready"; session: SessionGrant }
@@ -83,36 +77,23 @@ export function applyHudMessage(state: HudState, raw: string): HudState {
   return state;
 }
 
-export function sessionFromResponse(status: number, body: unknown): SessionLoad {
+export function sessionLoad(
+  status: number,
+  session: SessionGrant | undefined,
+  error: unknown,
+): SessionLoad {
   if (status === 404) {
     return { status: "error", message: "Product not found." };
   }
-  if (status >= 200 && status < 300 && isSessionGrant(body)) {
-    return { status: "ready", session: body };
+  if (session === undefined) {
+    return { status: "error", message: errorDetail(error, "Could not start the session.") };
   }
-  return {
-    status: "error",
-    message: errorDetail(body, "Could not start the session."),
-  };
+  return { status: "ready", session };
 }
 
-export function isSessionGrant(body: unknown): body is SessionGrant {
-  if (typeof body !== "object" || body === null) {
-    return false;
-  }
-  const record = body as Record<string, unknown>;
-  return (
-    typeof record.url === "string" &&
-    record.url.length > 0 &&
-    typeof record.token === "string" &&
-    record.token.length > 0 &&
-    typeof record.room === "string" &&
-    record.room.length > 0
-  );
-}
-
+// LiveKit names agent participants agent-<id>. Everyone else is the caller.
 export function speakerLabel(identity: string): string {
-  return identity === "user" ? "You" : "Agent";
+  return identity.startsWith("agent-") ? "Agent" : "You";
 }
 
 export function sourceLabel(source: string): string {

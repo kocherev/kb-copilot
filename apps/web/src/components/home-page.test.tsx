@@ -3,6 +3,7 @@ import { Activity } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
 import { HomePage } from "@/components/home-page";
+import { TEST_JWT, stubApi } from "@/test/api-stub";
 
 const draft = {
   name: "Acme",
@@ -32,7 +33,7 @@ function fillCreateForm() {
 }
 
 test("home page explains the flow without operator links", () => {
-  render(<HomePage apiUrl="http://localhost:8000/" />);
+  render(<HomePage apiUrl="http://localhost:8000/" products={[]} />);
 
   expect(
     screen.getByRole("heading", { level: 1, name: "Knowledge base copilot" }),
@@ -40,6 +41,26 @@ test("home page explains the flow without operator links", () => {
   expect(screen.queryByRole("link", { name: "API health" })).toBeNull();
   expect(screen.getByText(/answers by voice/i)).toBeDefined();
   expect(screen.getByRole("button", { name: "Create product" })).toBeDefined();
+  expect(screen.getByText("No products yet.")).toBeDefined();
+});
+
+test("home page links each product in the org", () => {
+  render(
+    <HomePage
+      apiUrl="http://localhost:8000"
+      products={[{ id: "11111111-1111-4111-8111-111111111111", ...draft }]}
+    />,
+  );
+
+  expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(
+    "/products/11111111-1111-4111-8111-111111111111",
+  );
+});
+
+test("a failed product list says so", () => {
+  render(<HomePage apiUrl="http://localhost:8000" products={null} />);
+
+  expect(screen.getByRole("alert").textContent).toBe("Could not load products.");
 });
 
 test("creating a product shows that it was saved", async () => {
@@ -47,25 +68,21 @@ test("creating a product shows that it was saved", async () => {
     id: "11111111-1111-4111-8111-111111111111",
     ...draft,
   };
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(String(input)).toBe("http://localhost:8000/products");
-      expect(init?.method).toBe("POST");
-      expect(JSON.parse(String(init?.body))).toEqual(draft);
-      return {
-        ok: true,
-        status: 201,
-        json: async () => created,
-      };
-    }),
-  );
-  render(<HomePage apiUrl="http://localhost:8000" />);
+  const calls = stubApi(() => ({ status: 201, body: created }));
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
   expect(await screen.findByRole("status")).toBeDefined();
   expect(screen.getByRole("status").textContent).toBe("Saved");
+  expect(calls).toMatchObject([
+    {
+      method: "POST",
+      url: "http://localhost:8000/products",
+      authorization: `Bearer ${TEST_JWT}`,
+      json: draft,
+    },
+  ]);
   expect(screen.getByRole("link", { name: "Open Acme" }).getAttribute("href")).toBe(
     `/products/${created.id}`,
   );
@@ -78,18 +95,11 @@ test("a finished create clears when the page hides", async () => {
     id: "11111111-1111-4111-8111-111111111111",
     ...draft,
   };
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: true,
-      status: 201,
-      json: async () => created,
-    })),
-  );
+  stubApi(() => ({ status: 201, body: created }));
   function Page({ hidden }: { hidden: boolean }) {
     return (
       <Activity mode={hidden ? "hidden" : "visible"}>
-        <HomePage apiUrl="http://localhost:8000" />
+        <HomePage apiUrl="http://localhost:8000" products={[]} />
       </Activity>
     );
   }
@@ -111,7 +121,7 @@ test("an unfinished draft stays when the page hides", () => {
   function Page({ hidden }: { hidden: boolean }) {
     return (
       <Activity mode={hidden ? "hidden" : "visible"}>
-        <HomePage apiUrl="http://localhost:8000" />
+        <HomePage apiUrl="http://localhost:8000" products={[]} />
       </Activity>
     );
   }
@@ -123,33 +133,26 @@ test("an unfinished draft stays when the page hides", () => {
 });
 
 test("create shows the api error", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: false,
-      status: 400,
-      json: async () => ({ detail: "description must be one paragraph" }),
-    })),
-  );
-  render(<HomePage apiUrl="http://localhost:8000" />);
+  stubApi(() => ({
+    status: 422,
+    body: {
+      detail: [
+        { loc: ["body", "description"], msg: "String should match pattern", type: "x" },
+      ],
+    },
+  }));
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
-  expect((await screen.findByRole("alert")).textContent).toContain("one paragraph");
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "description: String should match pattern",
+  );
 });
 
 test("create survives a response that is not a product", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => ({
-      ok: true,
-      status: 201,
-      json: async () => {
-        throw new Error("not json");
-      },
-    })),
-  );
-  render(<HomePage apiUrl="http://localhost:8000" />);
+  stubApi(() => ({ status: 201, text: "not json" }));
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
@@ -159,25 +162,14 @@ test("create survives a response that is not a product", async () => {
 });
 
 test("a description typed on several lines is saved as one paragraph", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const sent = JSON.parse(String(init?.body)) as typeof draft;
-      if (/[\r\n]/.test(sent.description)) {
-        return {
-          ok: false,
-          status: 400,
-          json: async () => ({ detail: "description must be one paragraph" }),
-        };
-      }
-      return {
-        ok: true,
-        status: 201,
-        json: async () => ({ id: "11111111-1111-4111-8111-111111111111", ...sent }),
-      };
-    }),
-  );
-  render(<HomePage apiUrl="http://localhost:8000" />);
+  stubApi((call) => {
+    const sent = call.json as typeof draft;
+    if (/[\r\n]/.test(sent.description)) {
+      return { status: 422, body: { detail: [{ loc: ["body", "description"], msg: "x" }] } };
+    }
+    return { status: 201, body: { id: "11111111-1111-4111-8111-111111111111", ...sent } };
+  });
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Acme resets passwords.\r\n\n  It also unlocks accounts." },

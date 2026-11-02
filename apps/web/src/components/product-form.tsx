@@ -6,19 +6,19 @@ import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { apiPath, errorDetail, readJson } from "@/lib/api";
 import {
-  emptyDraft,
-  isProduct,
+  browserApi,
+  errorDetail,
   type Product,
-  type ProductDraft,
-} from "@/lib/product";
+  type ProductWrite,
+} from "@/lib/api/client";
+import { emptyDraft } from "@/lib/product";
 
 const linkClass =
   "underline underline-offset-4 [overflow-wrap:anywhere] focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]";
 
 const fields: {
-  key: keyof ProductDraft;
+  key: keyof ProductWrite;
   label: string;
   hint?: string;
   multiline: boolean;
@@ -55,12 +55,12 @@ export function ProductForm({
 }: {
   apiUrl: string;
   productId?: string;
-  initial?: ProductDraft;
+  initial?: ProductWrite;
   submitLabel: string;
   formLabel: string;
   onSaved?: (product: Product) => void;
 }) {
-  const [draft, setDraft] = useState<ProductDraft>({
+  const [draft, setDraft] = useState<ProductWrite>({
     name: initial.name,
     description: initial.description,
     tone: initial.tone,
@@ -85,7 +85,7 @@ export function ProductForm({
     };
   }, []);
 
-  function update(key: keyof ProductDraft, value: string) {
+  function update(key: keyof ProductWrite, value: string) {
     setDraft((current) => ({ ...current, [key]: value }));
     setSaved(false);
   }
@@ -95,34 +95,33 @@ export function ProductForm({
     setPending(true);
     setError(null);
     setSaved(false);
+    // The API keeps the description to one paragraph.
+    const body = {
+      ...draft,
+      description: draft.description.replace(/\s*[\r\n]+\s*/g, " "),
+    };
     try {
-      const response = await fetch(
-        apiPath(apiUrl, productId ? `/products/${productId}` : "/products"),
-        {
-          method: productId ? "PUT" : "POST",
-          headers: { "content-type": "application/json" },
-          // The API keeps the description to one paragraph.
-          body: JSON.stringify({
-            ...draft,
-            description: draft.description.replace(/\s*[\r\n]+\s*/g, " "),
-          }),
-        },
-      );
-      const body = await readJson(response);
-      if (!response.ok || !isProduct(body)) {
-        setError(errorDetail(body, "Could not save the product."));
+      const api = browserApi(apiUrl);
+      const { data: product, error } = productId
+        ? await api.PUT("/products/{product_id}", {
+            params: { path: { product_id: productId } },
+            body,
+          })
+        : await api.POST("/products", { body });
+      if (product === undefined) {
+        setError(errorDetail(error, "Could not save the product."));
         return;
       }
       setDraft({
-        name: body.name,
-        description: body.description,
-        tone: body.tone,
-        refusal_rules: body.refusal_rules,
+        name: product.name,
+        description: product.description,
+        tone: product.tone,
+        refusal_rules: product.refusal_rules,
       });
-      setCreated(body);
+      setCreated(product);
       setSaved(true);
       resetAfterHide.current = productId === undefined;
-      onSaved?.(body);
+      onSaved?.(product);
     } catch {
       setError("Could not save the product.");
     } finally {
