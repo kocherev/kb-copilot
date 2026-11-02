@@ -12,7 +12,7 @@ Use this with `skills/ponytail`. Ponytail picks the smallest complete change. Th
 
 ## Before code
 
-Name the data. If the change is stateful, put the states in a type or a table before writing branches. An ingest job is `queued`, then `indexing`, then `indexed` or `failed`. Chunk payloads carry `product_id` and `source_url`. The RAG package stays free of the HTTP app and the database driver.
+Name the data. If the change is stateful, put the states in a type or a table before writing branches. An ingest job is `queued`, then `indexing`, then `indexed` or `failed`. Chunk payloads carry `product_id` and `source`. The RAG package stays free of the HTTP app and the database driver.
 
 Read the callers, tests, and exports the change touches. That list is the scope.
 

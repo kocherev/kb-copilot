@@ -1,0 +1,93 @@
+%PDF-1.3
+%‚„œ”
+1 0 obj
+<<
+/Producer (pypdf)
+/Title (Northstar Desk security overview)
+>>
+endobj
+2 0 obj
+<<
+/Type /Pages
+/Count 1
+/Kids [ 4 0 R ]
+>>
+endobj
+3 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+4 0 obj
+<<
+/Type /Page
+/Resources <<
+/Font <<
+/F1 <<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Helvetica
+/Encoding /WinAnsiEncoding
+>>
+>>
+>>
+/MediaBox [ 0.0 0.0 612 792 ]
+/Parent 2 0 R
+/Contents 5 0 R
+>>
+endobj
+5 0 obj
+<<
+/Length 1848
+>>
+stream
+BT /F1 11 Tf 15 TL 72 720 Td
+/F1 16 Tf (Northstar Desk security overview) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (This overview describes how Northstar Desk protects customer data. It is written for) Tj T*
+/F1 11 Tf (security reviewers and applies to every plan.) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (Encryption. Customer data is encrypted at rest with AES-256. All traffic to) Tj T*
+/F1 11 Tf (Northstar Desk uses TLS 1.2 or higher. Plain HTTP connections are redirected or) Tj T*
+/F1 11 Tf (refused.) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (Backups. Each region is backed up daily. Backups are encrypted, kept for 35 days,) Tj T*
+/F1 11 Tf (and stored in a second availability zone inside the same region. Our recovery point) Tj T*
+/F1 11 Tf (objective is 24 hours and our recovery time objective is 8 hours.) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (Testing. An independent firm runs a penetration test of the product once a year.) Tj T*
+/F1 11 Tf (Findings rated high or critical are fixed within 30 days.) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (Compliance reports. Northstar Desk holds a SOC 2 Type II report. Team and Enterprise) Tj T*
+/F1 11 Tf (customers can request it under a non-disclosure agreement from the Compliance) Tj T*
+/F1 11 Tf (section of the security settings.) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (Staff access. Northstar employees can open a customer workspace only after an Admin) Tj T*
+/F1 11 Tf (of that workspace grants support access. A support access grant expires) Tj T*
+/F1 11 Tf (automatically after 72 hours, and every access is recorded.) Tj T*
+/F1 11 Tf () Tj T*
+/F1 11 Tf (Reporting a vulnerability. Send security reports to security@northstardesk.example.) Tj T*
+/F1 11 Tf (We acknowledge every report within 3 business days and keep the reporter informed) Tj T*
+/F1 11 Tf (until the issue is fixed.) Tj T*
+/F1 11 Tf () Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000096 00000 n 
+0000000155 00000 n 
+0000000204 00000 n 
+0000000412 00000 n 
+trailer
+<<
+/Size 6
+/Root 3 0 R
+/Info 1 0 R
+>>
+startxref
+2312
+%%EOF

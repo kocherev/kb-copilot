@@ -4,12 +4,11 @@ version = "0.0.0"
 description = "Offline retrieval and answer evals for the demo knowledge base."
 requires-python = ">=3.12"
 dependencies = [
-  "kb-agent",
+  "anthropic>=1.0",
   "kb-rag",
 ]
 
 [tool.uv.sources]
-kb-agent = { workspace = true }
 kb-rag = { workspace = true }
 
 [build-system]

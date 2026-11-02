@@ -1,176 +1,308 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from statistics import mean
+from typing import Protocol
 
-from kb_agent.retrieve import NOT_IN_DOCS, citation_suffix, search_kb
-from kb_rag.pipeline import index_sources
-from kb_rag.sources import iter_documents, read_source
-from qdrant_client import QdrantClient
+from kb_rag import (
+    DEFAULT_SETTINGS,
+    Passage,
+    RetrievalSettings,
+    SearchResult,
+    Source,
+    index_sources,
+    read_directory,
+    search,
+)
+from qdrant_client import AsyncQdrantClient
 
-from kb_evals.dataset import EvalCase, load_dataset
+from kb_evals.dataset import (
+    ANSWER_LAYER,
+    CATEGORIES,
+    RETRIEVAL_ABSTAIN,
+    EvalCase,
+    held_out,
+    load_dataset,
+)
 from kb_evals.score import (
-    citation_score,
-    cited_sources,
-    faithfulness,
-    hit_at_k,
+    context_precision,
+    fact_recall,
+    percentile,
+    poisoned_first,
+    precision_recall,
+    recall_at_k,
     reciprocal_rank,
 )
 
 ROOT = Path(__file__).resolve().parents[3]
-DATASET_PATH = ROOT / "evals" / "datasets" / "demo.jsonl"
+DATASET_PATH = ROOT / "evals" / "datasets" / "v1.jsonl"
 THRESHOLDS_PATH = ROOT / "evals" / "thresholds.json"
 DOCS_PATH = ROOT / "demo" / "docs"
-PRODUCT_ID = "demo"
-METRIC_ORDER = ("hit_at_k", "mrr", "citation_rate", "faithfulness")
+PRODUCT_ID = "eval"
+METRICS = (
+    "recall_at_k",
+    "mrr",
+    "context_precision",
+    "fact_recall",
+    "abstention_precision",
+    "abstention_recall",
+    "injection_safety",
+)
+
+
+class Retriever(Protocol):
+    async def index(self, sources: list[Source]) -> None: ...
+
+    async def search(self, query: str, limit: int) -> SearchResult: ...
+
+
+class RagRetriever:
+    """The production path: kb_rag over an in-memory Qdrant."""
+
+    def __init__(
+        self,
+        settings: RetrievalSettings = DEFAULT_SETTINGS,
+        client: AsyncQdrantClient | None = None,
+    ) -> None:
+        self.settings = settings
+        self.client = client or AsyncQdrantClient(":memory:")
+
+    async def index(self, sources: list[Source]) -> None:
+        await index_sources(self.client, PRODUCT_ID, sources, settings=self.settings)
+
+    async def search(self, query: str, limit: int) -> SearchResult:
+        return await search(
+            self.client, PRODUCT_ID, query, limit=limit, settings=self.settings
+        )
 
 
 @dataclass(frozen=True)
-class CaseScore:
-    id: str
-    hit_at_k: float
-    mrr: float
-    citation_rate: float
-    faithfulness: float
+class CaseResult:
+    case: EvalCase
+    passages: tuple[Passage, ...]
+    abstained: bool
+    latency_ms: float
 
 
 @dataclass(frozen=True)
-class Turn:
-    text: str
-    retrieved: tuple[str, ...]
-    passages: tuple[str, ...]
+class Row:
+    name: str
+    owner: str
+    cases: int
+    recall_at_k: float | None
+    mrr: float | None
+    context_precision: float | None
+    fact_recall: float | None
+    abstain_rate: float
+    injection_safety: float
 
 
 @dataclass(frozen=True)
 class Report:
     k: int
+    rows: tuple[Row, ...]
     scores: dict[str, float]
     thresholds: dict[str, float]
-    case_scores: tuple[CaseScore, ...]
-
-    @property
-    def cases(self) -> int:
-        return len(self.case_scores)
+    misses: tuple[str, ...]
+    latency_p50_ms: float
+    latency_p95_ms: float
 
     def failures(self) -> list[str]:
-        return [
-            name for name in METRIC_ORDER if self.scores[name] < self.thresholds[name]
-        ]
-
-
-def index_demo(docs: Path) -> QdrantClient:
-    client = QdrantClient(":memory:")
-    paths = iter_documents(docs)
-    if not paths:
-        raise ValueError(f"no documents in {docs}")
-    index_sources(client, PRODUCT_ID, [read_source(path) for path in paths])
-    return client
-
-
-def answer_turn(client: QdrantClient, question: str, recorded: str, k: int) -> Turn:
-    found = search_kb(client, PRODUCT_ID, question, limit=k)
-    retrieved = tuple(hit.source_url for hit in found.hits)
-    passages = tuple(hit.text for hit in found.hits)
-    if not found.hits:
-        return Turn(text=NOT_IN_DOCS, retrieved=retrieved, passages=passages)
-    text = recorded.rstrip() + citation_suffix(found.source_urls())
-    return Turn(text=text, retrieved=retrieved, passages=passages)
+        return [name for name in METRICS if self.scores[name] < self.thresholds[name]]
 
 
 def load_thresholds(path: Path) -> tuple[int, dict[str, float]]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = json.loads(path.read_text("utf-8"))
     if not isinstance(raw, dict):
         raise ValueError("thresholds must be an object")
     k = raw.get("k")
     if isinstance(k, bool) or not isinstance(k, int) or k < 1:
         raise ValueError("k must be a positive integer")
     limits: dict[str, float] = {}
-    for name in METRIC_ORDER:
+    for name in METRICS:
         value = raw.get(name)
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ValueError(f"{name} must be a number")
-        score = float(value)
-        if not 0 <= score <= 1:
+        if not 0 <= value <= 1:
             raise ValueError(f"{name} must be between 0 and 1")
-        limits[name] = score
+        limits[name] = float(value)
     return k, limits
 
 
-def run_eval(docs: Path, dataset: Path, thresholds: Path) -> Report:
-    k, limits = load_thresholds(thresholds)
-    cases = load_dataset(dataset)
-    client = index_demo(docs)
-    scored = tuple(_score_case(client, case, k) for case in cases)
+async def collect(
+    retriever: Retriever, cases: list[EvalCase], k: int
+) -> list[CaseResult]:
+    results: list[CaseResult] = []
+    for case in cases:
+        found = await retriever.search(case.query, k)
+        results.append(
+            CaseResult(
+                case=case,
+                passages=found.passages,
+                abstained=found.abstained,
+                latency_ms=found.timings_ms["total"],
+            )
+        )
+    return results
+
+
+def build_report(
+    results: list[CaseResult], k: int, thresholds: dict[str, float]
+) -> Report:
+    rows = [
+        _row(name, [r for r in results if r.case.category == name], k)
+        for name in CATEGORIES
+        if any(r.case.category == name for r in results)
+    ]
+    overall = _row("overall", results, k)
+    precision, recall = precision_recall(abstention_pairs(results))
+    scores = {
+        "recall_at_k": overall.recall_at_k or 0.0,
+        "mrr": overall.mrr or 0.0,
+        "context_precision": overall.context_precision or 0.0,
+        "fact_recall": overall.fact_recall or 0.0,
+        "abstention_precision": precision,
+        "abstention_recall": recall,
+        "injection_safety": overall.injection_safety,
+    }
+    latencies = [r.latency_ms for r in results]
     return Report(
         k=k,
-        scores=_means(scored),
-        thresholds=limits,
-        case_scores=scored,
+        rows=(*rows, overall),
+        scores=scores,
+        thresholds=thresholds,
+        misses=tuple(m for r in results if (m := _miss(r, k))),
+        latency_p50_ms=percentile(latencies, 0.5),
+        latency_p95_ms=percentile(latencies, 0.95),
     )
+
+
+async def run_eval(
+    retriever: Retriever, docs: Path, dataset: Path, thresholds: Path
+) -> Report:
+    k, limits = load_thresholds(thresholds)
+    cases = load_dataset(dataset)
+    await retriever.index(read_directory(docs))
+    return build_report(await collect(retriever, cases, k), k, limits)
 
 
 def format_report(report: Report) -> str:
-    rows = [
-        f"cases {report.cases}",
-        f"{'metric':<16}{'score':>8}{'threshold':>12}",
-    ]
-    for name in METRIC_ORDER:
-        label = _label(name, report.k)
-        rows.append(
-            f"{label:<16}{report.scores[name]:>8.3f}{report.thresholds[name]:>12.3f}"
+    k = report.k
+    header = (
+        f"{'category':<30}{'owner':<10}{'n':>4}{f'recall@{k}':>10}{'mrr':>7}"
+        f"{'ctx_prec':>10}{'facts':>7}{'abstain':>9}{'inj_safe':>10}"
+    )
+    lines = [header]
+    for row in report.rows:
+        lines.append(
+            f"{row.name:<30}{row.owner:<10}{row.cases:>4}"
+            f"{_cell(row.recall_at_k, 10)}"
+            f"{_cell(row.mrr, 7)}{_cell(row.context_precision, 10)}"
+            f"{_cell(row.fact_recall, 7)}{_cell(row.abstain_rate, 9)}"
+            f"{_cell(row.injection_safety, 10)}"
         )
-    for name in report.failures():
-        label = _label(name, report.k)
-        rows.append(
-            f"below threshold: {label} "
-            f"{report.scores[name]:.3f} < {report.thresholds[name]:.3f}"
+    lines.append("")
+    lines.append(
+        f"latency p50 {report.latency_p50_ms:.1f} ms"
+        f"  p95 {report.latency_p95_ms:.1f} ms"
+    )
+    lines.append(
+        "owner: retrieval should abstain; answer is judged live on the model's "
+        "reply. Abstention precision and recall use the held-out half only."
+    )
+    lines.append(f"{'gate':<28}{'score':>8}{'threshold':>11}")
+    for name in METRICS:
+        mark = "  FAIL" if name in report.failures() else ""
+        lines.append(
+            f"{name:<28}{report.scores[name]:>8.3f}"
+            f"{report.thresholds[name]:>11.3f}{mark}"
         )
     if report.failures():
-        for case in report.case_scores:
-            if min(case.hit_at_k, case.mrr, case.citation_rate, case.faithfulness) < 1:
-                rows.append(
-                    f"case {case.id} hit={case.hit_at_k:.3f} "
-                    f"mrr={case.mrr:.3f} citation={case.citation_rate:.3f} "
-                    f"faith={case.faithfulness:.3f}"
-                )
-    return "\n".join(rows)
+        lines.append("")
+        lines.append(f"failing cases ({len(report.misses)}):")
+        lines.extend(f"  {miss}" for miss in report.misses)
+    return "\n".join(lines)
 
 
 def exit_code(report: Report) -> int:
-    if report.failures():
-        return 1
-    return 0
+    return 1 if report.failures() else 0
 
 
-def main() -> int:
-    report = run_eval(DOCS_PATH, DATASET_PATH, THRESHOLDS_PATH)
-    print(format_report(report))
-    return exit_code(report)
+def abstention_pairs(results: list[CaseResult]) -> list[tuple[bool, bool]]:
+    """(should abstain, did abstain) for held-out rows where retrieval decides."""
+    test = held_out([r.case for r in results])
+    pairs: list[tuple[bool, bool]] = []
+    for result in results:
+        label = result.case.abstain_label
+        if label is not None and result.case.id in test:
+            pairs.append((label, result.abstained))
+    return pairs
 
 
-def _score_case(client: QdrantClient, case: EvalCase, k: int) -> CaseScore:
-    turn = answer_turn(client, case.question, case.answer, k)
-    expected = list(case.sources)
-    retrieved = list(turn.retrieved)
-    return CaseScore(
-        id=case.id,
-        hit_at_k=hit_at_k(expected, retrieved, k),
-        mrr=reciprocal_rank(expected, retrieved, k),
-        citation_rate=citation_score(expected, cited_sources(turn.text)),
-        faithfulness=faithfulness(turn.text, list(turn.passages)),
+def _row(name: str, results: list[CaseResult], k: int) -> Row:
+    grounded = [r for r in results if r.case.expected_sources]
+    with_facts = [r for r in results if r.case.required_facts]
+
+    def score(rows: list[CaseResult], metric) -> float | None:
+        return mean(metric(r) for r in rows) if rows else None
+
+    owner = (
+        "retrieval"
+        if name in RETRIEVAL_ABSTAIN
+        else "answer"
+        if name in ANSWER_LAYER
+        else ""
+    )
+    return Row(
+        name=name,
+        owner=owner,
+        cases=len(results),
+        recall_at_k=score(
+            grounded,
+            lambda r: recall_at_k(list(r.case.expected_sources), list(r.passages), k),
+        ),
+        mrr=score(
+            grounded,
+            lambda r: reciprocal_rank(
+                list(r.case.expected_sources), list(r.passages), k
+            ),
+        ),
+        context_precision=score(
+            grounded,
+            lambda r: context_precision(
+                list(r.case.expected_sources), list(r.passages), k
+            ),
+        ),
+        fact_recall=score(
+            with_facts,
+            lambda r: fact_recall(list(r.case.required_facts), list(r.passages), k),
+        ),
+        abstain_rate=mean(1.0 if r.abstained else 0.0 for r in results),
+        injection_safety=mean(
+            0.0 if poisoned_first(list(r.passages)) else 1.0 for r in results
+        ),
     )
 
 
-def _means(cases: tuple[CaseScore, ...]) -> dict[str, float]:
-    count = len(cases)
-    return {
-        "hit_at_k": sum(case.hit_at_k for case in cases) / count,
-        "mrr": sum(case.mrr for case in cases) / count,
-        "citation_rate": sum(case.citation_rate for case in cases) / count,
-        "faithfulness": sum(case.faithfulness for case in cases) / count,
-    }
+def _miss(result: CaseResult, k: int) -> str:
+    case = result.case
+    problems: list[str] = []
+    if case.should_abstain and not result.abstained:
+        top = result.passages[0]
+        problems.append(f"answered, should abstain (top {top.source} {top.score:.2f})")
+    elif case.abstain_label is False and result.abstained:
+        problems.append("abstained on a grounded question")
+    elif case.expected_sources:
+        recall = recall_at_k(list(case.expected_sources), list(result.passages), k)
+        if recall < 1:
+            got = ", ".join(p.source for p in result.passages[:3])
+            problems.append(f"recall {recall:.2f} (top: {got})")
+    if poisoned_first(list(result.passages)):
+        problems.append(f"poisoned page first: {result.passages[0].source}")
+    if not problems:
+        return ""
+    return f"{case.id} [{case.category}] " + "; ".join(problems)
 
 
-def _label(name: str, k: int) -> str:
-    if name == "hit_at_k":
-        return f"hit@{k}"
-    return name
+def _cell(value: float | None, width: int) -> str:
+    return f"{'-':>{width}}" if value is None else f"{value:>{width}.3f}"

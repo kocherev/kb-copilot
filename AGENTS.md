@@ -15,7 +15,7 @@ Read this before changing the repository. It is enough to install, test, and sco
 | `demo/docs` | Original sample pages. MIT, same as `LICENSE`. |
 | `skills` | Task notes for this repo. `.agents/skills` is the same directory. |
 
-Postgres stores products and ingest jobs. Qdrant stores chunks in `kb_chunks` with `product_id` and `source_url`. The worker logs latency as JSON on stdout. It does not write a turn table.
+Postgres stores products and ingest jobs. Qdrant stores chunks in `kb_chunks` with `product_id`, `source` (a path relative to the ingest root, or `upload://name`), `title`, `anchor`, and `text`. The worker logs latency as JSON on stdout. It does not write a turn table.
 
 ## Commands
 
@@ -34,7 +34,7 @@ uv sync --all-packages --group dev
 make eval
 ```
 
-`make eval` is `uv run python -m kb_evals`. It indexes `demo/docs` in memory. It does not need Docker, LiveKit, or a model key.
+`make eval` is `uv run python -m kb_evals`. It indexes `demo/docs` in memory with the default FastEmbed models, which download on first use. It does not need Docker, LiveKit, or a model key. Unit tests use the hashed embedder in `kb_rag.testing` and download nothing.
 
 Start the local stack:
 
@@ -68,9 +68,9 @@ uv run pytest evals/tests
 
 - `packages/rag` stays free of the HTTP app and the database driver. Callers pass a Qdrant client and already-parsed sources.
 - The agent name `kb-support` is set in `services/agent` and in `services/api`. Change both.
-- A cited transcript line ends with `Source: <url>`. The web app, the worker, and the eval scorer share that shape. Change them together.
+- A cited transcript line ends with `Source: <source>`. The web app and the worker share that shape. Change them together.
 - An empty retrieval says exactly `That is not in the docs.`
-- Dense vectors are a local token hash. A model embedding is a separate change. Re-score with `make eval` before editing the README table.
+- Retrieval models and the abstain threshold live in `RetrievalSettings` in `packages/rag`. Changing one means `make bakeoff`, `make eval`, new `evals/thresholds.json` floors, and a README table pasted from the printout.
 - Do not put a secret, a live password, or a filled-in `.env` in a commit. `.env.example` stays placeholders.
 - The homepage button in `apps/web/src/components/ui/button.tsx` is Honest UI. Leave it. New primitives come from https://ds.asanshay.com/ first. Details are in `skills/interface/SKILL.md`.
 

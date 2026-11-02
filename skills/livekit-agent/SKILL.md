@@ -20,10 +20,10 @@ The worker reads `product_id` from that metadata and loads the system prompt wit
 
 On a user turn with content words, the worker calls `search_kb` before the model speaks. The tool of the same name is for a follow-up query. Both call `packages/rag` through the in-process helper, filtered by `product_id`.
 
-- Hits are remembered and appended to the transcript as `Source: <source_url>`, one line per source.
+- Hits are remembered and appended to the transcript as `Source: <source>`, one line per source.
 - No hit yields exactly `That is not in the docs.` The model is not called for that turn.
 - The system prompt says not to read source URLs aloud. The transcript lists them.
-- The web parser in `apps/web/src/lib/session.ts` and the scorer in `evals` depend on that `Source:` line. Change the three together.
+- The web parser in `apps/web/src/lib/session.ts` depends on that `Source:` line. Change the two together.
 - A lookup logs one JSON line: `kind` is `retrieval`, plus `product_id`, `duration_ms`, and `hit_count`.
 
 `QDRANT_URL` defaults to `http://localhost:6333`. Compose sets `http://qdrant:6333` on the agent.

@@ -1,10 +1,10 @@
 [project]
 name = "kb-rag"
 version = "0.0.0"
-description = "Indexing helpers for LlamaIndex and Qdrant."
+description = "Parse, chunk, index, and search documents in Qdrant."
 requires-python = ">=3.12"
 dependencies = [
-  "llama-index-core>=0.14",
+  "fastembed>=0.7",
   "pypdf>=5.1",
   "qdrant-client>=1.13",
 ]

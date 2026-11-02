@@ -1,12 +1,14 @@
+import asyncio
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from kb_api.ingest import get_job_store, get_qdrant
+from kb_api.ingest import get_job_store, get_qdrant, get_retrieval_settings
 from kb_api.jobs import MemoryJobStore
 from kb_api.main import app
-from kb_rag.pipeline import KB_COLLECTION
-from qdrant_client import QdrantClient
+from kb_rag import KB_COLLECTION
+from kb_rag.testing import HASH_SETTINGS
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -15,9 +17,10 @@ ROOT = Path(__file__).resolve().parents[3]
 @pytest.fixture
 def indexed_client(monkeypatch: pytest.MonkeyPatch):
     store = MemoryJobStore()
-    qdrant = QdrantClient(":memory:")
+    qdrant = AsyncQdrantClient(":memory:")
     app.dependency_overrides[get_job_store] = lambda: store
     app.dependency_overrides[get_qdrant] = lambda: qdrant
+    app.dependency_overrides[get_retrieval_settings] = lambda: HASH_SETTINGS
     monkeypatch.setenv("KB_DATA_ROOT", str(ROOT))
     client = TestClient(app)
     yield client, qdrant
@@ -46,30 +49,31 @@ def test_demo_directory_indexes_and_records_status(indexed_client) -> None:
     assert fetched.json()["status"] == "indexed"
     assert fetched.json()["status_log"] == ["queued", "indexing", "indexed"]
 
-    points, _offset = qdrant.scroll(
-        collection_name=KB_COLLECTION,
-        scroll_filter=Filter(
-            must=[FieldCondition(key="product_id", match=MatchValue(value="demo"))]
-        ),
-        with_payload=True,
-        with_vectors=True,
-        limit=50,
+    points, _offset = asyncio.run(
+        qdrant.scroll(
+            collection_name=KB_COLLECTION,
+            scroll_filter=Filter(
+                must=[FieldCondition(key="product_id", match=MatchValue(value="demo"))]
+            ),
+            with_payload=True,
+            with_vectors=True,
+            limit=500,
+        )
     )
     assert len(points) == body["chunk_count"]
-    names = set()
+    sources = set()
     for point in points:
         assert point.payload is not None
         assert point.payload["product_id"] == "demo"
-        source_url = str(point.payload["source_url"])
-        assert source_url.startswith("file:")
-        names.add(Path(source_url).name)
+        source = str(point.payload["source"])
+        assert not source.startswith(("/", "file:"))
+        sources.add(source)
         assert isinstance(point.vector, dict)
-        assert "dense" in point.vector
-        assert "bm25" in point.vector
-    assert {"billing.md", "account.html", "README.md"} <= names
+        assert set(point.vector) == {"dense", "sparse"}
+    assert {"billing/refunds.md", "accounts/password-reset.html"} <= sources
 
 
-def test_upload_file_uses_upload_source_url(indexed_client) -> None:
+def test_upload_file_uses_upload_source(indexed_client) -> None:
     client, qdrant = indexed_client
 
     created = client.post(
@@ -88,13 +92,15 @@ def test_upload_file_uses_upload_source_url(indexed_client) -> None:
 
     assert created.status_code == 201
     assert created.json()["status"] == "indexed"
-    points, _offset = qdrant.scroll(
-        collection_name=KB_COLLECTION,
-        with_payload=True,
-        limit=10,
+    points, _offset = asyncio.run(
+        qdrant.scroll(
+            collection_name=KB_COLLECTION,
+            with_payload=True,
+            limit=10,
+        )
     )
     assert points[0].payload is not None
-    assert points[0].payload["source_url"] == "upload://notes.md"
+    assert points[0].payload["source"] == "upload://notes.md"
     assert points[0].payload["product_id"] == "acme"
 
 
