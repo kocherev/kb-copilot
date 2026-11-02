@@ -18,7 +18,7 @@ jobs:
           version: 10.33.4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
@@ -58,6 +58,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose config --quiet
+      - run: docker compose --profile livekit config --quiet
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --frozen --all-packages --group dev
+      - name: Use the dev LiveKit key pair
+        run: |
+          cp .env.example .env
+          sed -i -e 's/^LIVEKIT_API_KEY=.*/LIVEKIT_API_KEY=devkey/' \
+            -e 's/^LIVEKIT_API_SECRET=.*/LIVEKIT_API_SECRET=secret/' .env
+      - run: docker compose --profile livekit up -d --build --wait postgres qdrant api web livekit
+      - run: uv run python scripts/smoke.py
+      - run: uv run pytest services/api/tests/test_products_live.py services/api/tests/test_ingest_live.py
+        env:
+          KB_LIVE_STORES: "1"
+          DATABASE_URL: postgresql://kb:replace-me@localhost:5432/kb
+          QDRANT_URL: http://localhost:6333
+      - if: failure()
+        run: docker compose --profile livekit logs --no-color
+      - if: always()
+        run: docker compose --profile livekit down -v
 
   secrets:
     runs-on: ubuntu-latest

@@ -16,6 +16,7 @@ uv run pytest
 uv run python -m kb_evals
 
 docker compose config --quiet
+docker compose --profile livekit config --quiet
 
 if command -v gitleaks >/dev/null 2>&1; then
   gitleaks detect --source . --redact
