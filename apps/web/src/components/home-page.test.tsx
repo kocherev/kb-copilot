@@ -157,3 +157,36 @@ test("create survives a response that is not a product", async () => {
     "Could not save the product.",
   );
 });
+
+test("a description typed on several lines is saved as one paragraph", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const sent = JSON.parse(String(init?.body)) as typeof draft;
+      if (/[\r\n]/.test(sent.description)) {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ detail: "description must be one paragraph" }),
+        };
+      }
+      return {
+        ok: true,
+        status: 201,
+        json: async () => ({ id: "11111111-1111-4111-8111-111111111111", ...sent }),
+      };
+    }),
+  );
+  render(<HomePage apiUrl="http://localhost:8000" />);
+  fillCreateForm();
+  fireEvent.change(screen.getByLabelText("Description"), {
+    target: { value: "Acme resets passwords.\r\n\n  It also unlocks accounts." },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Create product" }));
+
+  expect((await screen.findByRole("status")).textContent).toBe("Saved");
+  expect(screen.getByLabelText("Description")).toHaveProperty(
+    "value",
+    "Acme resets passwords. It also unlocks accounts.",
+  );
+});
