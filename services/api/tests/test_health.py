@@ -20,3 +20,7 @@ def test_settings_read_environment(monkeypatch) -> None:
     assert settings.database_url == "postgresql://kb:replace-me@db:5432/kb"
     assert settings.qdrant_url == "http://qdrant:6333"
     assert settings.data_root == "/app"
+
+
+def test_settings_are_read_once() -> None:
+    assert load_settings() is load_settings()
