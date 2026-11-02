@@ -42,7 +42,7 @@ The homepage button is Honest UI, in `apps/web/src/components/ui`, with tokens i
 
 New primitives come from https://ds.asanshay.com/ before another kit.
 
-Before changing UI, read `skills/interface/SKILL.md`, `skills/make-interfaces-feel-better/SKILL.md`, and `skills/design-engineering/SKILL.md`. `skills/design-catalog/SKILL.md` points at the rest of that index.
+Before changing UI, read `skills/interface/SKILL.md`, `skills/make-interfaces-feel-better/SKILL.md`, and `skills/design-engineering/SKILL.md`.
 
 ## Words
 
@@ -54,16 +54,14 @@ Docs, pull requests, and commit messages follow `skills/unslop/SKILL.md`. Short 
 | --- | --- |
 | `skills/ponytail/SKILL.md` | Sizing a diff |
 | `skills/working-style/SKILL.md` | Any code change. Named state, observable tests, role budgets |
-| `skills/prove-it/SKILL.md` | Before calling a change done |
 | `skills/tests/SKILL.md` | Writing or changing a test |
 | `skills/unslop/SKILL.md` | Docs, commits, and review text |
 | `skills/technical-writing/SKILL.md` | README and other public docs |
 | `skills/pr-hygiene/SKILL.md` | Branch, commit, and pull request |
-| `skills/prove-it-works/SKILL.md` | Unit tests plus the `make eval` table |
+| `skills/prove-it-works/SKILL.md` | Before calling a change done. Unit tests plus the `make eval` table |
 | `skills/livekit-agent/SKILL.md` | Worker, dispatch, screen share, citations |
 | `skills/rag-index-query/SKILL.md` | Chunking, embeddings, and the Qdrant query |
 | `skills/typescript-best-practices/SKILL.md` | `apps/web` |
 | `skills/interface/SKILL.md` | Any UI change in this app |
 | `skills/make-interfaces-feel-better/SKILL.md` | UI polish: type, surfaces, motion, icons |
 | `skills/design-engineering/SKILL.md` | Motion and component feel |
-| `skills/design-catalog/SKILL.md` | Pointer to the design-engineering index |
