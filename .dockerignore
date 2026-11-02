@@ -6,6 +6,13 @@
 **/.pytest_cache
 **/.ruff_cache
 **/.mypy_cache
+**/.pyright
+**/*.tsbuildinfo
+**/.DS_Store
+.worktrees
+.pnpm-store
+coverage
+docs
 .env
 .env.*
 !.env.example
