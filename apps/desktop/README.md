@@ -6,19 +6,24 @@ The agent's `operate_computer` tool calls an action only after the user allows t
 
 ## Run
 
-You need macOS 14 or later, Python 3.12, uv, and a running stack with a session (see the Quickstart in the repository README).
+You need macOS 14 or later, Python 3.12, uv, and a running stack with a product that has a few documents (see the Quickstart in the repository README).
 
-1. Start a session in the web app and share your entire screen.
-2. In the "Your Mac" panel under the preview, press Connect your Mac, then Copy command. The command holds a token for your own session. It grants RPC and data only and works for ten minutes.
-3. From the repository root, run it. Add `--dry-run` the first time:
+1. Start a session in the web app and share your entire screen. The agent can only act on the main display.
+2. In the "Your Mac" panel beside the stage, press Connect your Mac, then Copy command. The command holds a token for your own session. It grants RPC and data only and works for ten minutes.
+3. From the repository root, run it. Add `--dry-run` the first time: the helper then sends screenshots and draws the cursor, and logs each action without performing it.
 
-```bash
-uv run --package kb-desktop kb-desktop --url <url> --token <token> --dry-run
-```
+   ```bash
+   uv run --package kb-desktop kb-desktop --url <url> --token <token> --dry-run
+   ```
 
-It prints `joined <room> as desktop:<user id>` once it is in the room, and the panel then says your Mac is connected. Press Ctrl-C to leave the room and exit.
+4. The first run asks macOS for Screen Recording and exits. Open System Settings > Privacy & Security > Screen & System Audio Recording, switch on that terminal app, quit and reopen the terminal, and copy a fresh command.
+5. Run the command again. It prints `joined <room> as desktop:<user id>` once it is in the room, and the panel then says your Mac is connected.
+6. Say to the agent: "Can you open the Billing page for me?" It describes the step and asks. Say yes. The tray shows the step and the cursor rings at the target. Press Allow once. In dry-run the helper logs `dry run: Click(...) at point (x, y)` and nothing moves.
+7. To let it act for real, stop the helper with Ctrl-C, switch the same terminal on under System Settings > Privacy & Security > Accessibility, copy a fresh command, and run it without `--dry-run`.
 
-Without the web page, the same token comes from the API. Sign in from a shell as in "Use the API from the command line" in the repository README, then:
+Ctrl-C leaves the room and exits.
+
+Without the web page, the same token comes from the API. Sign in from a shell as in [Use the API from the command line](../../docs/setup.md#use-the-api-from-the-command-line), then:
 
 ```bash
 ROOM=$(curl -s -H "authorization: Bearer $TOKEN" http://localhost:8000/sessions | grep -o '"room":"[^"]*"' | head -1 | cut -d'"' -f4)
