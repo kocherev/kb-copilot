@@ -39,7 +39,7 @@ The agent calls `handoff_to_human(summary, reason)`. The tool posts to `POST /in
 
 The API takes only the room name from the agent and finds the org and product from the live session row. A room the API did not start is a 404.
 
-Approve claims the row with a conditional update from `proposed` to `creating`, so a double click or two tabs create one issue. A second approve of a created escalation returns the same issue. A failed `issueCreate` puts the row back to `proposed` and answers 502, so the user can try again. Approving a dismissed escalation, or dismissing a created one, is a 409.
+Approve claims the row with a conditional update from `proposed` to `creating`, so a double click or two tabs create one issue. If the request dies after the claim, the row stays `creating`. Once it has not changed for 2 minutes, a new approve can claim it with a conditional update that renews the lease, create the issue, and move it to `created`. A `creating` row that changed more recently still counts as in progress and answers 409 without calling Linear. A second approve of a created escalation returns the same issue. A failed `issueCreate` puts the row back to `proposed` and answers 502, so the user can try again. Approving a dismissed escalation, or dismissing a created one, is a 409.
 
 Every step writes an audit row: `linear.connect`, `linear.disconnect`, `escalation.propose` (actor `agent`), `escalation.approve`, `escalation.approve_failed`, and `escalation.dismiss`.
 
@@ -67,7 +67,6 @@ The body is the summary, the product name, the reason, and the last eight spoken
 - The tickets go to the first team Linear returns. There is no team picker.
 - The agent is not told when the user approves. The page shows the ticket number.
 - A card is kept in the page only. After a reload an open proposal stays `proposed` in the database and cannot be approved from the page.
-- A crash between the claim and the write leaves an escalation in `creating`, and approve answers 409 for it. A lease timeout would fix that.
 - Any member of an org can connect or disconnect Linear. Org admins are not modeled.
 - The agent does not limit how many proposals it makes in one session.
 

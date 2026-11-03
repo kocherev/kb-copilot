@@ -2025,7 +2025,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorBody"];
                 };
             };
-            /** @description Dismissed, in progress, or no Linear */
+            /** @description Dismissed, in progress, or no Linear. A creating escalation idle for two minutes can be approved again */
             409: {
                 headers: {
                     [name: string]: unknown;
