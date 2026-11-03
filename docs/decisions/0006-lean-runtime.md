@@ -77,7 +77,7 @@ Mac with 8 cores and a Docker VM of 8 CPUs and 8 GB. The agent numbers are from 
 | Citation check per turn, median / p95 | 440 to 547 ms / 676 to 764 ms | 34 ms / 50 ms |
 | Agent container memory, no session running | 1.12 GiB (8 warm processes) | 0.60 GiB (1 warm process) |
 | API memory, models loaded | 1.0 to 1.4 GB | 1.2 GB |
-| Indexing the 19 files of `kb-demo-claude-code` (1.7 MB) | API killed at 7.3 GB, restart loop | 2,475 chunks in 11.7 min, API 205% CPU on average, 1.5 GB peak, no restart |
+| Indexing a 19-file Markdown docs set (1.7 MB) | API killed at 7.3 GB, restart loop | 2,475 chunks in 11.7 min, API 205% CPU on average, 1.5 GB peak, no restart |
 | Same files on the host without `errors.md`, one process | 1,633 chunks, 6,245 s, 8,495 CPU s, 7.8 GB peak, swapping | not rerun |
 
 The image sizes did not change: the agent still imports `kb_rag` for `NOT_IN_DOCS` (see below), which pulls in fastembed.
