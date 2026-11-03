@@ -741,16 +741,40 @@
         ],
         "summary": "List Sessions",
         "operationId": "list_sessions_sessions_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Product Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LiveSession"
-                  },
                   "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionSummary"
+                  },
                   "title": "Response List Sessions Sessions Get"
                 }
               }
@@ -775,13 +799,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -789,15 +818,20 @@
         ],
         "summary": "Create Session",
         "operationId": "create_session_sessions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SessionCreate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -880,12 +914,85 @@
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "sessions"
+        ],
+        "summary": "Get Replay",
+        "operationId": "get_replay_sessions__session_id__get",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Replay"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No organization for this caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session in this org",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/sessions/{room}/desktop-token": {
@@ -1919,6 +2026,65 @@
         ],
         "title": "CallbackBody"
       },
+      "Citation": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source"
+        ],
+        "title": "Citation"
+      },
+      "DesktopAction": {
+        "properties": {
+          "event": {
+            "type": "string",
+            "title": "Event"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event",
+          "at",
+          "task",
+          "detail"
+        ],
+        "title": "DesktopAction"
+      },
       "DesktopGrant": {
         "properties": {
           "url": {
@@ -2074,6 +2240,54 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "Handoff": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "issue_identifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Identifier"
+          },
+          "issue_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Url"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "status",
+          "issue_identifier",
+          "issue_url",
+          "created_at"
+        ],
+        "title": "Handoff"
+      },
       "Health": {
         "properties": {
           "status": {
@@ -2186,49 +2400,6 @@
           "connected"
         ],
         "title": "LinearStatus"
-      },
-      "LiveSession": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "product_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Product Id"
-          },
-          "room": {
-            "type": "string",
-            "title": "Room"
-          },
-          "user_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "User Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "product_id",
-          "room",
-          "user_id",
-          "created_at"
-        ],
-        "title": "LiveSession"
       },
       "Me": {
         "properties": {
@@ -2395,6 +2566,166 @@
         ],
         "title": "Proposal"
       },
+      "Replay": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "room": {
+            "type": "string",
+            "title": "Room"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "turn_count": {
+            "type": "integer",
+            "title": "Turn Count"
+          },
+          "action_count": {
+            "type": "integer",
+            "title": "Action Count"
+          },
+          "handoff_count": {
+            "type": "integer",
+            "title": "Handoff Count"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "type": "array",
+            "title": "Turns"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/DesktopAction"
+            },
+            "type": "array",
+            "title": "Actions"
+          },
+          "handoffs": {
+            "items": {
+              "$ref": "#/components/schemas/Handoff"
+            },
+            "type": "array",
+            "title": "Handoffs"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "room",
+          "user_id",
+          "created_at",
+          "ended_at",
+          "turn_count",
+          "action_count",
+          "handoff_count",
+          "turns",
+          "actions",
+          "handoffs"
+        ],
+        "title": "Replay"
+      },
+      "Search": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Query"
+          },
+          "passages": {
+            "items": {
+              "$ref": "#/components/schemas/SearchedPassage"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Passages"
+          },
+          "abstained": {
+            "type": "boolean",
+            "title": "Abstained"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Duration Ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "passages",
+          "abstained",
+          "duration_ms"
+        ],
+        "title": "Search"
+      },
+      "SearchedPassage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Title"
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Source"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source",
+          "score"
+        ],
+        "title": "SearchedPassage"
+      },
       "SessionCreate": {
         "properties": {
           "product_id": {
@@ -2431,6 +2762,153 @@
           "room"
         ],
         "title": "SessionGrant"
+      },
+      "SessionSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Product Id"
+          },
+          "room": {
+            "type": "string",
+            "title": "Room"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "turn_count": {
+            "type": "integer",
+            "title": "Turn Count"
+          },
+          "action_count": {
+            "type": "integer",
+            "title": "Action Count"
+          },
+          "handoff_count": {
+            "type": "integer",
+            "title": "Handoff Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "product_id",
+          "room",
+          "user_id",
+          "created_at",
+          "ended_at",
+          "turn_count",
+          "action_count",
+          "handoff_count"
+        ],
+        "title": "SessionSummary"
+      },
+      "Turn": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Ended At"
+          },
+          "searches": {
+            "items": {
+              "$ref": "#/components/schemas/Search"
+            },
+            "type": "array",
+            "title": "Searches"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "type": "array",
+            "title": "Citations"
+          },
+          "latency": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Latency"
+          },
+          "image_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Tokens"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "role",
+          "text",
+          "started_at",
+          "ended_at",
+          "searches",
+          "citations",
+          "latency",
+          "image_tokens"
+        ],
+        "title": "Turn"
       },
       "ValidationError": {
         "properties": {

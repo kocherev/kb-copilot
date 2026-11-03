@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { apiClient, publicApiUrl, type ApiClient, type Product } from "@/lib/api/client";
 import { auth } from "@/lib/auth";
 import { productLoad, type ProductLoad } from "@/lib/product";
+import { replayLoad, type ReplayLoad } from "@/lib/replay";
 
 // Inside Compose the browser's API URL points at the web container itself.
 export function serverApiUrl(): string {
@@ -26,6 +27,18 @@ export async function loadProduct(id: string): Promise<ProductLoad> {
     return productLoad(response.status, data, error);
   } catch {
     return { status: "error", message: "Could not load the product." };
+  }
+}
+
+export async function loadReplay(id: string): Promise<ReplayLoad> {
+  try {
+    const api = await serverApi();
+    const { data, error, response } = await api.GET("/sessions/{session_id}", {
+      params: { path: { session_id: id } },
+    });
+    return replayLoad(response.status, data, error);
+  } catch {
+    return { status: "error", message: "Could not load the session." };
   }
 }
 

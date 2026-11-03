@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ProductDocuments } from "@/components/product-documents";
 import { ProductForm } from "@/components/product-form";
+import { ProductSessions } from "@/components/product-sessions";
 import { Button } from "@/components/ui/button";
 import type { Product } from "@/lib/api/client";
 import type { ProductLoad } from "@/lib/product";
@@ -58,6 +59,7 @@ export function ProductEditor({
             onSaved={setProduct}
           />
           <ProductDocuments apiUrl={apiUrl} productId={product.id} />
+          <ProductSessions apiUrl={apiUrl} productId={product.id} />
         </>
       ) : null}
     </main>
