@@ -25,7 +25,6 @@ from kb_evals.run import (
     CaseResult,
     RagRetriever,
     Report,
-    Retriever,
     build_report,
     collect,
     load_thresholds,
@@ -46,7 +45,7 @@ FALSE_REFUSAL_COST = 10.0
 HASH_SETTINGS = replace(testing.HASH_SETTINGS, abstain_threshold=None)
 
 
-def retriever_for(name: str) -> Retriever:
+def retriever_for(name: str) -> RagRetriever:
     if name == "default":
         return RagRetriever()
     if name == HASH_BASELINE:
