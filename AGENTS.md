@@ -8,7 +8,7 @@ Read this before changing the repository. It is enough to install, test, and sco
 | --- | --- |
 | `apps/web` | Next.js App Router app. Product config, upload, and the LiveKit session. |
 | `services/api` | FastAPI. Products, ingest jobs, and `POST /sessions`. |
-| `services/agent` | LiveKit worker `kb-support`. Voice, screen share, and `search_kb`. |
+| `services/agent` | LiveKit worker `kb-support`. Gemini Live voice and vision, `search_kb`, `point_at`. |
 | `services/mcp` | stdio MCP server for `search_kb` and `get_product`. |
 | `packages/rag` | Parse, chunk, embed, and hybrid query. No HTTP and no Postgres. |
 | `evals` | `make eval`. Dataset, scorers, and `evals/thresholds.json`. |
@@ -49,7 +49,7 @@ Self-hosted media server:
 docker compose --profile livekit up --build
 ```
 
-The dev LiveKit process uses API key `devkey` and API secret `secret`. Spoken replies on that URL need `OPENAI_API_KEY`. A `*.livekit.cloud` URL uses LiveKit Inference and does not use that key. A placeholder key pair such as `replace-me` counts as missing. `POST /sessions` then returns 503, and the agent container keeps retrying. The web app and the API still come up.
+The dev LiveKit process uses API key `devkey` and API secret `secret`. The agent speaks through Gemini Live on any LiveKit host and needs `GOOGLE_API_KEY`. A placeholder key pair such as `replace-me` counts as missing. `POST /sessions` then returns 503. The agent container exits at start with one line that names the missing setting. The web app and the API still come up.
 
 One package at a time:
 
@@ -67,8 +67,8 @@ uv run pytest evals/tests
 ## Boundaries
 
 - `packages/rag` stays free of the HTTP app and the database driver. Callers pass a Qdrant client and already-parsed sources.
-- The agent name `kb-support` is set in `services/agent` and in `services/api`. Change both.
-- A cited transcript line ends with `Source: <source>`. The web app and the worker share that shape. Change them together.
+- The agent name `kb-support` and the data-channel topics are in `services/agent/src/kb_agent/protocol.py` and `apps/web/src/lib/protocol.ts`. `services/api` repeats the agent name. `services/agent/tests/test_protocol.py` fails when they drift.
+- Citations travel as `citations` data messages, not as text in the transcript. Change the worker, `apps/web/src/lib/protocol.ts`, and the page together.
 - An empty retrieval says exactly `That is not in the docs.`
 - Retrieval models and the abstain threshold live in `RetrievalSettings` in `packages/rag`. Changing one means `make bakeoff`, `make eval`, new `evals/thresholds.json` floors, and a README table pasted from the printout.
 - Do not put a secret, a live password, or a filled-in `.env` in a commit. `.env.example` stays placeholders.

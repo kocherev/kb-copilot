@@ -91,7 +91,7 @@ def test_env_example_lists_placeholders_only() -> None:
         "LIVEKIT_API_URL",
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
-        "OPENAI_API_KEY",
+        "GOOGLE_API_KEY",
         "ANTHROPIC_API_KEY",
     }
     found: set[str] = set()

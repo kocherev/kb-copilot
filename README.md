@@ -2,7 +2,7 @@
 
 Screen-share and voice support over a knowledge base you upload. The agent answers from that knowledge base, cites the passage, and this repo scores those answers before a change lands.
 
-You upload documents, set the product name, description, tone, and refusal rules, then join a LiveKit room with your microphone and your screen. The worker searches the index for that product. A hit shows up under the spoken line as `Source:`. A miss is the sentence `That is not in the docs.`
+You upload documents, set the product name, description, tone, and refusal rules, then join a LiveKit room with your microphone and your screen. The worker searches the index for that product. A hit lists the sections it used under the spoken line. A miss is the sentence `That is not in the docs.`
 
 ## Architecture
 
@@ -86,7 +86,7 @@ make eval
 
 ### LiveKit Cloud
 
-Set `LIVEKIT_URL`, `LIVEKIT_AGENT_URL`, and `LIVEKIT_API_URL` to the same `wss://<project>.livekit.cloud` URL, and set that project's key pair. Leave `OPENAI_API_KEY` empty. Leave the `livekit` profile off.
+Set `LIVEKIT_URL`, `LIVEKIT_AGENT_URL`, and `LIVEKIT_API_URL` to the same `wss://<project>.livekit.cloud` URL, and set that project's key pair. Set `GOOGLE_API_KEY`. Leave the `livekit` profile off.
 
 ```bash
 docker compose up --build
@@ -98,21 +98,25 @@ docker compose up --build
 docker compose --profile livekit up --build
 ```
 
-That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Its key pair is `devkey` / `secret`. Put those in `.env`, with `LIVEKIT_URL=ws://localhost:7880`, `LIVEKIT_AGENT_URL=ws://livekit:7880`, and `LIVEKIT_API_URL=http://livekit:7880`. Set `OPENAI_API_KEY` as well. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`, and the API dispatches through `LIVEKIT_API_URL`, because `localhost` inside a container is not the LiveKit server.
+That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Its key pair is `devkey` / `secret`. Put those in `.env`, with `LIVEKIT_URL=ws://localhost:7880`, `LIVEKIT_AGENT_URL=ws://livekit:7880`, and `LIVEKIT_API_URL=http://livekit:7880`. Set `GOOGLE_API_KEY` as well. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`, and the API dispatches through `LIVEKIT_API_URL`, because `localhost` inside a container is not the LiveKit server.
 
 ## Demo
 
-The session page asks for the microphone and the screen, then shows the shared screen. A Thinking label appears while the agent thinks. When the agent calls `point_at`, the page draws a ring and a short label on that preview. The highlight stays in the browser. The worker does not move the mouse or click.
+The session page asks for the microphone and the screen, then shows the shared screen next to a transcript. The agent hears you, sees the screen, and answers by voice. A Thinking label shows only while the agent thinks. When the agent calls `point_at`, the page draws a ring and a short label on the picture. The ring sits inside the video, not in the bars around it. It stays in the browser and does not move the mouse or click.
 
-The transcript lists each turn. A cited answer shows `Source:` and the file name under the agent's line.
+Under an answer from the docs, the page lists the sections the answer used. Each has a title and a snippet that opens on click. A refusal lists none. The connection line reads Connecting, In the room, Connection lost. Reconnecting, or Session ended. End session leaves the room. If the agent cannot start, the page shows the reason.
 
-The GIF and the stills render the session components with a sample turn. They are not a recording of a live room.
+To see the agent read a real screenshot, run the selfcheck:
 
-![Session page, then the transcript. The cited line reads Source: billing.md.](docs/demo.gif)
+```bash
+GOOGLE_API_KEY=... uv run python -m kb_agent.selfcheck \
+  --image services/agent/tests/fixtures/billing-screen.png \
+  --question "What does the red banner say, and which button fixes it?"
+```
+
+It prints the reply, the tools called, and the token usage, and exits 1 when no image tokens were billed. Without a key it prints `skipped` and exits 0.
 
 ![Session page for Acme before the room connects. The button reads Start session.](docs/session-start.png)
-
-![Session transcript for Acme. The agent answers the refund question and the line under it reads Source: billing.md.](docs/session-transcript.png)
 
 ## Eval results
 
@@ -188,13 +192,21 @@ The web app at `/` creates a product. `/products/{id}` edits the four fields and
 
 `POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish the microphone and the screen. The API dispatches the agent named `kb-support` through `LIVEKIT_API_URL`, with job metadata `{"product_id":"<uuid>"}`. Missing or placeholder LiveKit settings return 503 with `LiveKit is not configured`.
 
-The worker loads that product from `GET /products/{id}` and uses it as the system prompt. On a `*.livekit.cloud` URL it uses Gemini Live through LiveKit Inference. On any other URL, including the Compose hostname `livekit`, it uses the OpenAI plugin and needs `OPENAI_API_KEY`. Neither path sends the screen share to the model yet, because LiveKit Inference does not pass video to realtime models and the OpenAI pipeline does not use video.
+The worker loads that product from `GET /products/{id}` and uses it as the system prompt. The model is Gemini Live, `gemini-3.8-live-extended-thinking`, through the LiveKit Google plugin with `GOOGLE_API_KEY`, on a `*.livekit.cloud` URL and on a self-hosted server alike. The worker exits at start with one line when `GOOGLE_API_KEY` or a LiveKit setting is missing or a placeholder. `KB_VOICE` picks the voice (default `Puck`). `AGENT_MAX_SESSION_SECONDS` (default 600) ends a session with a short goodbye. The screen share reaches the model as video frames, about one per second while the user speaks and one per three seconds otherwise.
 
-Each product question calls `search_kb` against `kb_chunks`, filtered by `product_id`. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose). The API and the worker pass `QDRANT_API_KEY` when it is set. An empty value leaves local Qdrant without a key. A matching passage is cited in the transcript. No matching passage produces `That is not in the docs.` On the Cloud path that sentence is spoken by the Inference TTS. The realtime model is not asked to invent a replacement.
+The agent searches before it answers a product question. `search_kb` queries `kb_chunks`, filtered by `product_id`, and returns the passages as numbered untrusted data plus an `abstained` flag. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose) and passes `QDRANT_API_KEY` when it is set. An abstained search or a passage that does not answer produces `That is not in the docs.`
 
-`point_at` publishes a JSON message on the `hud` topic. The session page draws it on the shared-screen preview. The same page shows Thinking while the agent state is thinking. Neither mark leaves the browser.
+The worker sends three kinds of message on the room data channel. The names are in `services/agent/src/kb_agent/protocol.py` and `apps/web/src/lib/protocol.ts`, and a test fails when they drift.
 
-The worker subscribes to screen-share video when the browser publishes one. Each STT, LLM, TTS, or realtime metric is one JSON line on stdout, and each user or assistant turn is another JSON line with the per-turn delays. A realtime line includes `image_tokens` when the model reports them. A knowledge lookup is another JSON line with `kind` set to `retrieval` and `duration_ms`.
+| Topic | Payload |
+| --- | --- |
+| `hud` | `{"kind":"point","x":0.5,"y":0.4,"label":"Review status"}`. `x` and `y` are fractions of the shared picture from the top left. |
+| `citations` | `{"message_id":"…","text":"<the assistant message>","passages":[{"id","title","source","anchor","snippet"}]}`. The page attaches it to the transcript line with the same text. Sent only when a passage supports the message. |
+| `agent-error` | `{"message":"…"}`. Sent when the agent cannot start, or its model session dies, so the page is never silent. |
+
+Each realtime model turn is one JSON line on stdout with `kind` `component`, `segment` `realtime`, and `image_tokens`. Each user or assistant turn is another line with the per-turn delays. A knowledge lookup is a line with `kind` `retrieval` and `duration_ms`.
+
+`make eval-answers` answers every eval question with Gemini in text, using the agent's prompt and tool, and `make eval-live` judges the result. Both need keys and write under `evals/runs/`, which git ignores.
 
 The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`. A dispatch failure returns HTTP 502 with `Could not dispatch the agent`, and the page shows that text. The response does not include a token.
 
