@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from functools import cache
 from typing import Protocol
@@ -5,6 +6,10 @@ from typing import Protocol
 from fastembed import SparseTextEmbedding, TextEmbedding
 from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client.models import SparseVector
+
+# One text at a time. A batch pads every text to the longest one, so on a
+# 1,600-chunk upload the default of 256 took 7.8 GB, and 8 took more CPU than 1.
+EMBED_BATCH = 1
 
 
 class DenseEmbedder(Protocol):
@@ -25,9 +30,20 @@ class Reranker(Protocol):
     def scores(self, query: str, texts: list[str]) -> list[float]: ...
 
 
+def _threads() -> int | None:
+    """ONNX threads per model. Unset lets onnxruntime use every core."""
+    raw = os.environ.get("KB_EMBED_THREADS")
+    if not raw:
+        return None
+    threads = int(raw)
+    if threads < 1:
+        raise ValueError("KB_EMBED_THREADS must be at least 1")
+    return threads
+
+
 @cache
 def _dense(name: str) -> TextEmbedding:
-    return TextEmbedding(name)
+    return TextEmbedding(name, threads=_threads())
 
 
 @cache
@@ -37,7 +53,7 @@ def _sparse(name: str) -> SparseTextEmbedding:
 
 @cache
 def _reranker(name: str) -> TextCrossEncoder:
-    return TextCrossEncoder(name)
+    return TextCrossEncoder(name, threads=_threads())
 
 
 @dataclass(frozen=True)
@@ -48,7 +64,10 @@ class FastEmbedDense:
         return TextEmbedding.get_embedding_size(self.name)
 
     def passages(self, texts: list[str]) -> list[list[float]]:
-        return [vector.tolist() for vector in _dense(self.name).passage_embed(texts)]
+        return [
+            vector.tolist()
+            for vector in _dense(self.name).passage_embed(texts, batch_size=EMBED_BATCH)
+        ]
 
     def query(self, text: str) -> list[float]:
         return next(iter(_dense(self.name).query_embed(text))).tolist()

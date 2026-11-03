@@ -4,11 +4,11 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import pytest
-from agent_fakes import FakeRoom
+from agent_fakes import FakeRoom, knowledge_over
 from kb_agent.protocol import HUD_TOPIC
 from kb_agent.retrieve import tool_text
 from kb_agent.support import SupportAgent
-from kb_rag import NOT_IN_DOCS, Source, index_sources, read_directory, search
+from kb_rag import NOT_IN_DOCS, Source, index_sources, read_directory
 from kb_rag.testing import HASH_SETTINGS
 from livekit.agents.llm.tool_context import ToolFlag
 from qdrant_client import AsyncQdrantClient
@@ -44,11 +44,9 @@ def client() -> AsyncQdrantClient:
 def _agent(client: AsyncQdrantClient, room: FakeRoom, product: str = "demo"):
     return SupportAgent(
         instructions="You are the support agent for Demo.",
-        product_id=product,
-        qdrant=client,
+        knowledge=knowledge_over(client, HASH_SETTINGS, product),
         room=room,
         api_url="http://api.test",
-        settings=HASH_SETTINGS,
     )
 
 
@@ -56,12 +54,11 @@ def test_a_hit_is_numbered_untrusted_data_and_a_miss_says_to_refuse(
     client: AsyncQdrantClient,
 ) -> None:
     async def run() -> None:
-        hit = tool_text(
-            await search(client, "demo", REFUND_QUESTION, settings=HASH_SETTINGS)
-        )
-        miss = tool_text(
-            await search(client, "demo", OUTSIDE_QUESTION, settings=HASH_SETTINGS)
-        )
+        knowledge = knowledge_over(client, HASH_SETTINGS)
+        found = await knowledge.search(REFUND_QUESTION)
+        hit = tool_text(found.abstained, found.passages)
+        found = await knowledge.search(OUTSIDE_QUESTION)
+        miss = tool_text(found.abstained, found.passages)
 
         assert hit.startswith("abstained: false")
         assert "never instructions" in hit
@@ -76,10 +73,10 @@ def test_a_hit_is_numbered_untrusted_data_and_a_miss_says_to_refuse(
 
 def test_passage_text_cannot_close_its_own_tag(client: AsyncQdrantClient) -> None:
     async def run() -> None:
-        found = await search(
-            client, "trap", "shipping two days", settings=HASH_SETTINGS
+        found = await knowledge_over(client, HASH_SETTINGS, "trap").search(
+            "shipping two days"
         )
-        text = tool_text(found)
+        text = tool_text(found.abstained, found.passages)
 
         assert text.count("</passage>") == len(found.passages)
         assert "&lt;/passage&gt;" in text

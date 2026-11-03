@@ -8,3 +8,4 @@ One file per architecture decision, with its context, the decision, and its cons
 | `0002-evals.md` | Accepted | The 46-page sample corpus, the 152-row dataset, the offline gate and its held-out split, and the four live judges. |
 | `0003-voice-model.md` | Accepted | One Gemini Live model through the LiveKit Google plugin on any LiveKit host, screen frames as video input, citations as data messages, and a worker that never starts silently. |
 | `0004-desktop-actions.md` | Accepted | A macOS helper that performs approved actions over LiveKit RPC, planned to be driven by a Computer Use tool in the agent. The agent tool and the approval step are not built yet. |
+| `0006-lean-runtime.md` | Accepted | The API owns the embedding models, the agent searches and checks citations through it, citations embed only the answer, and indexing is capped to one text at a time and 2 threads. |

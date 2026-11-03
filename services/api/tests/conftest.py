@@ -113,6 +113,7 @@ def database_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[st
 def api_env(database_url: str, jwks_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AUTH_JWKS_URL", jwks_url)
     monkeypatch.setenv("AUTH_ISSUER", ISSUER)
+    monkeypatch.setenv("WARM_MODELS", "false")
     load_settings.cache_clear()
 
 

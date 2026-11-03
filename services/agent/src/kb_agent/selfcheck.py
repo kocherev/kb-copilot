@@ -16,6 +16,7 @@ import os
 import sys
 from pathlib import Path
 
+import httpx
 from kb_rag import DEFAULT_SETTINGS, index_sources, read_directory
 from livekit import rtc
 from livekit.agents import CloseEvent, MetricsCollectedEvent
@@ -26,7 +27,9 @@ from PIL import Image
 from qdrant_client import AsyncQdrantClient
 
 from kb_agent.config import missing_settings
+from kb_agent.knowledge import Knowledge
 from kb_agent.latency import log_json
+from kb_agent.local_api import local_api
 from kb_agent.prompt import ProductPrompt, render_system_prompt
 from kb_agent.session import build_session
 from kb_agent.support import SupportAgent
@@ -88,11 +91,15 @@ async def check(image: Path, question: str, docs: Path) -> int:
     session.input.video = SharedScreen(load_frame(image))
     agent = SupportAgent(
         instructions=render_system_prompt(PRODUCT),
-        product_id=PRODUCT_ID,
-        qdrant=client,
+        knowledge=Knowledge(
+            PRODUCT_ID,
+            httpx.AsyncClient(
+                transport=local_api(client, DEFAULT_SETTINGS),
+                base_url="http://api.local",
+            ),
+        ),
         room=PrintRoom(),
         api_url=os.environ.get("API_URL", "http://localhost:8000"),
-        settings=DEFAULT_SETTINGS,
     )
     usage: list[RealtimeModelMetrics] = []
 

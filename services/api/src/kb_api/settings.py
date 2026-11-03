@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     livekit_api_secret: str = ""
     livekit_token_ttl_seconds: int = Field(default=900, gt=0)
     internal_api_token: str = ""
+    # Load the embedding models when the API starts. Tests turn it off.
+    warm_models: bool = True
     auth_jwks_url: str = "http://localhost:3000/api/auth/jwks"
     auth_issuer: str = "http://localhost:3000"
     session_rate_limit: int = Field(default=10, gt=0)
