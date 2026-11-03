@@ -49,9 +49,17 @@ def test_compose_defines_the_runtime_services() -> None:
     assert "LIVEKIT_URL" in services["api"]["environment"]
     assert "LIVEKIT_URL" in services["agent"]["environment"]
     assert "API_URL" in services["agent"]["environment"]
-    assert "QDRANT_URL" in services["agent"]["environment"]
     assert services["agent"]["depends_on"]["api"]["condition"] == "service_healthy"
-    assert services["agent"]["depends_on"]["qdrant"]["condition"] == "service_healthy"
+
+
+def test_only_the_api_holds_the_embedding_models() -> None:
+    services = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]
+
+    assert "QDRANT_URL" not in services["agent"]["environment"]
+    assert "qdrant" not in services["agent"]["depends_on"]
+    assert "volumes" not in services["agent"]
+    assert any("fastembed" in str(v) for v in services["api"]["volumes"])
+    assert "KB_EMBED_THREADS" in services["api"]["environment"]
 
 
 def test_compose_containers_reach_each_other_by_service_name() -> None:
