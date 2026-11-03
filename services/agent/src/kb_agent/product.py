@@ -7,14 +7,24 @@ from urllib.request import Request, urlopen
 from kb_agent.prompt import ProductPrompt
 
 
-def product_id_from_metadata(metadata: str) -> str:
+def metadata_object(metadata: str) -> dict[str, object]:
     try:
         payload = json.loads(metadata)
     except json.JSONDecodeError as exc:
         raise ValueError("job metadata must be JSON") from exc
     if not isinstance(payload, dict):
         raise ValueError("job metadata must be an object")
-    product_id = payload.get("product_id")
+    return payload
+
+
+def user_from_metadata(metadata: str) -> str | None:
+    """The participant who started the session, when the API named one."""
+    user = metadata_object(metadata).get("user")
+    return user if isinstance(user, str) and user else None
+
+
+def product_id_from_metadata(metadata: str) -> str:
+    product_id = metadata_object(metadata).get("product_id")
     if not isinstance(product_id, str) or not product_id.strip():
         raise ValueError("product_id is required")
     return product_id.strip()
