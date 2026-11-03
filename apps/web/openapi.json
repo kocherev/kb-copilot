@@ -388,7 +388,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/Product"
+                    "$ref": "#/components/schemas/ProductSummary"
                   },
                   "type": "array",
                   "title": "Response List Products Products Get"
@@ -2470,6 +2470,76 @@
           "voice"
         ],
         "title": "Product"
+      },
+      "ProductSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "tone": {
+            "type": "string",
+            "title": "Tone"
+          },
+          "refusal_rules": {
+            "type": "string",
+            "title": "Refusal Rules"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "voice": {
+            "type": "string",
+            "enum": [
+              "Sulafat",
+              "Achird",
+              "Puck",
+              "Aoede",
+              "Sadachbia",
+              "Vindemiatrix"
+            ],
+            "title": "Voice"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count"
+          },
+          "last_session_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Session At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "tone",
+          "refusal_rules",
+          "agent_name",
+          "voice",
+          "document_count",
+          "last_session_at"
+        ],
+        "title": "ProductSummary"
       },
       "ProductWrite": {
         "properties": {

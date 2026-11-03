@@ -1,12 +1,13 @@
 """Org-scoped product configuration."""
 
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from qdrant_client import AsyncQdrantClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kb_api.audit import audit
@@ -18,7 +19,7 @@ from kb_api.auth import (
     get_principal,
     get_reader,
 )
-from kb_api.db import DocumentRow, ProductRow, get_db
+from kb_api.db import DocumentRow, LiveSessionRow, ProductRow, get_db
 from kb_api.jobs import get_qdrant, remove_chunks
 
 NOT_FOUND: dict[int | str, dict[str, object]] = {
@@ -91,6 +92,11 @@ class Product(BaseModel):
     voice: Voice
 
 
+class ProductSummary(Product):
+    document_count: int
+    last_session_at: datetime | None
+
+
 async def load_owned_product(
     db: AsyncSession, org_id: str, product_id: UUID
 ) -> ProductRow:
@@ -117,13 +123,30 @@ async def owned_product(
 async def list_products(
     principal: Annotated[Principal, Depends(get_principal)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[Product]:
-    rows = await db.scalars(
-        select(ProductRow)
+) -> list[ProductSummary]:
+    document_count = (
+        select(func.count())
+        .where(DocumentRow.product_id == ProductRow.id)
+        .scalar_subquery()
+    )
+    last_session_at = (
+        select(func.max(LiveSessionRow.created_at))
+        .where(LiveSessionRow.product_id == ProductRow.id)
+        .scalar_subquery()
+    )
+    rows = await db.execute(
+        select(ProductRow, document_count, last_session_at)
         .where(ProductRow.org_id == principal.org_id)
         .order_by(ProductRow.created_at.desc())
     )
-    return [Product.model_validate(row) for row in rows]
+    return [
+        ProductSummary(
+            **Product.model_validate(row).model_dump(),
+            document_count=documents,
+            last_session_at=last_session,
+        )
+        for row, documents, last_session in rows
+    ]
 
 
 @router.post("/products", status_code=201)

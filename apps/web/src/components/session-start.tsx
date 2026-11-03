@@ -1,5 +1,7 @@
 "use client";
 
+import "@livekit/components-styles";
+
 import { ArrowLeft, Mic, MonitorUp, MousePointerClick, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";

@@ -559,6 +559,33 @@ export interface components {
              */
             voice: "Sulafat" | "Achird" | "Puck" | "Aoede" | "Sadachbia" | "Vindemiatrix";
         };
+        /** ProductSummary */
+        ProductSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Tone */
+            tone: string;
+            /** Refusal Rules */
+            refusal_rules: string;
+            /** Agent Name */
+            agent_name: string;
+            /**
+             * Voice
+             * @enum {string}
+             */
+            voice: "Sulafat" | "Achird" | "Puck" | "Aoede" | "Sadachbia" | "Vindemiatrix";
+            /** Document Count */
+            document_count: number;
+            /** Last Session At */
+            last_session_at: string | null;
+        };
         /** ProductWrite */
         ProductWrite: {
             /** Name */
@@ -1036,7 +1063,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Product"][];
+                    "application/json": components["schemas"]["ProductSummary"][];
                 };
             };
             /** @description Missing or invalid credentials */

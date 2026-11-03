@@ -18,7 +18,7 @@ const tuning = {
   dark: {},
 } as const;
 
-export function glowLevel(agentState: string): keyof typeof levels {
+function glowLevel(agentState: string): keyof typeof levels {
   return agentState === "thinking" || agentState === "speaking"
     ? agentState
     : "listening";

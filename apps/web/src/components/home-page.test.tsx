@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Activity } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { HomePage, type HomeData } from "@/components/home-page";
+import { HomePage } from "@/components/home-page";
 import { TEST_JWT, stubApi } from "@/test/api-stub";
 
 const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -25,7 +25,6 @@ afterEach(() => {
 });
 
 const productId = "11111111-1111-4111-8111-111111111111";
-const empty: HomeData = { products: [], documentCounts: {}, sessions: [] };
 
 function openCreateForm() {
   fireEvent.click(screen.getAllByRole("button", { name: "New product" })[0]);
@@ -52,7 +51,7 @@ function fillCreateForm() {
 }
 
 test("home page explains the product and offers a first product", () => {
-  render(<HomePage apiUrl="http://localhost:8000/" data={empty} />);
+  render(<HomePage apiUrl="http://localhost:8000/" products={[]} />);
 
   expect(screen.getByRole("heading", { level: 1, name: "Products" })).toBeDefined();
   expect(screen.queryByRole("link", { name: "API health" })).toBeNull();
@@ -61,35 +60,18 @@ test("home page explains the product and offers a first product", () => {
   expect(screen.getAllByRole("button", { name: "New product" })).toHaveLength(1);
 });
 
-function session(product_id: string, created_at: string) {
-  return {
-    id: created_at,
-    product_id,
-    room: "r",
-    user_id: null,
-    created_at,
-    ended_at: null,
-    turn_count: 0,
-    action_count: 0,
-    handoff_count: 0,
-  };
-}
-
 test("each product is a card with its documents and latest session", () => {
-  const otherId = "22222222-2222-4222-8222-222222222222";
-  const data: HomeData = {
-    products: [
-      { id: productId, ...draft },
-      { id: otherId, ...draft, name: "Ledgerly" },
-    ],
-    documentCounts: { [productId]: 6, [otherId]: 0 },
-    sessions: [
-      session(productId, "2026-11-01T10:00:00Z"),
-      session(productId, "2026-11-03T08:00:00Z"),
-      session(productId, "2026-11-02T23:00:00Z"),
-    ],
-  };
-  render(<HomePage apiUrl="http://localhost:8000" data={data} />);
+  const products = [
+    { id: productId, ...draft, document_count: 6, last_session_at: "2026-11-03T08:00:00Z" },
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      ...draft,
+      name: "Ledgerly",
+      document_count: 0,
+      last_session_at: null,
+    },
+  ];
+  render(<HomePage apiUrl="http://localhost:8000" products={products} />);
 
   expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(
     `/products/${productId}`,
@@ -109,7 +91,7 @@ test("the product list shows a skeleton while it loads", () => {
 });
 
 test("a failed product list says what to do and can try again", () => {
-  render(<HomePage apiUrl="http://localhost:8000" data={null} />);
+  render(<HomePage apiUrl="http://localhost:8000" products={null} />);
 
   expect(screen.getByRole("alert").textContent).toContain("Couldn’t load your products");
   fireEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -119,7 +101,7 @@ test("a failed product list says what to do and can try again", () => {
 test("creating a product opens it", async () => {
   const created = { id: productId, ...draft };
   const calls = stubApi(() => ({ status: 201, body: created }));
-  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   expect(screen.getByRole("dialog", { name: "New product" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
@@ -144,7 +126,7 @@ test("the create button says it is working until the API answers", async () => {
         : new Promise<Response>(() => {}),
     ),
   );
-  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
@@ -160,7 +142,7 @@ test("a finished create clears when the page hides", async () => {
   function Page({ hidden }: { hidden: boolean }) {
     return (
       <Activity mode={hidden ? "hidden" : "visible"}>
-        <HomePage apiUrl="http://localhost:8000" data={empty} />
+        <HomePage apiUrl="http://localhost:8000" products={[]} />
       </Activity>
     );
   }
@@ -184,7 +166,7 @@ test("an unfinished draft stays when the sheet closes and the page hides", () =>
   function Page({ hidden }: { hidden: boolean }) {
     return (
       <Activity mode={hidden ? "hidden" : "visible"}>
-        <HomePage apiUrl="http://localhost:8000" data={empty} />
+        <HomePage apiUrl="http://localhost:8000" products={[]} />
       </Activity>
     );
   }
@@ -207,7 +189,7 @@ test("create shows the api error", async () => {
       ],
     },
   }));
-  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
@@ -218,7 +200,7 @@ test("create shows the api error", async () => {
 
 test("create survives a response that is not a product", async () => {
   stubApi(() => ({ status: 201, text: "not json" }));
-  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
@@ -235,7 +217,7 @@ test("a description typed on several lines is saved as one paragraph", async () 
     }
     return { status: 201, body: { id: productId, ...sent } };
   });
-  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
+  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
   fillCreateForm();
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Acme resets passwords.\r\n\n  It also unlocks accounts." },

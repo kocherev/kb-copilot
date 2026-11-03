@@ -51,7 +51,7 @@ export function PendingLabel({
 const fields: {
   key: keyof ProductWrite;
   label: string;
-  hint?: string;
+  hint?: (agent: string) => string;
   multiline: boolean;
   maxLength: number;
   rows?: number;
@@ -60,7 +60,7 @@ const fields: {
   {
     key: "description",
     label: "Description",
-    hint: "One paragraph about what the product does.",
+    hint: () => "One paragraph about what the product does.",
     multiline: true,
     maxLength: 2000,
     rows: 3,
@@ -68,14 +68,14 @@ const fields: {
   {
     key: "tone",
     label: "Tone",
-    hint: "How the agent should sound, such as “calm and brief”.",
+    hint: (agent) => `How ${agent} should sound, such as “calm and brief”.`,
     multiline: false,
     maxLength: 200,
   },
   {
     key: "refusal_rules",
     label: "Refusal rules",
-    hint: "What the agent must not do.",
+    hint: (agent) => `What ${agent} must not do.`,
     multiline: true,
     maxLength: 4000,
     rows: 4,
@@ -83,7 +83,7 @@ const fields: {
   {
     key: "agent_name",
     label: "Agent name",
-    hint: "What the agent calls itself.",
+    hint: () => "What the agent calls itself.",
     multiline: false,
     maxLength: 40,
   },
@@ -169,6 +169,7 @@ export function ProductForm({
   }
 
   const voiceId = `${formLabel}-voice`.replaceAll(" ", "-").toLowerCase();
+  const agent = draft.agent_name.trim() || "the agent";
   return (
     <form
       aria-label={formLabel}
@@ -178,15 +179,16 @@ export function ProductForm({
     >
       {fields.map((field) => {
         const id = `${formLabel}-${field.key}`.replaceAll(" ", "-").toLowerCase();
-        const hintId = field.hint ? `${id}-hint` : undefined;
+        const hint = field.hint?.(agent);
+        const hintId = hint ? `${id}-hint` : undefined;
         return (
           <div key={field.key} className="flex min-w-0 flex-col gap-2">
             <label htmlFor={id} className="text-sm font-medium text-foreground">
               {field.label}
             </label>
-            {field.hint ? (
+            {hint ? (
               <p id={hintId} className="-mt-1 text-meta text-pretty text-muted-foreground">
-                {field.hint}
+                {hint}
               </p>
             ) : null}
             {field.multiline ? (

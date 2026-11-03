@@ -65,7 +65,3 @@ def product_from_body(body: object) -> ProductPrompt:
         agent_name=fields["agent_name"].strip(),
         voice=fields["voice"].strip(),
     )
-
-
-def load_product(metadata: str, api_url: str) -> ProductPrompt:
-    return fetch_product(api_url, product_id_from_metadata(metadata))

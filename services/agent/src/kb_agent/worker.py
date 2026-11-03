@@ -19,7 +19,7 @@ from kb_agent.config import require_settings
 from kb_agent.knowledge import api_client
 from kb_agent.latency import log_json
 from kb_agent.product import (
-    load_product,
+    fetch_product,
     product_id_from_metadata,
     user_from_metadata,
 )
@@ -147,7 +147,7 @@ async def entrypoint(ctx: JobContext) -> None:
         flush_traces = enable_tracing(ctx.room.name, product_id)
         if flush_traces is not None:
             ctx.add_shutdown_callback(flush_traces)
-        product = await asyncio.to_thread(load_product, ctx.job.metadata, api_url)
+        product = await asyncio.to_thread(fetch_product, api_url, product_id)
         session = build_session(product.voice)
         agent = SupportAgent(
             instructions=render_system_prompt(product),

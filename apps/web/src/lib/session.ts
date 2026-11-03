@@ -33,7 +33,7 @@ export function sessionLoad(
 }
 
 // LiveKit names agent participants agent-<id>. Everyone else is the caller.
-export function speakerLabel(identity: string): string {
+function speakerLabel(identity: string): string {
   return identity.startsWith("agent-") ? "Agent" : "You";
 }
 
