@@ -17,6 +17,7 @@ from kb_api.ingest import router as ingest_router
 from kb_api.integrations import router as integrations_router
 from kb_api.jobs import index_forever, requeue_interrupted
 from kb_api.products import router as products_router
+from kb_api.replay import router as replay_router
 from kb_api.retrieval import router as retrieval_router
 from kb_api.sessions import router as sessions_router
 from kb_api.settings import load_settings
@@ -68,6 +69,7 @@ app.add_middleware(
 app.include_router(ingest_router)
 app.include_router(products_router)
 app.include_router(sessions_router)
+app.include_router(replay_router)
 app.include_router(api_keys_router)
 app.include_router(integrations_router)
 app.include_router(escalations_router)

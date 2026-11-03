@@ -281,20 +281,6 @@ async def create_session(
     return grant
 
 
-@router.get("/sessions")
-async def list_sessions(
-    principal: Annotated[Principal, Depends(get_principal)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[LiveSession]:
-    rows = await db.scalars(
-        select(LiveSessionRow)
-        .where(LiveSessionRow.org_id == principal.org_id)
-        .order_by(LiveSessionRow.created_at.desc())
-        .limit(100)
-    )
-    return [LiveSession.model_validate(row) for row in rows]
-
-
 @router.post(
     "/sessions/{room}/desktop-token",
     responses={
