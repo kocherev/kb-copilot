@@ -8,7 +8,7 @@ import pytest
 from agent_fakes import FakeRoom
 from kb_agent import worker
 from kb_agent.product import (
-    load_product,
+    fetch_product,
     product_from_body,
     product_id_from_metadata,
     user_from_metadata,
@@ -61,7 +61,7 @@ def api_url() -> Iterator[str]:
 def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
     metadata = json.dumps({"product_id": PRODUCT_ID})
 
-    product = load_product(metadata, api_url)
+    product = fetch_product(api_url, product_id_from_metadata(metadata))
     instructions = render_system_prompt(product)
 
     assert product_id_from_metadata(metadata) == PRODUCT_ID
@@ -74,10 +74,7 @@ def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
     with pytest.raises(ValueError, match="JSON"):
         product_id_from_metadata("not-json")
     with pytest.raises(ValueError, match="404"):
-        load_product(
-            json.dumps({"product_id": "00000000-0000-0000-0000-000000000000"}),
-            api_url,
-        )
+        fetch_product(api_url, "00000000-0000-0000-0000-000000000000")
 
 
 def test_dispatch_metadata_names_the_user_when_the_api_sends_one() -> None:
