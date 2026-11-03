@@ -5,10 +5,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
 import pytest
-from agent_fakes import FakeRoom
+from agent_fakes import FakeRoom, knowledge_over
 from kb_agent.handoff import transcript_excerpt
 from kb_agent.protocol import ESCALATION_TOPIC
 from kb_agent.support import SupportAgent
+from kb_rag.testing import HASH_SETTINGS
 from livekit.agents.llm import ChatContext
 from qdrant_client import AsyncQdrantClient
 
@@ -60,8 +61,7 @@ async def _call(tool: Callable[..., Awaitable[str]], *args: object) -> str:
 def _agent(room: FakeRoom, api_url: str) -> SupportAgent:
     return SupportAgent(
         instructions="You are the support agent for Demo.",
-        product_id="demo",
-        qdrant=AsyncQdrantClient(":memory:"),
+        knowledge=knowledge_over(AsyncQdrantClient(":memory:"), HASH_SETTINGS),
         room=room,
         api_url=api_url,
     )

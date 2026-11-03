@@ -13,13 +13,12 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from google.genai import Client, types
-from kb_agent.citations import supporting_passages
 from kb_agent.prompt import ProductPrompt, render_system_prompt
 from kb_agent.retrieve import tool_text
-from kb_rag import Passage, read_directory
+from kb_rag import Passage, read_directory, supported_ids
 
 from kb_evals.dataset import EvalCase, load_dataset
-from kb_evals.run import DATASET_PATH, DOCS_PATH, RagRetriever
+from kb_evals.run import DATASET_PATH, DOCS_PATH, PRODUCT_ID, RagRetriever
 
 MODEL = "gemini-3.8-flash"
 PRODUCT = ProductPrompt(
@@ -65,15 +64,15 @@ async def answer(
         """
         found = await retriever.search(query, 5)
         seen.update({p.id: p for p in found.passages})
-        return tool_text(found)
+        return tool_text(found.abstained, found.passages)
 
     text = await generate(
         render_system_prompt(PRODUCT), [*case.turns, case.question], search_kb
     )
-    cited = await asyncio.to_thread(
-        supporting_passages, text, list(seen.values()), retriever.settings.dense
+    cited = await supported_ids(
+        retriever.client, PRODUCT_ID, text, list(seen), settings=retriever.settings
     )
-    return {"id": case.id, "answer": text, "cited_passage_ids": [p.id for p in cited]}
+    return {"id": case.id, "answer": text, "cited_passage_ids": cited}
 
 
 async def write_answers(

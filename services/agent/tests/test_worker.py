@@ -9,7 +9,6 @@ from agent_fakes import FakeRoom
 from kb_agent import worker
 from kb_agent.product import instructions_for, product_id_from_metadata
 from kb_agent.protocol import AGENT_ERROR_TOPIC
-from qdrant_client import AsyncQdrantClient
 
 PRODUCT_ID = "11111111-1111-4111-8111-111111111111"
 PRODUCT = {
@@ -36,13 +35,6 @@ class _Handler(BaseHTTPRequestHandler):
 
     def log_message(self, message: str, *args: object) -> None:
         return
-
-
-@pytest.fixture(autouse=True)
-def local_qdrant(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        worker, "AsyncQdrantClient", lambda **_: AsyncQdrantClient(":memory:")
-    )
 
 
 @pytest.fixture

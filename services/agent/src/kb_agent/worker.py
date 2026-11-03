@@ -14,9 +14,9 @@ from livekit.agents import (
 )
 from livekit.agents.llm import ChatMessage
 from livekit.agents.voice.events import CloseReason
-from qdrant_client import AsyncQdrantClient
 
 from kb_agent.config import require_settings
+from kb_agent.knowledge import Knowledge, api_client
 from kb_agent.latency import log_json
 from kb_agent.product import instructions_for, product_id_from_metadata
 from kb_agent.protocol import (
@@ -93,22 +93,21 @@ def publish_citations(
 @server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
-    qdrant = AsyncQdrantClient(
-        url=os.environ.get("QDRANT_URL") or "http://localhost:6333",
-        api_key=os.environ.get("QDRANT_API_KEY") or None,
-    )
+    api_url = os.environ.get("API_URL", "http://localhost:8000")
     limit: asyncio.Task[None] | None = None
     try:
         product_id = product_id_from_metadata(ctx.job.metadata)
-        api_url = os.environ.get("API_URL", "http://localhost:8000")
+        knowledge = Knowledge(
+            product_id, api_client(api_url, os.environ.get("INTERNAL_API_TOKEN", ""))
+        )
+        ctx.add_shutdown_callback(knowledge.aclose)
         instructions = await asyncio.to_thread(
             instructions_for, ctx.job.metadata, api_url
         )
         session = build_session()
         agent = SupportAgent(
             instructions=instructions,
-            product_id=product_id,
-            qdrant=qdrant,
+            knowledge=knowledge,
             room=ctx.room,
             api_url=api_url,
         )
@@ -134,14 +133,12 @@ async def entrypoint(ctx: JobContext) -> None:
         )
     except Exception as exc:
         await report_failure(ctx.room, exc)
-        await qdrant.close()
         ctx.shutdown(reason="agent error")
         return
 
     async def cleanup() -> None:
         if limit is not None:
             limit.cancel()
-        await qdrant.close()
 
     ctx.add_shutdown_callback(cleanup)
 

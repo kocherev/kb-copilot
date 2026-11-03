@@ -1,6 +1,12 @@
 import json
 from collections.abc import Callable
 
+import httpx
+from kb_agent.knowledge import Knowledge
+from kb_agent.local_api import local_api
+from kb_rag import RetrievalSettings
+from qdrant_client import AsyncQdrantClient
+
 
 class FakeRoom:
     def __init__(self, connected: bool = True) -> None:
@@ -23,3 +29,12 @@ class FakeRoom:
     ) -> None:
         assert reliable
         self.sent.append((topic, json.loads(payload)))
+
+
+def knowledge_over(
+    client: AsyncQdrantClient, settings: RetrievalSettings, product: str = "demo"
+) -> Knowledge:
+    http = httpx.AsyncClient(
+        transport=local_api(client, settings), base_url="http://api.test"
+    )
+    return Knowledge(product, http)
