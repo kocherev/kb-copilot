@@ -7,6 +7,8 @@ export type Product = components["schemas"]["Product"];
 export type ProductWrite = components["schemas"]["ProductWrite"];
 export type SessionGrant = components["schemas"]["SessionGrant"];
 export type IngestJob = components["schemas"]["IngestJob"];
+export type Escalation = components["schemas"]["Escalation"];
+export type LinearStatus = components["schemas"]["LinearStatus"];
 
 export function publicApiUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";

@@ -41,6 +41,13 @@ The names live in `protocol.py` and `protocol.ts`. Payloads are Pydantic models 
 - `hud`: `{"kind":"point","x","y","label"}`.
 - `citations`: `{"message_id","text","passages":[{"id","title","source","anchor","snippet"}]}`.
 - `agent-error`: `{"message"}`. Sent after someone has joined the room, because a message to an empty room reaches nobody.
+- `escalation`: `{"id","title","body"}`. A ticket the agent proposed, as the API stored it (redacted). The page shows an approval card. Nothing reaches Linear until the user approves.
+
+## Handoff
+
+`handoff_to_human(summary, reason)` posts `{room, summary, reason, transcript}` to `POST /internal/escalations` with `X-Internal-Token`. The transcript is the last eight spoken lines from `chat_ctx`. The API redacts it, stores an escalation with status `proposed`, and returns it. The tool publishes it as an `escalation` message and tells the model the ticket exists only if the user approves it on screen. The model cannot approve.
+
+A 404, 409, 503, or an unreachable API means no card. The tool tells the model that handoff is not available. The usual cause is an org that has not connected Linear. The prompt offers a handoff only when the docs do not answer or the user asks for a person. The design is in `docs/decisions/0005-linear-handoff.md`.
 
 ## Voice
 
@@ -48,7 +55,7 @@ The names live in `protocol.py` and `protocol.ts`. Payloads are Pydantic models 
 
 `config.require_settings` stops the worker at start when `GOOGLE_API_KEY` or a LiveKit setting is empty or `replace-me`. In a job, a failure to load the product, to start the session, or a model session that closes on an error is published as `agent-error`. `AGENT_MAX_SESSION_SECONDS` (default 600) makes the agent say goodbye and close.
 
-A new tool is one more `@function_tool` method on `SupportAgent` in `support.py`. Tools cannot change after the Gemini session starts.
+A new tool is one more `@function_tool` method on `SupportAgent` in `support.py`. The tools are `search_kb`, `point_at`, and `handoff_to_human`. Tools cannot change after the Gemini session starts.
 
 Realtime metrics are JSON lines on stdout (`kind` `component`, `segment` `realtime`, with `image_tokens`). Each user or assistant turn adds a line with the per-turn delays.
 
@@ -57,7 +64,7 @@ The container command is `python -m kb_agent start`. The dev server in the `live
 ## Checks
 
 ```bash
-uv run pytest services/agent/tests services/api/tests/test_sessions.py
+uv run pytest services/agent/tests services/api/tests/test_sessions.py services/api/tests/test_linear.py
 GOOGLE_API_KEY=... uv run python -m kb_agent.selfcheck --image services/agent/tests/fixtures/billing-screen.png --question "What does the red banner say, and which button fixes it?"
 ```
 

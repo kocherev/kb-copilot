@@ -31,6 +31,8 @@ def test_system_prompt_includes_configured_fields_and_refusal_rules() -> None:
     assert "That is not in the docs." in prompt
     assert "point_at" in prompt
     assert "does not move the mouse" in prompt
+    assert "handoff_to_human" in prompt
+    assert "approve it there" in prompt
     assert "Do not invent a refund policy." not in other
     assert "You are the support agent for Northwind." in other
     assert "Tone: warm and direct" in other

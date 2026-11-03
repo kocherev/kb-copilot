@@ -110,6 +110,7 @@ async def entrypoint(ctx: JobContext) -> None:
             product_id=product_id,
             qdrant=qdrant,
             room=ctx.room,
+            api_url=api_url,
         )
         attach_logs(session)
         publish_citations(session, agent, ctx.room)

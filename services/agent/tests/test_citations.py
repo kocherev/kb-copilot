@@ -80,6 +80,7 @@ def test_the_agent_builds_a_citations_message_for_this_turns_passages() -> None:
             product_id="demo",
             qdrant=AsyncQdrantClient(":memory:"),
             room=FakeRoom(),
+            api_url="http://api.test",
             settings=HASH_SETTINGS,
         )
         answer = "Refunds take five business days to reach your card."

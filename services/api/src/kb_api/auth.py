@@ -56,7 +56,7 @@ class UserPrincipal(Principal):
 
 @dataclass(frozen=True)
 class InternalCaller:
-    """The agent service. It reads products across orgs and nothing else."""
+    """The agent service. It reads products across orgs and proposes handoffs."""
 
 
 def unauthorized(detail: str) -> HTTPException:
@@ -157,6 +157,23 @@ async def require_user(
     )
 
 
+def verify_internal(internal_token: str) -> InternalCaller:
+    expected = load_settings().internal_api_token.strip()
+    if expected in PLACEHOLDERS:
+        raise HTTPException(status_code=503, detail="internal token is not configured")
+    if not hmac.compare_digest(internal_token.encode(), expected.encode()):
+        raise unauthorized("invalid internal token")
+    return InternalCaller()
+
+
+async def require_internal(
+    internal_token: Annotated[str | None, Depends(internal_header)],
+) -> InternalCaller:
+    if internal_token is None:
+        raise unauthorized("not authenticated")
+    return verify_internal(internal_token)
+
+
 async def get_reader(
     request: Request,
     internal_token: Annotated[str | None, Depends(internal_header)],
@@ -165,9 +182,4 @@ async def get_reader(
 ) -> Principal | InternalCaller:
     if internal_token is None:
         return await get_principal(request, credentials, db)
-    expected = load_settings().internal_api_token.strip()
-    if expected in PLACEHOLDERS:
-        raise HTTPException(status_code=503, detail="internal token is not configured")
-    if not hmac.compare_digest(internal_token.encode(), expected.encode()):
-        raise unauthorized("invalid internal token")
-    return InternalCaller()
+    return verify_internal(internal_token)

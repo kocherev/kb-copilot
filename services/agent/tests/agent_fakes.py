@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 class FakeRoom:
     def __init__(self, connected: bool = True) -> None:
+        self.name = "kb-test-room"
         self.connected = connected
         self.sent: list[tuple[str, dict[str, object]]] = []
         self.local_participant = self

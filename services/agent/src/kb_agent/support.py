@@ -6,8 +6,10 @@ from livekit.agents.llm.tool_context import ToolFlag
 from qdrant_client import AsyncQdrantClient
 
 from kb_agent.citations import cited, supporting_passages
+from kb_agent.handoff import propose_escalation, transcript_excerpt
 from kb_agent.latency import log_json
 from kb_agent.protocol import (
+    ESCALATION_TOPIC,
     HUD_TOPIC,
     LABEL_LIMIT,
     Citations,
@@ -28,11 +30,13 @@ class SupportAgent(Agent):
         product_id: str,
         qdrant: AsyncQdrantClient,
         room: Room,
+        api_url: str,
         settings: RetrievalSettings = DEFAULT_SETTINGS,
     ) -> None:
         self.product_id = product_id
         self.qdrant = qdrant
         self.room = room
+        self.api_url = api_url
         self.settings = settings
         # Passages the searches of the current user turn returned, by id.
         self.turn_passages: dict[str, Passage] = {}
@@ -82,6 +86,39 @@ class SupportAgent(Agent):
         return (
             "Highlight shown on the session preview. "
             "The user still clicks. You did not move the mouse."
+        )
+
+    @function_tool(flags=ToolFlag.IGNORE_ON_ENTER)
+    async def handoff_to_human(self, summary: str, reason: str) -> str:
+        """Propose a support ticket for a person to pick up.
+
+        Use this only when the docs do not answer the question, or the user asks
+        for a person. It shows the ticket on the user's screen. The ticket is
+        created only if the user approves it there. You cannot approve it.
+
+        Args:
+            summary: One sentence naming the customer's problem.
+            reason: Why the docs and you could not solve it.
+        """
+        proposed = await asyncio.to_thread(
+            propose_escalation,
+            self.api_url,
+            self.room.name,
+            summary,
+            reason,
+            transcript_excerpt(self.chat_ctx.items),
+        )
+        if proposed is None:
+            return (
+                "Handoff is not available for this product. "
+                "Tell the user you cannot hand this off."
+            )
+        if not await publish(self.room, ESCALATION_TOPIC, proposed):
+            return "The session preview is not connected, so nothing was proposed."
+        log_json({"event": "handoff_proposed", "escalation_id": proposed.id})
+        return (
+            "A ticket is proposed on the user's screen. It exists only if they "
+            "approve it there. Ask them to check the card."
         )
 
     def new_user_turn(self) -> None:

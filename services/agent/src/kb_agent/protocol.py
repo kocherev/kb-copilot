@@ -13,6 +13,7 @@ AGENT_NAME = "kb-support"
 HUD_TOPIC = "hud"
 CITATIONS_TOPIC = "citations"
 AGENT_ERROR_TOPIC = "agent-error"
+ESCALATION_TOPIC = "escalation"
 
 LABEL_LIMIT = 80
 SNIPPET_LIMIT = 280
@@ -51,6 +52,17 @@ class AgentError(BaseModel):
     message: str
 
 
+class EscalationProposal(BaseModel):
+    """A ticket the agent proposes. Nothing is sent to Linear until the user approves.
+
+    The text is what the API stored, already redacted.
+    """
+
+    id: str
+    title: str
+    body: str
+
+
 class Publisher(Protocol):
     async def publish_data(
         self, payload: bytes, *, reliable: bool = True, topic: str = ""
@@ -58,6 +70,9 @@ class Publisher(Protocol):
 
 
 class Room(Protocol):
+    @property
+    def name(self) -> str: ...
+
     def isconnected(self) -> bool: ...
 
     @property

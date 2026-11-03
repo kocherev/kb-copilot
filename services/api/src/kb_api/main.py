@@ -12,7 +12,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from kb_api.api_keys import router as api_keys_router
 from kb_api.auth import AUTH_ERRORS, UserPrincipal, jwks_client, require_user
+from kb_api.escalations import router as escalations_router
 from kb_api.ingest import router as ingest_router
+from kb_api.integrations import router as integrations_router
 from kb_api.jobs import index_forever, requeue_interrupted
 from kb_api.products import router as products_router
 from kb_api.sessions import router as sessions_router
@@ -53,6 +55,8 @@ app.include_router(ingest_router)
 app.include_router(products_router)
 app.include_router(sessions_router)
 app.include_router(api_keys_router)
+app.include_router(integrations_router)
+app.include_router(escalations_router)
 
 
 class Health(BaseModel):
