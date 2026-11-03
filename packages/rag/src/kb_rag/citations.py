@@ -17,11 +17,12 @@ from kb_rag.pipeline import DENSE, KB_COLLECTION, cosine, validate_product_id
 # up to 120 words, so the scores run lower than sentence against sentence.
 # A passage is cited when a sentence is very close to it, or when a sentence is
 # fairly close and nearly every content word of it appears in the passage.
-# Measured with the default embedder on the gold answers of the 116 demo eval
-# questions that name a source, against each question's top five passages:
-# 0.86 passages cited per answer, 94% of them from a page the dataset expects,
-# and 47% of the expected sections cited. A missing citation is cheaper than
-# a wrong one, so the cutoffs favor precision.
+# Measured with the default embedder on the 117 demo eval questions that name
+# a source, against each question's top five passages. Gold answers: 0.91
+# passages cited per answer, 92.5% from a page the dataset expects, 66% of the
+# expected sections cited. Gemini's answers: 82.5% and 45%. The numbers and
+# the method are in docs/decisions/0006-lean-runtime.md. A missing citation is
+# cheaper than a wrong one, so the cutoffs favor precision.
 CLOSE = 0.85
 RELATED = 0.55
 COVERED = 0.9
@@ -29,6 +30,14 @@ COVERED = 0.9
 MIN_WORDS = 4
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+|\n+")
 _WORD = re.compile(r"[a-z0-9]+")
+# A spoken answer adds "your", "from", "when" where the page has none. In a
+# six-word sentence one of them drops coverage under COVERED, so they do not
+# count. Negations stay: they change the claim.
+_FILLER = frozenset(
+    "about after also been before both could does each from have into just more "
+    "most other over some such than that their them then there these they this "
+    "those very were what when where which while will with would your".split()
+)
 
 
 def sentences(text: str) -> list[str]:
@@ -37,7 +46,12 @@ def sentences(text: str) -> list[str]:
 
 
 def _content_words(text: str) -> list[str]:
-    return [w for w in _WORD.findall(text.lower()) if len(w) > 3 or w.isdigit()]
+    """Words that carry the claim, with a plural "s" dropped ("requests")."""
+    return [
+        w.removesuffix("s") if len(w) > 4 else w
+        for w in _WORD.findall(text.lower())
+        if (len(w) > 3 or w.isdigit()) and w not in _FILLER
+    ]
 
 
 def _covered(sentence: str, passage_words: set[str]) -> float:
