@@ -1,10 +1,15 @@
+import os
 from dataclasses import dataclass
 from functools import cache
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
-from fastembed import SparseTextEmbedding, TextEmbedding
-from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client.models import SparseVector
+
+# fastembed pulls in onnxruntime, so it loads with the first model. The agent
+# imports this module for its types and never loads a model.
+if TYPE_CHECKING:
+    from fastembed import SparseTextEmbedding, TextEmbedding
+    from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 
 class DenseEmbedder(Protocol):
@@ -25,19 +30,36 @@ class Reranker(Protocol):
     def scores(self, query: str, texts: list[str]) -> list[float]: ...
 
 
-@cache
-def _dense(name: str) -> TextEmbedding:
-    return TextEmbedding(name)
+def _threads() -> int | None:
+    """ONNX threads per model. Unset lets onnxruntime use every core."""
+    raw = os.environ.get("KB_EMBED_THREADS")
+    if not raw:
+        return None
+    threads = int(raw)
+    if threads < 1:
+        raise ValueError("KB_EMBED_THREADS must be at least 1")
+    return threads
 
 
 @cache
-def _sparse(name: str) -> SparseTextEmbedding:
+def _dense(name: str) -> "TextEmbedding":
+    from fastembed import TextEmbedding
+
+    return TextEmbedding(name, threads=_threads())
+
+
+@cache
+def _sparse(name: str) -> "SparseTextEmbedding":
+    from fastembed import SparseTextEmbedding
+
     return SparseTextEmbedding(name)
 
 
 @cache
-def _reranker(name: str) -> TextCrossEncoder:
-    return TextCrossEncoder(name)
+def _reranker(name: str) -> "TextCrossEncoder":
+    from fastembed.rerank.cross_encoder import TextCrossEncoder
+
+    return TextCrossEncoder(name, threads=_threads())
 
 
 @dataclass(frozen=True)
@@ -45,6 +67,8 @@ class FastEmbedDense:
     name: str
 
     def size(self) -> int:
+        from fastembed import TextEmbedding
+
         return TextEmbedding.get_embedding_size(self.name)
 
     def passages(self, texts: list[str]) -> list[list[float]]:
