@@ -12,7 +12,7 @@ The worker is `services/agent`. The browser session is `apps/web`. The token and
 
 ## Dispatch
 
-The agent name is `kb-support` in `services/agent/src/kb_agent/protocol.py`, `apps/web/src/lib/protocol.ts`, and `services/api/src/kb_api/sessions.py`. `POST /sessions` sends job metadata `{"product_id":"<uuid>"}`. A missing product returns 404 and does not dispatch. Missing LiveKit settings return 503 with `LiveKit is not configured`. A placeholder such as `replace-me` counts as missing. The API dispatches through `LIVEKIT_API_URL`: `http://livekit:7880` for the self-hosted profile, the same `wss://` URL as `LIVEKIT_URL` on Cloud.
+The agent name is `kb-support` in `services/agent/src/kb_agent/protocol.py`, `apps/web/src/lib/protocol.ts`, and `services/api/src/kb_api/sessions.py`. `POST /sessions` sends job metadata `{"product_id":"<uuid>","user":"<token identity>"}`. The worker listens only to that participant. A missing product returns 404 and does not dispatch. Missing LiveKit settings return 503 with `LiveKit is not configured`. A placeholder such as `replace-me` counts as missing. The API dispatches through `LIVEKIT_API_URL`: `http://livekit:7880` for the self-hosted profile, the same `wss://` URL as `LIVEKIT_URL` on Cloud.
 
 The worker reads `product_id` from that metadata and loads the system prompt with `GET /products/{id}`. `render_system_prompt` includes the name, description, tone, and refusal rules. Config is data. Do not hard-code a product.
 
@@ -32,15 +32,17 @@ The browser publishes the microphone and the screen, not the camera. `sessionPub
 
 `point_at(x, y, label)` publishes a `hud` message. The page draws it inside the video's rendered picture. It does not move the pointer.
 
-The agent does not act on the user's computer. `apps/desktop` and `POST /sessions/{room}/desktop-token` exist, and no tool on `SupportAgent` calls the helper. A tool that does needs the per-action approval described in `docs/decisions/0004-desktop-actions.md`.
+`operate_computer(goal)` acts on the user's Mac through `apps/desktop`, one step at a time. Each step waits for a `computer-decision` message from the participant named in the dispatch metadata (`user`). The loop, the audit route, and the limits are in `docs/decisions/0004-desktop-actions.md`. `tests/test_computer_live.py` runs one task through a real room and Gemini with `KB_COMPUTER_LIVE=1`.
 
 ## Data channel
 
 The names live in `protocol.py` and `protocol.ts`. Payloads are Pydantic models in Python and type guards in TypeScript.
 
-- `hud`: `{"kind":"point","x","y","label"}`.
+- `hud`: `{"kind":"point" or "clicking","x","y","label"}`.
 - `citations`: `{"message_id","text","passages":[{"id","title","source","anchor","snippet"}]}`.
 - `agent-error`: `{"message"}`. Sent after someone has joined the room, because a message to an empty room reaches nobody.
+- `computer`: `{"kind":"proposal","id","task","description","x","y","needs_approval","warning"}` or `{"kind":"ended","task","reason"}`. The page shows the approval tray.
+- `computer-decision`: `{"id","decision"}`, sent by the page. `decision` is `once`, `task`, or `stop`.
 - `escalation`: `{"id","title","body"}`. A ticket the agent proposed, as the API stored it (redacted). The page shows an approval card. Nothing reaches Linear until the user approves.
 
 ## Handoff

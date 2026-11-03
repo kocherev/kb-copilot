@@ -37,9 +37,12 @@ def build_session(voice: str) -> AgentSession:
     )
 
 
-def room_options() -> room_io.RoomOptions:
+def room_options(user: str | None) -> room_io.RoomOptions:
     # Without video_input the worker never subscribes to the screen share.
-    return room_io.RoomOptions(video_input=True)
+    if user is None:
+        return room_io.RoomOptions(video_input=True)
+    # Pinned, so a desktop helper that joins first is never taken for the user.
+    return room_io.RoomOptions(video_input=True, participant_identity=user)
 
 
 def max_session_seconds(raw: str | None) -> int:

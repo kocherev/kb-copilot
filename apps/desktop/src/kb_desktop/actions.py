@@ -101,6 +101,22 @@ class Scroll(Pointer):
 Action = Click | TypeText | Key | Scroll
 Executor = Callable[[Action, Display], None]
 
+
+class Screenshot(Strict):
+    """The PNG comes back as a byte stream with this id, because an RPC reply
+    holds at most 15 KiB."""
+
+    stream_id: str = Field(min_length=1, max_length=64)
+
+
+class Cursor(Pointer):
+    """What the on-screen agent cursor shows."""
+
+    state: Literal["thinking", "about-to-click", "clicking", "hidden"]
+    name: str = Field(min_length=1, max_length=40)
+    label: str = Field(default="", max_length=80)
+
+
 METHODS: dict[str, type[Info | Action]] = {
     "desktop.info": Info,
     "desktop.click": Click,
@@ -118,12 +134,23 @@ def describe(error: ValidationError) -> str:
     )
 
 
-def handle(method: str, payload: str, display: Display, executor: Executor) -> str:
-    """Run one RPC call and return its JSON response."""
+def parse[T: BaseModel](model: type[T], payload: str) -> T:
     try:
-        action = METHODS[method].model_validate_json(payload or "{}")
+        return model.model_validate_json(payload or "{}")
     except ValidationError as exc:
         raise InvalidRequest(describe(exc)) from exc
+
+
+def fit(width: int, height: int, box: tuple[int, int] = (1440, 900)) -> tuple[int, int]:
+    """The screenshot size: the display scaled down to fit the box Computer Use
+    recommends, never up."""
+    scale = min(1.0, box[0] / width, box[1] / height)
+    return round(width * scale), round(height * scale)
+
+
+def handle(method: str, payload: str, display: Display, executor: Executor) -> str:
+    """Run one RPC call and return its JSON response."""
+    action = parse(METHODS[method], payload)
     if isinstance(action, Info):
         return json.dumps(asdict(display))
     executor(action, display)

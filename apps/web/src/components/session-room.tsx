@@ -7,6 +7,7 @@ import {
   VideoTrack,
   useConnectionState,
   useDataChannel,
+  useRemoteParticipants,
   useRoomContext,
   useTracks,
   useTranscriptions,
@@ -15,21 +16,29 @@ import {
 import { Track } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
 
-import { HandoffCard } from "@/components/handoff-card";
 import { AgentCursor } from "@/components/agent-cursor/agent-cursor";
+import { ApprovalTray } from "@/components/approval-tray";
+import { ConnectMac } from "@/components/connect-mac";
+import { HandoffCard } from "@/components/handoff-card";
 import { ScreenGlow } from "@/components/screen-glow";
 import { TranscriptPanel } from "@/components/transcript-panel";
 import { Button } from "@/components/ui/button";
 import {
   AGENT_ERROR_TOPIC,
   CITATIONS_TOPIC,
+  COMPUTER_DECISION_TOPIC,
+  COMPUTER_TOPIC,
   ESCALATION_TOPIC,
   HUD_TOPIC,
+  decisionMessage,
   parseAgentError,
   parseCitations,
+  parseComputerMessage,
   parseEscalation,
   parseHudPoint,
+  type ActionProposal,
   type Citations,
+  type Decision,
   type EscalationProposal,
   type HudPoint,
 } from "@/lib/protocol";
@@ -44,12 +53,14 @@ const decode = (payload: Uint8Array) => new TextDecoder().decode(payload);
 export function SessionRoom({
   url,
   token,
+  room,
   apiUrl,
   agentName,
   onRestart,
 }: {
   url: string;
   token: string;
+  room: string;
   apiUrl: string;
   agentName: string;
   onRestart: () => void;
@@ -72,7 +83,12 @@ export function SessionRoom({
           {roomError}
         </p>
       ) : null}
-      <SessionBody apiUrl={apiUrl} agentName={agentName} onRestart={onRestart} />
+      <SessionBody
+        apiUrl={apiUrl}
+        roomName={room}
+        agentName={agentName}
+        onRestart={onRestart}
+      />
     </LiveKitRoom>
   );
 }
@@ -141,7 +157,8 @@ function ScreenStage({ point, agentName }: { point: HudPoint | null; agentName: 
         {presence(agentName, watching, assistant.state)}
       </p>
       <p className="text-pretty text-sm leading-6 text-muted-foreground">
-        {agentName}&rsquo;s pointer is drawn on this preview. It does not move your mouse.
+        {agentName}&rsquo;s pointer is drawn on this preview. It moves your mouse only
+        for a step you allow.
       </p>
     </section>
   );
@@ -149,16 +166,22 @@ function ScreenStage({ point, agentName }: { point: HudPoint | null; agentName: 
 
 function SessionBody({
   apiUrl,
+  roomName,
   agentName,
   onRestart,
 }: {
   apiUrl: string;
+  roomName: string;
   agentName: string;
   onRestart: () => void;
 }) {
   const room = useRoomContext();
   const state = useConnectionState();
+  const helperConnected = useRemoteParticipants().some((participant) =>
+    participant.identity.startsWith("desktop:"),
+  );
   const [point, setPoint] = useState<HudPoint | null>(null);
+  const [proposal, setProposal] = useState<ActionProposal | null>(null);
   const [citations, setCitations] = useState<Citations[]>([]);
   const [agentError, setAgentError] = useState<string | null>(null);
   const [proposals, setProposals] = useState<EscalationProposal[]>([]);
@@ -177,6 +200,30 @@ function SessionBody({
       ]);
     }
   });
+  const decisions = useDataChannel(COMPUTER_DECISION_TOPIC);
+  useDataChannel(COMPUTER_TOPIC, (message) => {
+    const update = parseComputerMessage(decode(message.payload));
+    if (update?.kind === "ended") {
+      setProposal(null);
+      setPoint((current) => (current?.kind === "about-to-click" ? null : current));
+    } else if (update) {
+      const { target, description } = update.proposal;
+      setProposal(update.proposal);
+      if (target) {
+        setPoint({ kind: "about-to-click", ...target, label: description });
+      }
+    }
+  });
+  function decide(decision: Decision) {
+    if (!proposal) {
+      return;
+    }
+    void decisions.send(decisionMessage(proposal.id, decision), { reliable: true });
+    setProposal(null);
+    if (decision === "stop") {
+      setPoint(null);
+    }
+  }
   useDataChannel(AGENT_ERROR_TOPIC, (message) => {
     setAgentError(parseAgentError(decode(message.payload)));
   });
@@ -216,6 +263,15 @@ function SessionBody({
         <TrackToggle source={Track.Source.ScreenShare} aria-label="Screen share" />
       </div>
       <ScreenStage point={point} agentName={agentName} />
+      {proposal ? (
+        <ApprovalTray agentName={agentName} proposal={proposal} onDecide={decide} />
+      ) : null}
+      <ConnectMac
+        apiUrl={apiUrl}
+        room={roomName}
+        agentName={agentName}
+        connected={helperConnected}
+      />
       {proposals.map((proposal) => (
         <HandoffCard key={proposal.id} apiUrl={apiUrl} proposal={proposal} />
       ))}

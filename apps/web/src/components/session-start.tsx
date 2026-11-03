@@ -60,6 +60,7 @@ export function SessionStart({
         <SessionRoom
           url={session.url}
           token={session.token}
+          room={session.room}
           apiUrl={apiUrl}
           agentName={agentName}
           onRestart={() => setSession(null)}

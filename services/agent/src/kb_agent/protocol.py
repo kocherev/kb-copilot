@@ -14,15 +14,19 @@ HUD_TOPIC = "hud"
 CITATIONS_TOPIC = "citations"
 AGENT_ERROR_TOPIC = "agent-error"
 ESCALATION_TOPIC = "escalation"
+COMPUTER_TOPIC = "computer"
+COMPUTER_DECISION_TOPIC = "computer-decision"
 
 LABEL_LIMIT = 80
 SNIPPET_LIMIT = 280
 
 
 class HudPoint(BaseModel):
-    """A highlight on the shared frame. x and y are fractions from the top left."""
+    """A highlight on the shared frame. x and y are fractions from the top left.
 
-    kind: Literal["point"] = "point"
+    clicking means the agent is clicking there on the user's computer now."""
+
+    kind: Literal["point", "clicking"] = "point"
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
     label: str = Field(min_length=1, max_length=LABEL_LIMIT)
@@ -61,6 +65,37 @@ class EscalationProposal(BaseModel):
     id: str
     title: str
     body: str
+
+
+class ActionProposal(BaseModel):
+    """One step of a computer task, shown in the approval tray.
+
+    x and y are fractions of the screen for a step that points somewhere.
+    needs_approval is false while the user has allowed the rest of the task,
+    and the tray then only offers to stop. warning is the model's safety
+    explanation when it asks for an explicit confirmation."""
+
+    kind: Literal["proposal"] = "proposal"
+    id: str
+    task: str
+    description: str = Field(min_length=1, max_length=200)
+    x: float | None = Field(default=None, ge=0, le=1)
+    y: float | None = Field(default=None, ge=0, le=1)
+    needs_approval: bool
+    warning: str = ""
+
+
+class TaskEnded(BaseModel):
+    kind: Literal["ended"] = "ended"
+    task: str
+    reason: str
+
+
+class Decision(BaseModel):
+    """The user's answer to a proposal. Sent by the page, never by the agent."""
+
+    id: str
+    decision: Literal["once", "task", "stop"]
 
 
 class Publisher(Protocol):

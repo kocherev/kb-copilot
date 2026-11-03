@@ -6,7 +6,7 @@ import type { HudPoint } from "@/lib/protocol";
 
 const container = { width: 800, height: 450 };
 const video = { width: 1920, height: 1080 };
-const review: HudPoint = { x: 0.25, y: 0.5, label: "Review status" };
+const review: HudPoint = { kind: "point", x: 0.25, y: 0.5, label: "Review status" };
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -66,7 +66,7 @@ test("a new point moves the cursor and restarts the idle time", () => {
     vi.advanceTimersByTime(IDLE_MS - 100);
   });
 
-  view.rerender(show({ x: 0.5, y: 0.5, label: "Save" }));
+  view.rerender(show({ kind: "point", x: 0.5, y: 0.5, label: "Save" }));
   act(() => {
     vi.advanceTimersByTime(IDLE_MS - 100);
   });
@@ -91,7 +91,7 @@ test("after it hides, the next point brings it back from where it was", () => {
     "translate3d(200px, 225px, 0)",
   );
 
-  view.rerender(show({ x: 0.75, y: 0.25, label: "Next" }));
+  view.rerender(show({ kind: "point", x: 0.75, y: 0.25, label: "Next" }));
 
   expect(isHidden()).toBe(false);
   expect(screen.getByTestId("agent-cursor").style.transform).toBe(
@@ -117,9 +117,46 @@ test("the tag flips to the left of the arrow near the right edge", () => {
   const view = render(show(review));
   expect(screen.getByTestId("agent-cursor-tag").style.left).not.toBe("");
 
-  view.rerender(show({ x: 0.9, y: 0.5, label: "Menu" }));
+  view.rerender(show({ kind: "point", x: 0.9, y: 0.5, label: "Menu" }));
 
   const tag = screen.getByTestId("agent-cursor-tag");
   expect(tag.style.right).not.toBe("");
   expect(tag.style.left).toBe("");
+});
+
+test("a click waiting for approval rings and stays until the agent moves on", () => {
+  const view = render(show(null));
+
+  view.rerender(show({ kind: "about-to-click", x: 0.5, y: 0.5, label: "Save" }));
+  act(() => {
+    vi.advanceTimersByTime(IDLE_MS * 5);
+  });
+
+  expect(isHidden()).toBe(false);
+  expect(screen.getByTestId("agent-cursor").getAttribute("data-state")).toBe("about-to-click");
+  expect(screen.getByTestId("agent-cursor-ring")).toBeTruthy();
+  expect(announced()).toBe("Mina is about to click Save");
+
+  view.rerender(show(null));
+  expect(isHidden()).toBe(true);
+});
+
+test("a click ripples, says so, and fades out like a point", () => {
+  const view = render(show({ kind: "about-to-click", x: 0.5, y: 0.5, label: "Save" }));
+
+  view.rerender(show({ kind: "clicking", x: 0.5, y: 0.5, label: "Save" }));
+
+  expect(screen.getByTestId("agent-cursor").getAttribute("data-state")).toBe("clicking");
+  expect(screen.getByTestId("agent-cursor-ring")).toBeTruthy();
+  expect(announced()).toBe("Mina clicks Save");
+  act(() => {
+    vi.advanceTimersByTime(IDLE_MS);
+  });
+  expect(isHidden()).toBe(true);
+});
+
+test("a plain point has no ring", () => {
+  render(show(review));
+
+  expect(screen.queryByTestId("agent-cursor-ring")).toBeNull();
 });

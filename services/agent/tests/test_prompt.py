@@ -62,11 +62,21 @@ def test_the_agent_introduces_itself_by_the_name_the_product_gives_it() -> None:
 def test_the_agent_states_what_it_can_and_cannot_do() -> None:
     prompt = _prompt()
 
-    for tool in ("search_kb", "point_at", "handoff_to_human"):
+    for tool in ("search_kb", "point_at", "handoff_to_human", "operate_computer"):
         assert tool in prompt.split("How you speak:")[0]
     assert "You cannot browse the internet, open links" in prompt
     assert "Never say you will look something up online" in prompt
-    assert "You cannot click or type for the user." in prompt
+    assert "You click or type for the user only through operate_computer." in prompt
+
+
+def test_the_agent_asks_before_it_acts_and_narrates_while_it_does() -> None:
+    acting = _prompt().split("Acting on the computer:")[1].split("Handoff:")[0]
+
+    assert "ask if that is okay. Call it only after the user says yes." in acting
+    assert "You cannot allow a step for them." in acting
+    assert "say what each step does in a few words" in acting
+    assert "guide them with point_at instead" in acting
+    assert "Never use it to enter a password, pay, or accept terms." in acting
 
 
 def test_the_agent_is_told_to_sound_warm_inside_the_product_tone() -> None:

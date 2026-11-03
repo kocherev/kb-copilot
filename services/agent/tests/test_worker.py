@@ -7,7 +7,12 @@ from threading import Thread
 import pytest
 from agent_fakes import FakeRoom
 from kb_agent import worker
-from kb_agent.product import load_product, product_from_body, product_id_from_metadata
+from kb_agent.product import (
+    load_product,
+    product_from_body,
+    product_id_from_metadata,
+    user_from_metadata,
+)
 from kb_agent.prompt import render_system_prompt
 from kb_agent.protocol import AGENT_ERROR_TOPIC
 
@@ -73,6 +78,14 @@ def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
             json.dumps({"product_id": "00000000-0000-0000-0000-000000000000"}),
             api_url,
         )
+
+
+def test_dispatch_metadata_names_the_user_when_the_api_sends_one() -> None:
+    named = json.dumps({"product_id": PRODUCT_ID, "user": "user:abc"})
+
+    assert user_from_metadata(named) == "user:abc"
+    assert user_from_metadata(json.dumps({"product_id": PRODUCT_ID})) is None
+    assert user_from_metadata(json.dumps({"product_id": PRODUCT_ID, "user": 7})) is None
 
 
 class _Job:

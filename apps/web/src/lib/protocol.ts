@@ -5,8 +5,14 @@ export const HUD_TOPIC = "hud";
 export const CITATIONS_TOPIC = "citations";
 export const AGENT_ERROR_TOPIC = "agent-error";
 export const ESCALATION_TOPIC = "escalation";
+export const COMPUTER_TOPIC = "computer";
+export const COMPUTER_DECISION_TOPIC = "computer-decision";
 
-export type HudPoint = { x: number; y: number; label: string };
+// point is a highlight. about-to-click comes from a proposal waiting for the
+// user. clicking means the agent is clicking there on the user's computer.
+export type CursorKind = "point" | "about-to-click" | "clicking";
+
+export type HudPoint = { kind: CursorKind; x: number; y: number; label: string };
 
 export type CitedPassage = {
   id: string;
@@ -23,6 +29,21 @@ export type Citations = {
 };
 
 export type EscalationProposal = { id: string; title: string; body: string };
+
+export type ActionProposal = {
+  id: string;
+  task: string;
+  description: string;
+  target: { x: number; y: number } | null;
+  needsApproval: boolean;
+  warning: string;
+};
+
+export type ComputerMessage =
+  | { kind: "proposal"; proposal: ActionProposal }
+  | { kind: "ended"; task: string };
+
+export type Decision = "once" | "task" | "stop";
 
 function record(raw: string): Record<string, unknown> | null {
   try {
@@ -44,13 +65,51 @@ function fraction(value: unknown): number | null {
 
 export function parseHudPoint(raw: string): HudPoint | null {
   const body = record(raw);
-  if (body?.kind !== "point" || typeof body.label !== "string") {
+  const kind = body?.kind;
+  if ((kind !== "point" && kind !== "clicking") || typeof body?.label !== "string") {
     return null;
   }
   const x = fraction(body.x);
   const y = fraction(body.y);
   const label = body.label.trim();
-  return x === null || y === null || label === "" ? null : { x, y, label };
+  return x === null || y === null || label === "" ? null : { kind, x, y, label };
+}
+
+export function parseComputerMessage(raw: string): ComputerMessage | null {
+  const body = record(raw);
+  if (typeof body?.task !== "string" || body.task === "") {
+    return null;
+  }
+  if (body.kind === "ended") {
+    return { kind: "ended", task: body.task };
+  }
+  if (
+    body.kind !== "proposal" ||
+    typeof body.id !== "string" ||
+    body.id === "" ||
+    typeof body.description !== "string" ||
+    body.description.trim() === "" ||
+    typeof body.needs_approval !== "boolean"
+  ) {
+    return null;
+  }
+  const x = fraction(body.x);
+  const y = fraction(body.y);
+  return {
+    kind: "proposal",
+    proposal: {
+      id: body.id,
+      task: body.task,
+      description: body.description.trim(),
+      target: x === null || y === null ? null : { x, y },
+      needsApproval: body.needs_approval,
+      warning: typeof body.warning === "string" ? body.warning.trim() : "",
+    },
+  };
+}
+
+export function decisionMessage(id: string, decision: Decision): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify({ id, decision }));
 }
 
 function parsePassage(value: unknown): CitedPassage | null {

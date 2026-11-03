@@ -1,8 +1,18 @@
 import asyncio
 
-from livekit.agents import Agent, function_tool
+import httpx
+from google.genai import Client
+from livekit.agents import Agent, RunContext, function_tool
 from livekit.agents.llm.tool_context import ToolFlag
 
+from kb_agent.computer import (
+    Approvals,
+    ComputerTask,
+    Desktop,
+    DesktopRoom,
+    gemini_planner,
+    helper_identity,
+)
 from kb_agent.handoff import propose_escalation, transcript_excerpt
 from kb_agent.knowledge import Knowledge, Passage
 from kb_agent.latency import log_json
@@ -18,6 +28,12 @@ from kb_agent.protocol import (
     publish,
 )
 from kb_agent.retrieve import retrieval_record, tool_text
+
+NO_COMPUTER = (
+    "You cannot act on the user's computer right now: their Mac is not "
+    "connected. Offer to guide them step by step with point_at instead. They "
+    "can connect their Mac from the session page and ask again."
+)
 
 
 def cited(passage: Passage) -> CitedPassage:
@@ -40,10 +56,15 @@ class SupportAgent(Agent):
         knowledge: Knowledge,
         room: Room,
         api_url: str,
+        user: str | None = None,
+        agent_name: str = "Shawn",
     ) -> None:
         self.knowledge = knowledge
         self.room = room
         self.api_url = api_url
+        # The participant who started the session. Only they approve actions.
+        self.user = user
+        self.agent_name = agent_name
         # Passages the searches of the current user turn returned, by id.
         self.turn_passages: dict[str, Passage] = {}
         super().__init__(instructions=instructions)
@@ -124,6 +145,48 @@ class SupportAgent(Agent):
             "A ticket is proposed on the user's screen. It exists only if they "
             "approve it there. Ask them to check the card."
         )
+
+    @function_tool(
+        flags=ToolFlag.IGNORE_ON_ENTER | ToolFlag.CANCELLABLE, on_duplicate="reject"
+    )
+    async def operate_computer(self, ctx: RunContext, goal: str) -> str:
+        """Do a task on the user's Mac for them, one approved step at a time.
+
+        Call this only after you said what you will do and the user said yes.
+        Each step appears on the user's screen and runs only when they allow
+        it there. You cannot allow a step yourself.
+
+        Args:
+            goal: What to get done, in one sentence, such as "Open Billing and
+                click Update card".
+        """
+        room = self.room
+        helper = helper_identity(self.user) if self.user else None
+        if (
+            self.user is None
+            or helper is None
+            or not isinstance(room, DesktopRoom)
+            or helper not in room.remote_participants
+        ):
+            return NO_COMPUTER
+        try:
+            found = await self.knowledge.search(goal)
+            passages = () if found.abstained else found.passages
+        except httpx.HTTPError:
+            passages = ()
+        await ctx.update(
+            "Starting. Each step waits until the user allows it on their screen."
+        )
+        task = ComputerTask(
+            room=room,
+            desktop=Desktop(room, helper),
+            approvals=Approvals(self.user),
+            plan=gemini_planner(Client()),
+            api=self.knowledge.client,
+            say=ctx.update,
+            agent_name=self.agent_name,
+        )
+        return await task.run(goal, passages)
 
     def new_user_turn(self) -> None:
         self.turn_passages = {}
