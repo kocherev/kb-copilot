@@ -178,7 +178,7 @@ async def search(
     )
     queried = time.perf_counter()
     candidates = [
-        _passage(point.id, point.payload or {}, _cosine(dense, point.vector))
+        _passage(point.id, point.payload or {}, cosine(dense, point.vector))
         for point in fused.points
     ]
     if settings.reranker and candidates:
@@ -283,7 +283,8 @@ def _passage(point_id: object, payload: dict[str, object], score: float) -> Pass
     )
 
 
-def _cosine(query: list[float], stored: object) -> float:
+def cosine(query: list[float], stored: object) -> float:
+    """Cosine to the dense vector of a Qdrant point, or 0 when it has none."""
     vector = stored.get(DENSE) if isinstance(stored, dict) else None
     if not isinstance(vector, list):
         return 0.0

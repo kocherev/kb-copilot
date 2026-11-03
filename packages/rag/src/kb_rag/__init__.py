@@ -1,5 +1,6 @@
 """Parse, chunk, index, and search product documents in Qdrant."""
 
+from kb_rag.citations import supported_ids
 from kb_rag.models import (
     DEFAULT_SETTINGS,
     FastEmbedDense,
@@ -39,5 +40,6 @@ __all__ = [
     "search",
     "should_abstain",
     "source_from_bytes",
+    "supported_ids",
     "validate_product_id",
 ]
