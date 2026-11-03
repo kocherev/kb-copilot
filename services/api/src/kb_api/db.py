@@ -21,6 +21,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+JSON_COLUMN = JSON().with_variant(JSONB(), "postgresql")
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
@@ -29,7 +31,7 @@ def utcnow() -> datetime:
 class Base(DeclarativeBase):
     type_annotation_map = {
         datetime: DateTime(timezone=True),
-        dict[str, Any]: JSON().with_variant(JSONB(), "postgresql"),
+        dict[str, Any]: JSON_COLUMN,
     }
 
 
@@ -83,6 +85,28 @@ class LiveSessionRow(Base):
     )
     room: Mapped[str] = mapped_column(Text)
     user_id: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class TurnRow(Base):
+    """One thing said in a live session, with what the agent did to answer it."""
+
+    __tablename__ = "turns"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("live_sessions.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+    started_at: Mapped[datetime]
+    ended_at: Mapped[datetime]
+    # Every search of the turn: query, passages with scores, abstained, duration_ms.
+    searches: Mapped[list[Any]] = mapped_column(JSON_COLUMN, default=list)
+    cited: Mapped[list[Any]] = mapped_column(JSON_COLUMN, default=list)
+    # Stage name to milliseconds, as the agent measured it.
+    latency: Mapped[dict[str, Any]] = mapped_column(JSON_COLUMN, default=dict)
+    image_tokens: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 

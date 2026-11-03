@@ -15,6 +15,7 @@ API_TABLES = {
     "linear_connections",
     "linear_state_uses",
     "escalations",
+    "turns",
 }
 ALEMBIC = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
 

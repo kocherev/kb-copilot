@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     auth_jwks_url: str = "http://localhost:3000/api/auth/jwks"
     auth_issuer: str = "http://localhost:3000"
     session_rate_limit: int = Field(default=10, gt=0)
+    # Set it to export traces. Leave it empty and no tracing code loads.
+    otel_exporter_otlp_endpoint: str = ""
     linear_client_id: str = ""
     linear_client_secret: str = ""
     linear_redirect_uri: str = "http://localhost:3000/api/integrations/linear/callback"

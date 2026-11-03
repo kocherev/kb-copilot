@@ -13,6 +13,7 @@ from livekit.agents.voice import VoiceActivityVideoSampler
 from livekit.plugins import google
 
 from kb_agent.latency import component_latency, log_json, turn_latency
+from kb_agent.turns import TurnLog
 
 MODEL = "gemini-3.8-live-extended-thinking"
 DEFAULT_MAX_SESSION_SECONDS = 600
@@ -72,11 +73,12 @@ async def enforce_time_limit(
     on_limit()
 
 
-def attach_logs(session: AgentSession) -> None:
+def attach_logs(session: AgentSession, turns: TurnLog) -> None:
     def on_metrics(ev: MetricsCollectedEvent) -> None:
         record = component_latency(ev.metrics)
         if record is not None:
             log_json(record)
+            turns.on_metrics(record)
 
     def on_item(ev: ConversationItemAddedEvent) -> None:
         if isinstance(ev.item, ChatMessage):

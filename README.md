@@ -109,6 +109,21 @@ curl -s -X POST -H "authorization: Bearer $TOKEN" -H 'content-type: application/
 
 `scripts/smoke.py` walks the same flow against a running stack, including the agent's first reaction in the room. The full route list is in `apps/web/openapi.json`.
 
+## See what happened
+
+Every session leaves a replay. Open a product and its Sessions list shows each one with its date, length, turns, desktop actions and handoffs. A replay shows the transcript, and under each answer the searches it ran (query, passages with scores, or no match) and the passages it cited. It also lists the desktop steps the user was asked to approve, the handoffs, and a bar of stage latency for each turn: search, model first token, first audio.
+
+The agent posts each turn to the API as it happens. If the API is down, the turn is dropped and the conversation goes on. The API redacts email addresses, card numbers and phone numbers before it stores anything. `docs/decisions/0007-session-replay.md` has what is stored and for how long.
+
+Traces are optional. Leave `OTEL_EXPORTER_OTLP_ENDPOINT` empty and no tracing code loads. To look at them, start the viewer, point both services at it, and open http://localhost:16686:
+
+```bash
+echo 'OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318' >> .env
+docker compose --profile observability up --build
+```
+
+Spans carry timings, model names and token counts. They do not carry the conversation.
+
 ## How it works
 
 ```mermaid
