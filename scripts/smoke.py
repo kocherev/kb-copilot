@@ -230,4 +230,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    code = main()
+    sys.stdout.flush()
+    # LiveKit's native runtime can panic while Python shuts down, which turns a
+    # passed run into exit 134. Nothing is left to clean up, so skip the teardown.
+    os._exit(code)
