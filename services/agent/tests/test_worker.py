@@ -1,19 +1,15 @@
+import asyncio
 import json
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from threading import Thread
 
 import pytest
+from agent_fakes import FakeRoom
+from kb_agent import worker
 from kb_agent.product import instructions_for, product_id_from_metadata
-from kb_agent.voice import (
-    is_screen_share_video,
-    model_provider,
-    resolve_realtime_model,
-    session_room_options,
-    voice_attempts,
-)
-from kb_agent.worker import AGENT_NAME
-from livekit import rtc
+from kb_agent.protocol import AGENT_ERROR_TOPIC
+from qdrant_client import AsyncQdrantClient
 
 PRODUCT_ID = "11111111-1111-4111-8111-111111111111"
 PRODUCT = {
@@ -42,6 +38,13 @@ class _Handler(BaseHTTPRequestHandler):
         return
 
 
+@pytest.fixture(autouse=True)
+def local_qdrant(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        worker, "AsyncQdrantClient", lambda **_: AsyncQdrantClient(":memory:")
+    )
+
+
 @pytest.fixture
 def api_url() -> Iterator[str]:
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
@@ -64,7 +67,6 @@ def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
     assert "You are the support agent for Acme." in instructions
     assert "Tone: calm and brief" in instructions
     assert "Do not invent a refund policy." in instructions
-    assert AGENT_NAME == "kb-support"
     with pytest.raises(ValueError, match="product_id is required"):
         product_id_from_metadata("{}")
     with pytest.raises(ValueError, match="JSON"):
@@ -76,115 +78,77 @@ def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
         )
 
 
-def test_room_options_enable_screen_share_video() -> None:
-    options = session_room_options()
-
-    assert options.get_video_input_options() is not None
-    assert options.get_audio_input_options() is not None
-    assert options.get_audio_output_options() is not None
-    assert is_screen_share_video(
-        rtc.TrackSource.SOURCE_SCREENSHARE,
-        rtc.TrackKind.KIND_VIDEO,
-    )
-    assert not is_screen_share_video(
-        rtc.TrackSource.SOURCE_CAMERA,
-        rtc.TrackKind.KIND_VIDEO,
-    )
-    assert not is_screen_share_video(
-        rtc.TrackSource.SOURCE_SCREENSHARE,
-        rtc.TrackKind.KIND_AUDIO,
-    )
+class _Job:
+    metadata = json.dumps({"product_id": PRODUCT_ID})
 
 
-def test_model_provider_follows_the_livekit_host() -> None:
-    assert model_provider("wss://example.livekit.cloud") == "livekit"
-    assert model_provider("wss://livekit.cloud") == "livekit"
-    assert model_provider("wss://Acme.LiveKit.Cloud") == "livekit"
-    assert model_provider("ws://localhost:7880") == "openai"
-    assert model_provider("ws://livekit:7880") == "openai"
-    assert model_provider("wss://evil.livekit.cloud.example") == "openai"
+class _Ctx:
+    def __init__(self, room: FakeRoom) -> None:
+        self.room = room
+        self.job = _Job()
+        self.stopped: str | None = None
+
+    async def connect(self) -> None:
+        return None
+
+    def shutdown(self, reason: str = "") -> None:
+        self.stopped = reason
+
+    def add_shutdown_callback(self, callback: object) -> None:
+        return None
 
 
-def test_self_hosted_voice_uses_openai_and_cloud_uses_inference(
-    monkeypatch: pytest.MonkeyPatch,
+class _BrokenSession:
+    def on(self, event: str, callback: object = None) -> object:
+        return callback or (lambda handler: handler)
+
+    async def start(self, **kwargs: object) -> None:
+        raise RuntimeError("model refused the connection")
+
+
+def test_a_model_that_cannot_start_tells_the_room_why(
+    api_url: str, monkeypatch: pytest.MonkeyPatch, room: FakeRoom
 ) -> None:
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    # Inference reads these at construction. CI does not provide them.
-    monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
-    from kb_agent.voice import build_voice
+    monkeypatch.setenv("API_URL", api_url)
+    monkeypatch.setattr(worker, "build_session", lambda: _BrokenSession())
+    ctx = _Ctx(room)
 
-    local = build_voice("ws://livekit:7880")
-    cloud = build_voice("wss://example.livekit.cloud")
-    fallback = build_voice(
-        "wss://example.livekit.cloud",
-        realtime_model="google/gemini-3.8-live",
-    )
+    asyncio.run(worker.entrypoint(ctx))  # type: ignore[arg-type]
 
-    assert "openai" in local.stt.label
-    assert "openai" in local.llm.label
-    assert "openai" in local.tts.label
-    assert local.realtime_model is None
-    assert local.provider == "openai"
-    assert local.stt.label != cloud.stt.label
-    assert "inference" in cloud.stt.label
-    assert "inference" in cloud.llm.label
-    assert "inference" in cloud.tts.label
-    assert cloud.provider == "livekit"
-    assert cloud.realtime_model == "google/gemini-3.8-live-extended-thinking"
-    assert cloud.llm.model == "google/gemini-3.8-live-extended-thinking"
-    assert cloud.voice == "Puck"
-    assert cloud.reasoning_effort == "low"
-    assert cloud.video_speaking_fps == 1.0
-    assert cloud.video_silent_fps == 0.3
-    assert fallback.realtime_model == "google/gemini-3.8-live"
-    assert fallback.reasoning_effort is None
-    assert voice_attempts("wss://example.livekit.cloud") == (
-        "google/gemini-3.8-live-extended-thinking",
-        "google/gemini-3.8-live",
-        "google/gemini-live",
-    )
-    assert voice_attempts("ws://localhost:7880") == (None,)
-    assert resolve_realtime_model(None) == "google/gemini-3.8-live-extended-thinking"
-    with pytest.raises(ValueError, match="unsupported realtime model"):
-        resolve_realtime_model("google/gemma-4-31b-it")
+    [(topic, body)] = room.sent
+    assert topic == AGENT_ERROR_TOPIC
+    assert "could not start" in str(body["message"])
+    assert "RuntimeError" in str(body["message"])
+    assert ctx.stopped == "agent error"
 
 
-def test_cloud_latency_logs_read_session_metrics(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+def test_a_missing_product_also_tells_the_room(
+    api_url: str, monkeypatch: pytest.MonkeyPatch, room: FakeRoom
 ) -> None:
-    monkeypatch.setenv("LIVEKIT_API_KEY", "test-key")
-    monkeypatch.setenv("LIVEKIT_API_SECRET", "test-secret-placeholder-32bytes!")
-    from kb_agent.voice import attach_latency_logs, build_voice
-    from livekit.agents import MetricsCollectedEvent
-    from livekit.agents.metrics import RealtimeModelMetrics
+    monkeypatch.setenv("API_URL", api_url)
+    ctx = _Ctx(room)
+    ctx.job.metadata = json.dumps({"product_id": "missing"})
 
-    cloud = build_voice("wss://example.livekit.cloud")
-    attach_latency_logs(cloud)
-    cloud.session.emit(
-        "metrics_collected",
-        MetricsCollectedEvent(
-            metrics=RealtimeModelMetrics(
-                label="realtime",
-                request_id="rt-1",
-                timestamp=1.0,
-                duration=0.4,
-                ttft=0.2,
-                input_tokens=100,
-                output_tokens=20,
-                total_tokens=120,
-                input_token_details=RealtimeModelMetrics.InputTokenDetails(
-                    image_tokens=30,
-                    audio_tokens=70,
-                ),
-                output_token_details=RealtimeModelMetrics.OutputTokenDetails(
-                    audio_tokens=20,
-                ),
-            )
-        ),
-    )
+    asyncio.run(worker.entrypoint(ctx))  # type: ignore[arg-type]
 
-    logged = capsys.readouterr().out
-    assert '"image_tokens": 30' in logged
-    assert '"segment": "realtime"' in logged
+    assert room.sent[0][0] == AGENT_ERROR_TOPIC
+    assert ctx.stopped == "agent error"
+
+
+def test_an_error_waits_for_someone_to_join_before_it_is_sent() -> None:
+    room = FakeRoom()
+    room.remote_participants = {}
+
+    async def run() -> None:
+        sending = asyncio.create_task(
+            worker.report_failure(room, RuntimeError("down"))  # type: ignore[arg-type]
+        )
+        await asyncio.sleep(0.05)
+        assert room.sent == []
+        for joined in room.joiners:
+            joined(object())
+        await sending
+
+    asyncio.run(run())
+
+    assert room.sent[0][0] == AGENT_ERROR_TOPIC

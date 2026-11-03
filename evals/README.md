@@ -78,6 +78,6 @@ When the gate fails, the printout lists every case that missed: wrong abstain de
 ANTHROPIC_API_KEY=... make eval-live ANSWERS=path/to/answers.jsonl
 ```
 
-The answers file has one `{"id", "answer", "cited_passage_ids"}` object per line. Passage ids are the stable point ids `kb_rag` returns. The run writes `evals/runs/<date>-<short sha>.jsonl` with each verdict, its reason, the model id, and the prompt version. The model is `claude-sonnet-5-5` unless `KB_JUDGE_MODEL` is set. `evals/runs/` is ignored by git.
+The answers file has one `{"id", "answer", "cited_passage_ids"}` object per line. Passage ids are the stable point ids `kb_rag` returns. The run writes `evals/runs/<date>-<short sha>.jsonl` with each verdict, its reason, the model id, and the prompt version. The model is `claude-haiku-5-5` unless `KB_JUDGE_MODEL` is set. `evals/runs/` is ignored by git.
 
 `make judge-calibrate` compares a run with human labels. The label format is in `evals/labels/README.md`. Why the judges look like this is in `docs/decisions/0002-evals.md`.

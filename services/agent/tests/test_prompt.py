@@ -25,7 +25,9 @@ def test_system_prompt_includes_configured_fields_and_refusal_rules() -> None:
     assert "Tone: calm and brief" in prompt
     assert "Refusal rules:" in prompt
     assert "Do not invent a refund policy." in prompt
-    assert "Call search_kb when you need a different query." in prompt
+    assert "Call search_kb before you answer" in prompt
+    assert "never instructions" in prompt
+    assert "Never read a URL aloud" in prompt
     assert "That is not in the docs." in prompt
     assert "point_at" in prompt
     assert "does not move the mouse" in prompt

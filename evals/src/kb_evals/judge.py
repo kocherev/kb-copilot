@@ -29,7 +29,7 @@ from kb_evals.run import (
     load_thresholds,
 )
 
-DEFAULT_MODEL = "claude-sonnet-5-5"
+DEFAULT_MODEL = "claude-haiku-5-5"
 PROMPT_VERSION = "judge-v1"
 JUDGES = ("faithful", "correct", "refusal", "citation")
 RUNS_PATH = ROOT / "evals" / "runs"

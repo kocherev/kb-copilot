@@ -5,10 +5,13 @@ description = "Offline retrieval and answer evals for the demo knowledge base."
 requires-python = ">=3.12"
 dependencies = [
   "anthropic>=1.0",
+  "google-genai>=2",
+  "kb-agent",
   "kb-rag",
 ]
 
 [tool.uv.sources]
+kb-agent = { workspace = true }
 kb-rag = { workspace = true }
 
 [build-system]
