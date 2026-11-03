@@ -18,7 +18,8 @@ from livekit.agents.voice.events import CloseReason
 from kb_agent.config import require_settings
 from kb_agent.knowledge import Knowledge, api_client
 from kb_agent.latency import log_json
-from kb_agent.product import instructions_for, product_id_from_metadata
+from kb_agent.product import load_product, product_id_from_metadata
+from kb_agent.prompt import render_system_prompt
 from kb_agent.protocol import (
     AGENT_ERROR_TOPIC,
     AGENT_NAME,
@@ -104,12 +105,10 @@ async def entrypoint(ctx: JobContext) -> None:
             product_id, api_client(api_url, os.environ.get("INTERNAL_API_TOKEN", ""))
         )
         ctx.add_shutdown_callback(knowledge.aclose)
-        instructions = await asyncio.to_thread(
-            instructions_for, ctx.job.metadata, api_url
-        )
-        session = build_session()
+        product = await asyncio.to_thread(load_product, ctx.job.metadata, api_url)
+        session = build_session(product.voice)
         agent = SupportAgent(
-            instructions=instructions,
+            instructions=render_system_prompt(product),
             knowledge=knowledge,
             room=ctx.room,
             api_url=api_url,

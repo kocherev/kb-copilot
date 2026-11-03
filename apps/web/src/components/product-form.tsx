@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   browserApi,
@@ -12,7 +13,7 @@ import {
   type Product,
   type ProductWrite,
 } from "@/lib/api/client";
-import { emptyDraft } from "@/lib/product";
+import { emptyDraft, voices } from "@/lib/product";
 
 const linkClass =
   "underline underline-offset-4 [overflow-wrap:anywhere] focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]";
@@ -43,7 +44,19 @@ const fields: {
     maxLength: 4000,
     rows: 4,
   },
+  {
+    key: "agent_name",
+    label: "Agent name",
+    hint: "What the agent calls itself.",
+    multiline: false,
+    maxLength: 40,
+  },
 ];
+
+function writable(source: ProductWrite): ProductWrite {
+  const { name, description, tone, refusal_rules, agent_name, voice } = source;
+  return { name, description, tone, refusal_rules, agent_name, voice };
+}
 
 export function ProductForm({
   apiUrl,
@@ -60,12 +73,7 @@ export function ProductForm({
   formLabel: string;
   onSaved?: (product: Product) => void;
 }) {
-  const [draft, setDraft] = useState<ProductWrite>({
-    name: initial.name,
-    description: initial.description,
-    tone: initial.tone,
-    refusal_rules: initial.refusal_rules,
-  });
+  const [draft, setDraft] = useState<ProductWrite>(writable(initial));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
@@ -112,12 +120,7 @@ export function ProductForm({
         setError(errorDetail(error, "Could not save the product."));
         return;
       }
-      setDraft({
-        name: product.name,
-        description: product.description,
-        tone: product.tone,
-        refusal_rules: product.refusal_rules,
-      });
+      setDraft(writable(product));
       setCreated(product);
       setSaved(true);
       resetAfterHide.current = productId === undefined;
@@ -129,6 +132,7 @@ export function ProductForm({
     }
   }
 
+  const voiceId = `${formLabel}-voice`.replaceAll(" ", "-").toLowerCase();
   return (
     <form
       aria-label={formLabel}
@@ -175,6 +179,29 @@ export function ProductForm({
           </div>
         );
       })}
+      <div className="flex min-w-0 flex-col gap-2">
+        <label htmlFor={voiceId} className="text-sm font-medium text-foreground">
+          Voice
+        </label>
+        <Select
+          id={voiceId}
+          name="voice"
+          value={draft.voice}
+          onChange={(event) => {
+            const voice = voices.find((item) => item.value === event.target.value);
+            if (voice) {
+              setDraft((current) => ({ ...current, voice: voice.value }));
+              setSaved(false);
+            }
+          }}
+        >
+          {voices.map((voice) => (
+            <option key={voice.value} value={voice.value}>
+              {voice.value}, {voice.trait.toLowerCase()}
+            </option>
+          ))}
+        </Select>
+      </div>
       {error ? (
         <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
           {error}

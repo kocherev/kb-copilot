@@ -42,6 +42,18 @@ The prompt says to search before any product answer and to say exactly `That is 
 
 The worker exits at startup when `GOOGLE_API_KEY` or the LiveKit settings are missing or placeholders. Inside a job, a failure to load the product, to start the session or a later unrecoverable model error is published on the `agent-error` topic, once someone has joined the room. The page shows it. CI runs the agent with a made-up key and fails when the room stays silent.
 
+### Voice and persona
+
+Gemini 3.x Live has no affective-dialog option, and LiveKit's `expressive` session option applies to separate text-to-speech engines, not to Gemini native audio. Two levers are left. One is the prebuilt voice. The other is the speaking style in the system prompt, so the prompt has a "How you speak" section: varied intonation, short sentences, acknowledge frustration first, celebrate a fix, no filler. The product's tone still sets how formal the agent is.
+
+Native audio models accept any voice of the Gemini speech generation models. The API accepts six of them, each with the trait the docs give it: Sulafat (warm), Achird (friendly), Puck (upbeat), Aoede (breezy), Sadachbia (lively), and Vindemiatrix (gentle). A product stores one, and the worker passes it to the model. The default is Sulafat, the voice the docs call warm. `KB_VOICE` is gone.
+
+A trait word does not say how a voice sounds in a support call, so it is picked by ear. `python -m kb_agent.voices --out <dir>` renders one support sentence in every curated voice to a WAV file with the Gemini speech model. These are the same voices the live model uses, and the live model's prosody differs a little. The files are not committed.
+
+The agent also has a name per product, Shawn by default, and the prompt tells it what it can do: search the uploaded documents, see the shared screen, highlight a spot, and propose a handoff. It cannot browse, open links, or see anything that is not shared. Without that section the agent offered to "take a look online", a promise it has no tool to keep.
+
+The page learns the agent's state (listening, thinking, speaking) from the `lk.agent.state` participant attribute that LiveKit agents already publish, read with `useVoiceAssistant`. There is no new data message for it.
+
 ## Consequences
 
 - A Google key is a required secret. It never reaches the browser.

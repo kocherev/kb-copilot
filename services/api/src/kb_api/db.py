@@ -42,6 +42,8 @@ class ProductRow(Base):
     description: Mapped[str] = mapped_column(Text)
     tone: Mapped[str] = mapped_column(Text)
     refusal_rules: Mapped[str] = mapped_column(Text)
+    agent_name: Mapped[str] = mapped_column(Text, server_default="Shawn")
+    voice: Mapped[str] = mapped_column(Text, server_default="Sulafat")
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 

@@ -2270,6 +2270,22 @@
           "refusal_rules": {
             "type": "string",
             "title": "Refusal Rules"
+          },
+          "agent_name": {
+            "type": "string",
+            "title": "Agent Name"
+          },
+          "voice": {
+            "type": "string",
+            "enum": [
+              "Sulafat",
+              "Achird",
+              "Puck",
+              "Aoede",
+              "Sadachbia",
+              "Vindemiatrix"
+            ],
+            "title": "Voice"
           }
         },
         "type": "object",
@@ -2278,7 +2294,9 @@
           "name",
           "description",
           "tone",
-          "refusal_rules"
+          "refusal_rules",
+          "agent_name",
+          "voice"
         ],
         "title": "Product"
       },
@@ -2310,6 +2328,27 @@
             "maxLength": 4000,
             "minLength": 1,
             "title": "Refusal Rules"
+          },
+          "agent_name": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]*$",
+            "title": "Agent Name",
+            "default": "Shawn"
+          },
+          "voice": {
+            "type": "string",
+            "enum": [
+              "Sulafat",
+              "Achird",
+              "Puck",
+              "Aoede",
+              "Sadachbia",
+              "Vindemiatrix"
+            ],
+            "title": "Voice",
+            "default": "Sulafat"
           }
         },
         "type": "object",

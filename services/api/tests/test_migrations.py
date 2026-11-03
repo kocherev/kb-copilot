@@ -103,3 +103,24 @@ def test_upgrade_keeps_ingest_jobs_from_before_migrations(sync_engine: Engine) -
             connection.execute(text("DROP TABLE IF EXISTS ingest_jobs_legacy"))
     assert [tuple(row) for row in legacy] == [("job-1", "old-1")]
     assert {"status", "chunk_count", "error"} <= columns
+
+
+def test_upgrade_gives_existing_products_the_default_agent(
+    sync_engine: Engine,
+) -> None:
+    command.downgrade(ALEMBIC, "0003")
+    with sync_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO products (id, org_id, name, description, tone,"
+                " refusal_rules, created_at, updated_at) VALUES"
+                " ('00000000000000000000000000000001', 'org-a', 'Old', 'd', 't', 'r',"
+                " CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            )
+        )
+
+    command.upgrade(ALEMBIC, "head")
+
+    with sync_engine.connect() as connection:
+        row = connection.execute(text("SELECT agent_name, voice FROM products")).one()
+    assert tuple(row) == ("Shawn", "Sulafat")

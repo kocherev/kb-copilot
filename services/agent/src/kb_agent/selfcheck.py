@@ -87,7 +87,7 @@ class PrintRoom:
 async def check(image: Path, question: str, docs: Path) -> int:
     client = AsyncQdrantClient(":memory:")
     await index_sources(client, PRODUCT_ID, read_directory(docs))
-    session = build_session()
+    session = build_session(PRODUCT.voice)
     session.input.video = SharedScreen(load_frame(image))
     agent = SupportAgent(
         instructions=render_system_prompt(PRODUCT),

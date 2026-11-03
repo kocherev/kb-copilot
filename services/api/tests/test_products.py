@@ -58,7 +58,12 @@ def test_create_list_get_put_and_delete_product(http: TestClient, as_user) -> No
     assert created.status_code == 201
     body = created.json()
     UUID(body["id"])
-    assert body == {"id": body["id"], **VALID}
+    assert body == {
+        "id": body["id"],
+        **VALID,
+        "agent_name": "Shawn",
+        "voice": "Sulafat",
+    }
     assert http.get(f"/products/{body['id']}", headers=headers).json() == body
     assert http.get("/products", headers=headers).json() == [body]
 
@@ -125,6 +130,29 @@ def test_invalid_product_config_is_rejected(http: TestClient, as_user) -> None:
     ).status_code == (404)
 
 
+def test_agent_name_and_voice_are_saved_and_validated(
+    http: TestClient, as_user
+) -> None:
+    headers = as_user()
+    persona = {"agent_name": "  Mina ", "voice": "Achird"}
+
+    created = http.post("/products", json={**VALID, **persona}, headers=headers)
+
+    assert created.status_code == 201
+    assert created.json()["agent_name"] == "Mina"
+    assert created.json()["voice"] == "Achird"
+    for bad in (
+        {"agent_name": " "},
+        {"agent_name": "A" * 41},
+        {"agent_name": "Mi\nna"},
+        {"voice": "Zephyr"},
+        {"voice": ""},
+    ):
+        rejected = http.post("/products", json={**VALID, **bad}, headers=headers)
+        assert rejected.status_code == 422, bad
+        assert rejected.json()["detail"][0]["loc"] == ["body", *bad]
+
+
 def test_openapi_documents_bodies_and_limits(http: TestClient) -> None:
     schema = http.get("/openapi.json").json()
 
@@ -134,6 +162,8 @@ def test_openapi_documents_bodies_and_limits(http: TestClient) -> None:
     assert write["tone"]["maxLength"] == 200
     assert write["refusal_rules"]["maxLength"] == 4000
     assert write["name"]["minLength"] == 1
+    assert write["agent_name"]["maxLength"] == 40
+    assert write["voice"]["enum"][0] == "Sulafat"
     put = schema["paths"]["/products/{product_id}"]["put"]
     assert put["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/ProductWrite"
