@@ -18,12 +18,17 @@ import asyncio
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from uuid import uuid4
 
 from livekit import rtc
 
+DEMO_DOCS = Path(__file__).resolve().parents[1] / "demo" / "docs"
+UPLOAD_BATCH = 20  # the API takes at most 20 files per upload
+INDEX_TIMEOUT_SECONDS = 300
 AGENT_ERROR_TOPIC = "agent-error"
 AGENT_STATE_ATTRIBUTE = "lk.agent.state"
 
@@ -31,13 +36,17 @@ AGENT_STATE_ATTRIBUTE = "lk.agent.state"
 def request(
     method: str,
     url: str,
-    body: object | None = None,
+    body: object | tuple[bytes, str] | None = None,
     headers: dict[str, str] | None = None,
 ) -> tuple[int, str, list[str]]:
-    data = None if body is None else json.dumps(body).encode()
     sent = dict(headers or {})
-    if body is not None:
+    if isinstance(body, tuple):
+        data, sent["content-type"] = body
+    elif body is not None:
+        data = json.dumps(body).encode()
         sent["content-type"] = "application/json"
+    else:
+        data = None
     req = urllib.request.Request(url, data=data, method=method, headers=sent)
     try:
         with urllib.request.urlopen(req, timeout=120) as response:
@@ -45,6 +54,21 @@ def request(
             return response.status, response.read().decode(), cookies
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode(), []
+
+
+def upload_files(paths: list[Path]) -> tuple[bytes, str]:
+    boundary = uuid4().hex
+    body = (
+        b"".join(
+            f'--{boundary}\r\nContent-Disposition: form-data; name="files"; '
+            f'filename="{path.name}"\r\n\r\n'.encode()
+            + path.read_bytes()
+            + b"\r\n"
+            for path in paths
+        )
+        + f"--{boundary}--\r\n".encode()
+    )
+    return body, f"multipart/form-data; boundary={boundary}"
 
 
 def expect(step: str, status: int, text: str, want: int) -> None:
@@ -134,16 +158,51 @@ def main() -> int:
     expect("create product", status, text, 201)
     product_id = json.loads(text)["id"]
 
+    documents_url = f"{api}/products/{product_id}/documents"
+    paths = [
+        path
+        for path in sorted(DEMO_DOCS.rglob("*"))
+        if path.suffix in {".md", ".html", ".pdf"}
+    ]
     status, text, _ = request(
-        "POST",
-        f"{api}/products/{product_id}/documents",
-        {"directory": "demo/docs"},
-        auth,
+        "POST", documents_url, upload_files(paths[:1]), {"origin": web}
     )
-    expect("index demo/docs", status, text, 201)
-    job = json.loads(text)
-    if job["status"] != "indexed":
-        sys.exit(f"FAIL index demo/docs: status {job['status']}: {job.get('error')}")
+    expect("anonymous upload is refused", status, text, 401)
+    for start in range(0, len(paths), UPLOAD_BATCH):
+        status, text, _ = request(
+            "POST",
+            documents_url,
+            upload_files(paths[start : start + UPLOAD_BATCH]),
+            auth,
+        )
+        expect(f"upload demo/docs from file {start + 1}", status, text, 202)
+
+    deadline = time.monotonic() + INDEX_TIMEOUT_SECONDS
+    while True:
+        status, text, _ = request("GET", documents_url, headers=auth)
+        expect("list documents", status, text, 200)
+        documents = json.loads(text)
+        if all(doc["status"] not in {"queued", "indexing"} for doc in documents):
+            break
+        if time.monotonic() > deadline:
+            sys.exit("FAIL index demo/docs: still indexing after the timeout")
+        time.sleep(2)
+    broken = [(d["title"], d["error"]) for d in documents if d["status"] != "indexed"]
+    if broken or len(documents) != len(paths):
+        sys.exit(
+            f"FAIL index demo/docs: {len(documents)}/{len(paths)} listed, {broken}"
+        )
+    print(f"ok   indexed {len(documents)} documents")
+
+    removed = documents[0]
+    status, text, _ = request(
+        "DELETE", f"{documents_url}/{removed['id']}", headers=auth
+    )
+    expect("delete a document", status, text, 204)
+    status, text, _ = request("GET", documents_url, headers=auth)
+    expect("list documents after delete", status, text, 200)
+    if removed["id"] in {doc["id"] for doc in json.loads(text)}:
+        sys.exit("FAIL delete a document: it is still listed")
 
     for path in (f"/products/{product_id}", f"/products/{product_id}/session"):
         status, text, _ = request("GET", f"{web}{path}", headers=session)

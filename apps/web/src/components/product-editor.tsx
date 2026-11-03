@@ -1,20 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState } from "react";
 
+import { ProductDocuments } from "@/components/product-documents";
 import { ProductForm } from "@/components/product-form";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  apiPath,
-  browserToken,
-  errorDetail,
-  readJson,
-  type IngestJob,
-  type Product,
-} from "@/lib/api/client";
-import { indexedLabel, type ProductLoad } from "@/lib/product";
+import type { Product } from "@/lib/api/client";
+import type { ProductLoad } from "@/lib/product";
 
 const linkClass =
   "text-sm underline underline-offset-4 focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]";
@@ -64,107 +57,9 @@ export function ProductEditor({
             formLabel="Product config"
             onSaved={setProduct}
           />
-          <UploadDocuments apiUrl={apiUrl} productId={product.id} />
+          <ProductDocuments apiUrl={apiUrl} productId={product.id} />
         </>
       ) : null}
     </main>
-  );
-}
-
-function UploadDocuments({
-  apiUrl,
-  productId,
-}: {
-  apiUrl: string;
-  productId: string;
-}) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  function onFiles(event: ChangeEvent<HTMLInputElement>) {
-    setFiles(event.target.files ? Array.from(event.target.files) : []);
-    setMessage(null);
-    setError(null);
-  }
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    setMessage(null);
-    const body = new FormData();
-    for (const file of files) {
-      body.append("files", file);
-    }
-    try {
-      const response = await fetch(
-        apiPath(apiUrl, `/products/${productId}/documents`),
-        {
-          method: "POST",
-          headers: { authorization: `Bearer ${await browserToken()}` },
-          body,
-        },
-      );
-      const payload = (await readJson(response)) as Partial<IngestJob> | null;
-      if (!response.ok) {
-        setError(errorDetail(payload, "Could not upload documents."));
-        return;
-      }
-      if (payload?.status === "failed") {
-        setError(payload.error || "Upload failed.");
-        return;
-      }
-      if (payload?.status !== "indexed" || typeof payload.chunk_count !== "number") {
-        setError("Could not upload documents.");
-        return;
-      }
-      setMessage(indexedLabel(payload.chunk_count));
-    } catch {
-      setError("Could not upload documents.");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <form
-      aria-label="Upload documents"
-      className="flex min-w-0 flex-col gap-4"
-      onSubmit={onSubmit}
-    >
-      <h2 className="text-balance text-sm font-medium text-foreground">Documents</h2>
-      <div className="flex min-w-0 flex-col gap-2">
-        <label htmlFor="document-files" className="text-sm font-medium text-foreground">
-          Files
-        </label>
-        <p id="document-files-hint" className="text-pretty text-sm leading-6 text-muted-foreground">
-          Markdown, HTML, text, or PDF.
-        </p>
-        <Input
-          id="document-files"
-          name="files"
-          type="file"
-          multiple
-          accept=".md,.markdown,.txt,.html,.htm,.pdf"
-          aria-describedby="document-files-hint"
-          onChange={onFiles}
-        />
-      </div>
-      {message ? (
-        <p role="status" className="text-sm text-foreground tabular-nums">
-          {message}
-        </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
-          {error}
-        </p>
-      ) : null}
-      <Button type="submit" disabled={pending || files.length === 0}>
-        Upload documents
-      </Button>
-    </form>
   );
 }
