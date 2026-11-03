@@ -5,7 +5,7 @@ from typing import Any, cast
 import httpx
 import pytest
 from agent_fakes import DesktopFakeRoom, FakeRoom, knowledge_over
-from google.genai import types
+from google.genai import errors, types
 from kb_agent import computer
 from kb_agent.computer import (
     STEP_LIMIT,
@@ -297,6 +297,23 @@ def test_a_helper_error_goes_back_to_the_model() -> None:
     assert response is not None and response.response is not None
     assert response.response == {"error": "desktop.click failed: busy"}
     assert "failed" in api.names()
+
+
+def test_a_gemini_outage_ends_the_task_and_says_so() -> None:
+    room = DesktopFakeRoom()
+
+    async def unavailable(contents: list[types.Content]) -> types.Content:
+        raise errors.ServerError(503, {"error": {"message": "Deadline expired"}})
+
+    said, _ = run_task(room, cast(Script, unavailable))
+
+    assert said.startswith("The task stopped because something failed (ServerError)")
+    assert room.actions() == []
+    assert published(room, "computer")[-1] == {
+        "kind": "ended",
+        "task": published(room, "computer")[-1]["task"],
+        "reason": "failed",
+    }
 
 
 def test_an_audit_log_that_cannot_record_stops_the_task_before_it_acts() -> None:

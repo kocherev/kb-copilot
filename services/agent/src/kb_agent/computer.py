@@ -13,7 +13,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import uuid4
 
 import httpx
-from google.genai import Client, types
+from google.genai import Client, errors, types
 from livekit import rtc
 from pydantic import ValidationError
 
@@ -442,7 +442,13 @@ class ComputerTask:
         said = "The task stopped."
         try:
             outcome, said = await self.steps(goal, passages)
-        except (httpx.HTTPError, rtc.RpcError, TimeoutError, RuntimeError) as exc:
+        except (
+            httpx.HTTPError,
+            errors.APIError,
+            rtc.RpcError,
+            TimeoutError,
+            RuntimeError,
+        ) as exc:
             said = (
                 f"The task stopped because something failed ({type(exc).__name__})."
                 " Nothing more was done."
