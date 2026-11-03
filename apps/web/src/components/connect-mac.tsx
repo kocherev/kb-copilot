@@ -8,7 +8,7 @@ import { InlineError } from "@/components/ui/inline-error";
 import { Spinner } from "@/components/ui/spinner";
 import { browserApi, errorDetail } from "@/lib/api/client";
 
-export function helperCommand(url: string, token: string): string {
+function helperCommand(url: string, token: string): string {
   return `uv run --package kb-desktop kb-desktop --url ${url} --token ${token}`;
 }
 

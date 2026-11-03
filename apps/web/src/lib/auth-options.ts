@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { requireAuthSecret } from "@/lib/auth-secret";
 
 // The API checks this audience on every JWT.
-export const API_AUDIENCE = "kb-api";
+const API_AUDIENCE = "kb-api";
 
 // Instrumentation and route handlers load this module in separate bundles.
 const shared = globalThis as typeof globalThis & { kbAuthPool?: Pool };

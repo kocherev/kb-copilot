@@ -8,7 +8,7 @@ import { productLoad, type ProductLoad } from "@/lib/product";
 import { replayLoad, type ReplayLoad } from "@/lib/replay";
 
 // Inside Compose the browser's API URL points at the web container itself.
-export function serverApiUrl(): string {
+function serverApiUrl(): string {
   return process.env.API_INTERNAL_URL ?? publicApiUrl();
 }
 

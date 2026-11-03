@@ -10,7 +10,6 @@ export type SessionGrant = components["schemas"]["SessionGrant"];
 export type SessionSummary = components["schemas"]["SessionSummary"];
 export type Replay = components["schemas"]["Replay"];
 export type Turn = components["schemas"]["Turn"];
-export type IngestJob = components["schemas"]["IngestJob"];
 export type Escalation = components["schemas"]["Escalation"];
 export type LinearStatus = components["schemas"]["LinearStatus"];
 

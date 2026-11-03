@@ -10,7 +10,7 @@ export const COMPUTER_DECISION_TOPIC = "computer-decision";
 
 // point is a highlight. about-to-click comes from a proposal waiting for the
 // user. clicking means the agent is clicking there on the user's computer.
-export type CursorKind = "point" | "about-to-click" | "clicking";
+type CursorKind = "point" | "about-to-click" | "clicking";
 
 export type HudPoint = { kind: CursorKind; x: number; y: number; label: string };
 
