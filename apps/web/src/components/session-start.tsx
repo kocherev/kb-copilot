@@ -117,7 +117,7 @@ export function SessionStart({
 
   if (session) {
     return (
-      <main className="mx-auto flex w-full max-w-[1080px] min-w-0 flex-col gap-5 overflow-x-clip px-4 pt-5 pb-28 animate-enter sm:px-8 lg:pb-10">
+      <main className="mx-auto flex w-full max-w-[1080px] min-w-0 flex-col gap-5 overflow-x-clip px-4 pt-5 pb-28 transition-opacity duration-(--duration-enter) ease-out starting:opacity-0 sm:px-8 lg:pb-10">
         <header className="flex min-w-0 flex-col gap-1">
           <Link
             href={back.href}

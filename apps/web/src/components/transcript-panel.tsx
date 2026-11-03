@@ -62,7 +62,7 @@ export function TranscriptPanel({
           </p>
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-col-reverse overflow-y-auto overscroll-contain">
+      <div className="flex min-h-0 flex-col-reverse overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,transparent,black_0.75rem)]">
         <ol
           role="log"
           aria-label="Conversation"

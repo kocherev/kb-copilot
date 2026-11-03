@@ -16,6 +16,8 @@ const TIP = { x: (SIZE * 5) / 24, y: (SIZE * 2) / 24 };
 const TAG = { x: SIZE * 0.62, y: SIZE * 0.72 };
 // Past these fractions the tag would leave the picture, so it flips.
 const FLIP = { x: 0.7, y: 0.8 };
+const TAG_MAX_WIDTH = 192;
+const TAG_MIN_WIDTH = 96;
 
 // Adapted from the Figma Cursor snippet in Cursor Lab. See NOTICE.md.
 function Arrow() {
@@ -145,8 +147,13 @@ export function AgentCursor({
         <Arrow />
         <p
           data-testid="agent-cursor-tag"
-          className="absolute w-max max-w-48 rounded-lg bg-[var(--hui-color-background-accent-emphasis)] px-2 py-1 text-xs leading-4 text-[var(--hui-color-foreground-accent-emphasis)] shadow-[0_1px_2px_rgb(0_0_0/0.2),0_4px_12px_rgb(0_0_0/0.15)] [overflow-wrap:anywhere]"
+          className="absolute w-max rounded-lg bg-[var(--hui-color-background-accent-emphasis)] px-2 py-1 text-xs leading-4 text-[var(--hui-color-foreground-accent-emphasis)] shadow-[0_1px_2px_rgb(0_0_0/0.2),0_4px_12px_rgb(0_0_0/0.15)] [overflow-wrap:anywhere]"
           style={{
+            // On a narrow stage the tag wraps instead of running out of the picture.
+            maxWidth: Math.max(
+              TAG_MIN_WIDTH,
+              Math.min(TAG_MAX_WIDTH, flipX ? at.x * frame.width - 6 : (1 - at.x) * frame.width - TAG.x - 4),
+            ),
             ...(flipX ? { right: 6 } : { left: TAG.x }),
             ...(flipY ? { bottom: 10 } : { top: TAG.y }),
           }}

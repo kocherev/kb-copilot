@@ -160,3 +160,19 @@ test("a plain point has no ring", () => {
 
   expect(screen.queryByTestId("agent-cursor-ring")).toBeNull();
 });
+
+test("on a narrow stage the tag narrows to the space left in the picture", () => {
+  const point: HudPoint = { kind: "point", x: 0.6, y: 0.5, label: "Update card" };
+  const narrow = { width: 300, height: 169 };
+  const view = render(
+    <AgentCursor name="Mina" point={point} thinking={false} container={narrow} video={narrow} />,
+  );
+  const width = () => parseFloat(screen.getByTestId("agent-cursor-tag").style.maxWidth);
+
+  expect(width()).toBeCloseTo(300 * 0.4 - (22 * 0.62) - 4);
+
+  view.rerender(
+    <AgentCursor name="Mina" point={point} thinking={false} container={container} video={video} />,
+  );
+  expect(width()).toBe(192);
+});

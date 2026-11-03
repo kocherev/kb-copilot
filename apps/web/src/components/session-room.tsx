@@ -159,15 +159,17 @@ function presence(
 function PresenceLine({ presence: { text, Icon, live }, speaking }: { presence: Presence; speaking: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <span
-        aria-hidden
-        className={`grid size-9 shrink-0 place-items-center rounded-full transition-[background-color,color] duration-200 ease-out ${speaking ? "bg-primary text-primary-foreground" : live ? "bg-primary-soft text-primary-soft-foreground" : "bg-surface-sunken text-muted-foreground"}`}
-      >
-        <Icon
-          key={text}
-          className="size-4 animate-enter [--motion-y:3px] motion-reduce:[--motion-y:0px]"
-        />
-      </span>
+      {text === "" ? null : (
+        <span
+          aria-hidden
+          className={`grid size-9 shrink-0 place-items-center rounded-full transition-[background-color,color] duration-200 ease-out ${speaking ? "bg-primary text-primary-foreground" : live ? "bg-primary-soft text-primary-soft-foreground" : "bg-surface-sunken text-muted-foreground"}`}
+        >
+          <Icon
+            key={text}
+            className="size-4 animate-enter [--motion-y:3px] motion-reduce:[--motion-y:0px]"
+          />
+        </span>
+      )}
       <p role="status" aria-label="Agent" className="min-w-0 text-sm font-medium text-foreground">
         {text}
       </p>
@@ -221,6 +223,9 @@ function StagePlaceholder({
   if (state === "disconnected") {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <span className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary-soft-foreground max-sm:hidden">
+          <PhoneOff aria-hidden className="size-5" />
+        </span>
         <p className="font-display text-xl/tight text-foreground">Session ended</p>
         <p className="max-w-[40ch] text-meta text-pretty text-muted-foreground">
           The transcript stays on this page until you leave.
@@ -297,10 +302,12 @@ function ScreenStage({
           />
         </div>
       </ScreenGlow>
-      <p className="text-meta text-pretty text-muted-foreground">
-        {agentName}&rsquo;s pointer is drawn on this preview. It moves your mouse only for a
-        step you allow.
-      </p>
+      {shared && state !== "disconnected" ? (
+        <p className="text-meta text-pretty text-muted-foreground">
+          {agentName}&rsquo;s pointer is drawn on this preview. It moves your mouse only for a
+          step you allow.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -485,7 +492,7 @@ function SessionBody({
   return (
     <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start">
       <div className="flex min-w-0 flex-col gap-4">
-        <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <div className="flex min-w-0 items-center justify-between gap-3">
           <PresenceLine
             presence={presence(agentName, connected, agentPresent, shared !== undefined, assistant.state)}
             speaking={connected && agentPresent && assistant.state === "speaking"}
@@ -523,12 +530,14 @@ function SessionBody({
         {proposals.map((proposal) => (
           <HandoffCard key={proposal.id} apiUrl={apiUrl} agentName={agentName} proposal={proposal} />
         ))}
-        <ConnectMac
-          apiUrl={apiUrl}
-          room={roomName}
-          agentName={agentName}
-          connected={helperConnected}
-        />
+        {ended ? null : (
+          <ConnectMac
+            apiUrl={apiUrl}
+            room={roomName}
+            agentName={agentName}
+            connected={helperConnected}
+          />
+        )}
         <TranscriptPanel lines={lines} agentName={agentName} />
       </aside>
     </div>

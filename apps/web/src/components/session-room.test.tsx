@@ -204,6 +204,7 @@ test("end session leaves the room, and an ended room offers a new one", () => {
   live.state = "disconnected";
   renderRoom(onRestart);
   expect(screen.queryByRole("button", { name: "End session" })).toBeNull();
+  expect(screen.queryByRole("region", { name: "Your Mac" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "New session" }));
   expect(onRestart).toHaveBeenCalledOnce();
 });
