@@ -63,9 +63,12 @@ def test_answers_are_written_in_the_judge_format_with_cited_passage_ids(
 
     [line] = (tmp_path / "runs" / "answers.jsonl").read_text().splitlines()
     row = json.loads(line)
-    assert set(row) == {"id", "answer", "cited_passage_ids"}
+    assert set(row) == {"id", "answer", "cited_passage_ids", "passages"}
     assert row["id"] == "c1"
-    assert len(row["cited_passage_ids"]) == 1
+    [seen] = row["passages"]
+    assert row["cited_passage_ids"] == [seen["id"]]
+    assert seen["source"] == "refunds.md"
+    assert seen["text"] == REFUNDS.text
     system, contents = prompts[0]
     assert "Call search_kb before you answer" in system
     assert [(c.role, (c.parts or [])[0].text) for c in contents] == [

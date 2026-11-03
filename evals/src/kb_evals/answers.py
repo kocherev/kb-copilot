@@ -2,7 +2,8 @@
 
 The model gets the agent's system prompt and the agent's tools, with search_kb
 over the demo index. It answers in text, because the Live model only streams
-audio. Cited passages are chosen the way the live agent chooses them.
+audio. Cited passages are chosen the way the live agent chooses them. Each row
+records the passages its searches returned, which the judges grade against.
 """
 
 import argparse
@@ -119,7 +120,14 @@ async def answer(
     cited = await supported_ids(
         retriever.client, PRODUCT_ID, text, list(seen), settings=retriever.settings
     )
-    return {"id": case.id, "answer": text, "cited_passage_ids": cited}
+    return {
+        "id": case.id,
+        "answer": text,
+        "cited_passage_ids": cited,
+        "passages": [
+            {"id": p.id, "source": p.source, "text": p.text} for p in seen.values()
+        ],
+    }
 
 
 async def write_answers(
