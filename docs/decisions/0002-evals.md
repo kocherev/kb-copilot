@@ -41,7 +41,7 @@ Answer quality needs a model to grade it. The harness has four binary judges, on
 
 Verdicts are requested as JSON through a structured-output schema, at low effort. The brief asked for temperature 0. The current Messages API rejects sampling parameters on every model, so there is none; the schema and the binary question keep verdicts stable enough to calibrate.
 
-The judge model is pinned to `claude-sonnet-5-5` and set by `KB_JUDGE_MODEL`. Each run file records the model id and `PROMPT_VERSION`, so two runs are comparable only when both match.
+The judge model is pinned to `claude-haiku-5-5` and set by `KB_JUDGE_MODEL`. Each run file records the model id and `PROMPT_VERSION`, so two runs are comparable only when both match.
 
 The agent speaks with Gemini. The judge is a different model family on purpose: a model grading its own family's output tends to prefer it, and shared blind spots pass unnoticed.
 

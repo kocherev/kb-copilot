@@ -1,4 +1,5 @@
 import { errorDetail, type SessionGrant } from "@/lib/api/client";
+import type { Citations, CitedPassage } from "@/lib/protocol";
 
 export type SessionLoad =
   | { status: "ready"; session: SessionGrant }
@@ -8,7 +9,7 @@ export type TranscriptLine = {
   id: string;
   speaker: string;
   text: string;
-  sources: string[];
+  citations: CitedPassage[];
 };
 
 export const sessionPublish = {
@@ -16,66 +17,6 @@ export const sessionPublish = {
   video: false,
   screen: true,
 } as const;
-
-export const HUD_TOPIC = "hud";
-
-export type HudPoint = {
-  x: number;
-  y: number;
-  label: string;
-};
-
-export type HudState = {
-  thinking: boolean;
-  point: HudPoint | null;
-};
-
-export const emptyHud: HudState = { thinking: false, point: null };
-
-function unit(value: number): number {
-  if (value < 0) {
-    return 0;
-  }
-  if (value > 1) {
-    return 1;
-  }
-  return value;
-}
-
-export function applyHudMessage(state: HudState, raw: string): HudState {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return state;
-  }
-  if (typeof parsed !== "object" || parsed === null) {
-    return state;
-  }
-  const record = parsed as Record<string, unknown>;
-  if (record.kind === "thinking" && typeof record.active === "boolean") {
-    return { ...state, thinking: record.active };
-  }
-  if (
-    record.kind === "point" &&
-    typeof record.x === "number" &&
-    Number.isFinite(record.x) &&
-    typeof record.y === "number" &&
-    Number.isFinite(record.y) &&
-    typeof record.label === "string" &&
-    record.label.trim().length > 0
-  ) {
-    return {
-      ...state,
-      point: {
-        x: unit(record.x),
-        y: unit(record.y),
-        label: record.label.trim(),
-      },
-    };
-  }
-  return state;
-}
 
 export function sessionLoad(
   status: number,
@@ -107,39 +48,48 @@ export function sourceLabel(source: string): string {
   return name && name.length > 0 ? name : cleaned;
 }
 
-function splitAnswer(text: string): { text: string; sources: string[] } {
-  const sources: string[] = [];
-  const body: string[] = [];
-  for (const line of text.split("\n")) {
-    const match = /^Source:\s+(\S.*)$/.exec(line.trim());
-    const source = match?.[1]?.trim();
-    if (source) {
-      if (!sources.includes(source)) {
-        sources.push(source);
-      }
-      continue;
-    }
-    body.push(line);
+// The values of livekit-client's ConnectionState.
+export function connectionLabel(state: string): string {
+  switch (state) {
+    case "connected":
+      return "In the room";
+    case "reconnecting":
+    case "signalReconnecting":
+      return "Connection lost. Reconnecting";
+    case "disconnected":
+      return "Session ended";
+    default:
+      return "Connecting";
   }
-  return { text: body.join("\n").trim(), sources };
 }
 
+function normalized(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+// A citations message names the assistant message it supports by its text.
+// The transcript stream ids are not message ids, so the text is the join key.
 export function transcriptLines(
   items: {
     text: string;
     participantInfo: { identity: string };
     streamInfo: { id: string };
   }[],
+  citations: Citations[] = [],
 ): TranscriptLine[] {
+  const byText = new Map(
+    citations.map((found) => [normalized(found.text), found.passages]),
+  );
   return items
     .map((item) => {
-      const answer = splitAnswer(item.text);
+      const speaker = speakerLabel(item.participantInfo.identity);
+      const text = item.text.trim();
       return {
         id: item.streamInfo.id,
-        speaker: speakerLabel(item.participantInfo.identity),
-        text: answer.text,
-        sources: answer.sources,
+        speaker,
+        text,
+        citations: speaker === "Agent" ? (byText.get(normalized(text)) ?? []) : [],
       };
     })
-    .filter((line) => line.text.length > 0 || line.sources.length > 0);
+    .filter((line) => line.text.length > 0);
 }

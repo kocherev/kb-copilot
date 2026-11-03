@@ -142,7 +142,9 @@ services:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:-replace-me}
       QDRANT_URL: http://qdrant:6333
       QDRANT_API_KEY: ${QDRANT_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      KB_VOICE: ${KB_VOICE:-Puck}
+      AGENT_MAX_SESSION_SECONDS: ${AGENT_MAX_SESSION_SECONDS:-600}
     depends_on:
       api:
         condition: service_healthy
