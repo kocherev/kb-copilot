@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { connection } from "next/server";
 
 import { apiClient, publicApiUrl, type ApiClient, type Product } from "@/lib/api/client";
 import { auth } from "@/lib/auth";
@@ -11,6 +12,10 @@ export function serverApiUrl(): string {
 }
 
 export async function serverApi(): Promise<ApiClient> {
+  // openapi-fetch draws a Math.random request id, which Next refuses in a
+  // prerender. headers() alone does not stop one: partial prefetching resolves
+  // session data in the shell.
+  await connection();
   const requestHeaders = await headers();
   return apiClient(serverApiUrl(), async () => {
     const { token } = await auth.api.getToken({ headers: requestHeaders });

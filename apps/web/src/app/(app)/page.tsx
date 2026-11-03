@@ -1,4 +1,3 @@
-import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { HomePage, type HomeData } from "@/components/home-page";
@@ -20,8 +19,6 @@ async function HomeRoute() {
 // ponytail: one documents request per product; add counts to GET /products
 // if an org grows past a few dozen products.
 async function loadHome(): Promise<HomeData | null> {
-  // The API client draws a random request id, which a prerender may not do.
-  await connection();
   try {
     const api = await serverApi();
     const [products, sessions] = await Promise.all([api.GET("/products"), api.GET("/sessions")]);
