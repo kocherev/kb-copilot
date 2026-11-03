@@ -58,23 +58,27 @@ def component_latency(metric: object) -> dict[str, object] | None:
     return None
 
 
-def turn_latency(role: str, metrics: Mapping[str, object]) -> dict[str, object] | None:
+def turn_stages(role: str, metrics: Mapping[str, object]) -> dict[str, int]:
+    """The stage timings of one turn, in milliseconds."""
+    stages: dict[str, int] = {}
     if role == "user":
-        record: dict[str, object] = {"kind": "turn", "role": "user"}
-        _copy_ms(record, metrics, "transcription_delay", "transcription_delay_ms")
-        _copy_ms(record, metrics, "end_of_turn_delay", "end_of_turn_delay_ms")
-        return record
-    if role == "assistant":
-        record = {"kind": "turn", "role": "assistant"}
-        _copy_ms(record, metrics, "llm_node_ttft", "llm_ttft_ms")
-        _copy_ms(record, metrics, "tts_node_ttfb", "tts_ttfb_ms")
-        _copy_ms(record, metrics, "e2e_latency", "e2e_latency_ms")
-        return record
-    return None
+        _copy_ms(stages, metrics, "transcription_delay", "transcription_delay_ms")
+        _copy_ms(stages, metrics, "end_of_turn_delay", "end_of_turn_delay_ms")
+    elif role == "assistant":
+        _copy_ms(stages, metrics, "llm_node_ttft", "llm_ttft_ms")
+        _copy_ms(stages, metrics, "tts_node_ttfb", "tts_ttfb_ms")
+        _copy_ms(stages, metrics, "e2e_latency", "e2e_latency_ms")
+    return stages
+
+
+def turn_latency(role: str, metrics: Mapping[str, object]) -> dict[str, object] | None:
+    if role not in ("user", "assistant"):
+        return None
+    return {"kind": "turn", "role": role, **turn_stages(role, metrics)}
 
 
 def _copy_ms(
-    record: dict[str, object],
+    record: dict[str, int],
     metrics: Mapping[str, object],
     source: str,
     dest: str,
