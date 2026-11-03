@@ -4,19 +4,19 @@ This process speaks MCP over stdio. `search_kb` calls `search` in `packages/rag`
 
 ## Run
 
-Start Postgres, Qdrant, and the API:
-
-```bash
-docker compose up --build
-```
-
-Create a product and upload its documents, as described in the repository README. From the repo root:
+Start the stack, then create a product and upload its documents, as in the Quickstart of the repository README. The product id is the UUID the API returned. From the repo root:
 
 ```bash
 uv run --package kb-mcp kb-mcp
 ```
 
-The process waits on stdin. `QDRANT_URL` defaults to `http://localhost:6333`. `QDRANT_API_KEY` is sent when set. `API_URL` defaults to `http://localhost:8000`.
+The process waits on stdin. It needs Python 3.12 and uv on the host. The first `search_kb` call downloads the embedding models, about 1.2 GB, unless they are already cached. Set `FASTEMBED_CACHE_PATH` to choose where.
+
+| Variable | Default | Used by |
+| --- | --- | --- |
+| `QDRANT_URL` | `http://localhost:6333` | `search_kb`. Change it when you changed `QDRANT_PORT` |
+| `QDRANT_API_KEY` | none | `search_kb`, sent when set |
+| `API_URL` | `http://localhost:8000` | `get_product`. Change it when you changed `API_PORT` |
 
 ## Connect a client
 
@@ -44,4 +44,10 @@ The client starts the process. Stdout is the protocol. Set the project directory
 }
 ```
 
+## Tools
+
 `search_kb` takes `query` and `product_id`. It returns `chunks` (source, title, anchor, text, score), `sources`, and `abstained` for that product only. `abstained` is true and `chunks` is empty when no passage clears the abstain threshold. A malformed product id, or one with no indexed documents, is a tool error. `get_product` takes `product_id` and returns the stored name, description, tone, and refusal rules.
+
+## Known limit: `get_product` returns 401
+
+The API requires a sign-in for `GET /products/{id}`. A service may instead send the header `X-Internal-Token` with the API's `INTERNAL_API_TOKEN`, which the agent does. This server sends no credentials and does not read `INTERNAL_API_TOKEN`, so `get_product` returns the tool error `product config returned 401` on the current code. `search_kb` does not call the API and is not affected.
