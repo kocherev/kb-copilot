@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import spec from "../../openapi.json";
 import { errorDetail } from "@/lib/api/client";
-import { indexedLabel, productLoad, voices } from "@/lib/product";
+import { fileSize, indexedLabel, productLoad, voices } from "@/lib/product";
 
 const product = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -15,8 +15,14 @@ const product = {
 };
 
 test("indexed label matches the chunk count", () => {
-  expect(indexedLabel(1)).toBe("Indexed 1 chunk.");
-  expect(indexedLabel(2)).toBe("Indexed 2 chunks.");
+  expect(indexedLabel(1)).toBe("1 section");
+  expect(indexedLabel(2)).toBe("2 sections");
+});
+
+test("file size reads in KB under a megabyte and never rounds to zero", () => {
+  expect(fileSize(10)).toBe("1 KB");
+  expect(fileSize(5_000)).toBe("5 KB");
+  expect(fileSize(2_200_000)).toBe("2.1 MB");
 });
 
 test("product load maps not found, errors, and a saved product", () => {

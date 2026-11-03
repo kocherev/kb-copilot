@@ -36,20 +36,21 @@ test("saves config and shows the product's documents", async () => {
   const heading = await screen.findByRole("heading", { level: 1 });
   expect(heading.textContent).toBe(product.name);
   expect(heading.className).toMatch(/anywhere/);
-  expect(screen.getByRole("link", { name: "New product" }).getAttribute("href")).toBe(
-    "/",
-  );
+  expect(screen.getByRole("link", { name: "All products" }).getAttribute("href")).toBe("/");
   expect(screen.getByRole("link", { name: "Start session" }).getAttribute("href")).toBe(
     `/products/${product.id}/session`,
   );
-  expect(await screen.findByText("No documents yet.")).toBeDefined();
+  expect(screen.getByRole("region", { name: "Knowledge" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "Agent" })).toBeDefined();
+  expect(screen.getByRole("region", { name: "Sessions" })).toBeDefined();
+  expect(await screen.findByText("No documents yet")).toBeDefined();
 
   fireEvent.change(screen.getByLabelText("Name"), {
     target: { value: "Acme Care" },
   });
   fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "Mina" } });
   fireEvent.change(screen.getByLabelText("Voice"), { target: { value: "Puck" } });
-  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
   expect(
     await screen.findByRole("heading", { level: 1, name: "Acme Care" }),
@@ -66,18 +67,29 @@ test("saves config and shows the product's documents", async () => {
     agent_name: "Mina",
     voice: "Puck",
   });
-  const listed = calls.find((call) => call.method === "GET");
-  expect(listed?.url).toBe(`http://localhost:8000/products/${product.id}/documents`);
+  expect(calls.map((call) => call.url)).toContain(
+    `http://localhost:8000/products/${product.id}/documents`,
+  );
 });
 
-test("missing product says it was not found", async () => {
+test("missing product says it was not found and links back", async () => {
   const loaded: ProductLoad = { status: "missing" };
   render(<ProductEditor apiUrl="http://localhost:8000" loaded={loaded} />);
 
-  expect(await screen.findByText("Product not found.")).toBeDefined();
-  expect(screen.getByText("Product not found.").className).toMatch(/leading-6/);
-  expect(screen.getByRole("link", { name: "New product" }).getAttribute("href")).toBe(
-    "/",
+  expect(await screen.findByText("Product not found")).toBeDefined();
+  expect(screen.getByRole("link", { name: "All products" }).getAttribute("href")).toBe("/");
+  expect(screen.queryByLabelText("Name")).toBeNull();
+});
+
+test("a product that failed to load says why and offers to try again", () => {
+  render(
+    <ProductEditor
+      apiUrl="http://localhost:8000"
+      loaded={{ status: "error", message: "Could not load the product." }}
+    />,
   );
+
+  expect(screen.getByRole("alert").textContent).toContain("Could not load the product.");
+  expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
   expect(screen.queryByLabelText("Name")).toBeNull();
 });
