@@ -80,7 +80,7 @@ export function ProductEditor({
         />
         <Section
           title="Agent"
-          description={`How ${product.agent_name} sounds and what it won’t do.`}
+          description={`${product.agent_name}’s voice, tone and limits.`}
           className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
         >
           <Surface>

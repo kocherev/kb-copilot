@@ -115,7 +115,7 @@ function Searches({ turn }: { turn: Turn }) {
             <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-control px-3 py-2 text-sm outline-none transition-colors duration-150 ease-out hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
               <ChevronRight
                 aria-hidden
-                className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-open:rotate-90"
+                className="size-3.5 shrink-0 text-muted-foreground transition-transform duration-150 ease-out group-open:rotate-90 motion-reduce:transition-none"
               />
               <Search aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 text-foreground [overflow-wrap:anywhere]">
@@ -370,7 +370,7 @@ export function SessionReplay({
         <EmptyState
           icon={MessageSquareDashed}
           title="Nothing to replay"
-          description={`No one spoke in this session, so ${agentName} has nothing to show. A session records once someone talks.`}
+          description={`No one spoke in this session, so there is nothing to show. Start a session and talk to ${agentName} to record one.`}
           action={
             <Button variant="outline" render={<Link href={`/products/${productId}/session`} />}>
               Start a session
