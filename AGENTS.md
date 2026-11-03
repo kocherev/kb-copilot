@@ -7,9 +7,9 @@ Read this before changing the repository. It is enough to install, test, and sco
 | Path | What it is |
 | --- | --- |
 | `apps/web` | Next.js App Router app. Better Auth sign-in, product config, upload, and the LiveKit session. |
-| `apps/desktop` | macOS helper that joins a session room and performs mouse and keyboard actions over LiveKit RPC. The agent does not call it yet. |
+| `apps/desktop` | macOS helper that joins a session room, sends screenshots, draws the agent cursor, and performs the mouse and keyboard actions the user approves, over LiveKit RPC. |
 | `services/api` | FastAPI. Products, documents, the ingest queue, API keys, and `POST /sessions`. Verifies Better Auth JWTs. |
-| `services/agent` | LiveKit worker `kb-support`. Gemini Live voice and vision, `search_kb`, `point_at`. Loads no embedding model: it calls the API. |
+| `services/agent` | LiveKit worker `kb-support`. Gemini Live voice and vision, `search_kb`, `point_at`, `handoff_to_human`, `operate_computer`. Loads no embedding model: it calls the API. |
 | `services/mcp` | stdio MCP server for `search_kb` and `get_product`. |
 | `packages/rag` | Parse, chunk, embed, and hybrid query. No HTTP and no Postgres. |
 | `evals` | `make eval`. Dataset, scorers, `evals/thresholds.json`, and the live answer and judge harness. |
@@ -19,7 +19,7 @@ Read this before changing the repository. It is enough to install, test, and sco
 
 Postgres stores products, documents (with the uploaded bytes until they are indexed), ingest jobs, API keys, live sessions, the audit log, and the session rate limit. Better Auth keeps its own tables in the same database. Qdrant stores chunks in `kb_chunks` with `product_id`, `source`, `title`, `anchor`, and `text`. `source` is `upload://<name>` for an API upload, or a path relative to the directory for `read_directory`, which the evals and the selfcheck use. The worker logs latency as JSON on stdout. It does not write a turn table.
 
-Auth: every product, document, session, and API-key route needs `Authorization: Bearer`, either a Better Auth JWT from `GET /api/auth/token` on the web app or an org API key that starts with `kb_`. `GET /products/{id}` also accepts the `X-Internal-Token` header with `INTERNAL_API_TOKEN`, which the agent sends. The agent also calls `POST /internal/search` and `POST /internal/citations` with it. The API process holds the only embedding models. `GET /health` is open. Uploads are multipart `POST /products/{id}/documents`, answered with 202. A loop in the API process indexes them.
+Auth: every product, document, session, and API-key route needs `Authorization: Bearer`, either a Better Auth JWT from `GET /api/auth/token` on the web app or an org API key that starts with `kb_`. `GET /products/{id}` also accepts the `X-Internal-Token` header with `INTERNAL_API_TOKEN`, which the agent sends. The agent also calls `POST /internal/search`, `POST /internal/citations`, and `POST /internal/desktop-actions` with it. The API process holds the only embedding models. `GET /health` is open. Uploads are multipart `POST /products/{id}/documents`, answered with 202. A loop in the API process indexes them.
 
 ## Commands
 

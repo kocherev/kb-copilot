@@ -59,3 +59,53 @@ macOS has to allow the terminal that starts the helper under System Settings > P
 - Scroll direction and horizontal scroll were not tried on a live window. No test posts an event.
 - A new agent participant in the room is trusted like `kb-support`. Only `kb-support` is dispatched today.
 - The agent worker may treat the helper as a user to listen to when it joins first. The tool that wires this has to pin the agent to the user's identity.
+
+## Addendum, 2026-11-03: the agent tool, approvals, screenshots, and the cursor
+
+The agent tool and the approval step are built. Three decisions above changed: the helper now takes screenshots, it needs Screen Recording, and the agent pins the user's identity.
+
+### The loop
+
+`operate_computer(goal)` on `SupportAgent` is available only when the dispatch named a signed-in user (`user:<id>`) and `desktop:<id>` is in the room. Otherwise it tells the model to guide with `point_at`. The prompt has the agent say what it will do and ask before it calls the tool.
+
+1. The agent searches the docs for the goal through `POST /internal/search` and passes the passages as reference text.
+2. The helper sends a screenshot. `gemini-3.8-flash` with `ComputerUse(environment=ENVIRONMENT_DESKTOP)` and a custom `yield_to_user` function returns the next call. The predefined actions the helper cannot run (`triple_click`, `middle_click`, `mouse_down`, `mouse_up`, `move`, `drag_and_drop`, `key_down`, `key_up`) are excluded. Other unknown calls go back to the model as an error.
+3. The agent publishes an `ActionProposal` on the `computer` topic, audits it, and moves the cursor to `about-to-click`.
+4. It waits up to 60 seconds for a `Decision` on `computer-decision`: `once`, `task` (allow the rest of this task), or `stop`. Only the participant named in the dispatch counts. A message from anyone else, a malformed one, or one for a proposal this task did not make is ignored.
+5. On approval it publishes a `clicking` point on `hud`, sets the native cursor to `clicking`, calls the helper, and sends the result to the model with a fresh screenshot.
+6. It stops on `yield_to_user`, `stop`, a timeout, a blocked safety decision, an error, or after ten model turns. It then hides the cursor and publishes `ended`.
+
+A call whose `safety_decision` is `require_confirmation` always waits for the user, even after `task`, and the tray shows the explanation. The function response then carries `safety_acknowledgement: true`. A decision containing `block` ends the task.
+
+Each proposal, decision, performed or failed action, and the end is written through `POST /internal/desktop-actions` to the audit log as `desktop.<event>` on the session. If the API does not record a step, the task stops before it acts.
+
+The proposal's answer slot exists from the moment it is published. A live run showed the user can answer while the agent is still auditing and moving the cursor, and that answer was lost when the slot was made only on wait.
+
+### Coordinates
+
+The Computer Use page says both "pixel coordinates" and "normalized 1000x1000". A live call settled it: on the 1280 by 720 billing fixture, the model returned `click(x=322, y=528)` for the Update card button centred at 412, 380, which is 322 and 528 on a 0 to 999 grid. The proposal sends `x / 1000` and `y / 1000` to the page. The helper maps the grid to logical points as before.
+
+### Screenshots
+
+The agent's video frames come from the browser's screen share at a sampled rate and resolution, and the share may be a window. Computer Use needs the full display at the moment of each step, so the helper captures it with ScreenCaptureKit, scaled to fit 1440 by 900 (the size the Computer Use page recommends) and never up. An RPC reply holds at most 15 KiB, so `desktop.screenshot` takes a `stream_id` from the agent and sends the PNG to the caller as a LiveKit byte stream with that id. The agent accepts a stream only from the helper's identity. The capture leaves out the helper's own windows, so the model does not see the cursor overlay.
+
+The helper now needs Screen Recording. It checks with `CGPreflightScreenCaptureAccess`, which asks nothing, and when it is missing it calls `CGRequestScreenCaptureAccess` once, prints the path, and exits 1.
+
+### The cursor on the real screen
+
+`desktop.cursor` sets the native cursor: a borderless, click-through window at overlay level, on every space, with sharing type none. `cursor.py` computes each frame (glide, pulse, ripple, and the time each state stays up) without AppKit, and `overlay.py` draws it. The asyncio loop runs on the main thread and pumps AppKit at 60 frames a second, so there is no second thread. The web cursor gained the same two states: `about-to-click` comes from a pending proposal and stays until the user decides, and `clicking` comes from a `hud` message and fades like a point.
+
+### Who the agent listens to
+
+`POST /sessions` now sends `{"product_id", "user"}` as dispatch metadata, where `user` is the token identity. The worker passes it as `RoomOptions(participant_identity=...)`, so a helper that joins first is never taken for the user, and the same identity is the only one whose decisions count.
+
+### The flaky live test
+
+The test sometimes failed with 4001 for the agent itself. The server announces a joining participant once its connection is up, which took 3.0 s on a local dev server in six runs out of six, and the agent's first RPC arrived before that. The helper now waits up to 5 s for an unknown caller before refusing. Ten runs in a row passed after the change.
+
+## Limits after the addendum
+
+- The helper still trusts the agent. A broken agent could act without approval. Having the helper ask the page would close that.
+- The screenshot capture and the native overlay have not run against a real screen in CI or in development without Screen Recording. Their drawing and PNG encoding are tested off screen.
+- Every screenshot of a task stays in the model's context. Ten steps is about eleven images.
+- A browser that shares the screen with ScreenCaptureKit may still show the overlay in the preview.
