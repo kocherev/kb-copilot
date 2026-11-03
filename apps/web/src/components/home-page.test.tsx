@@ -2,8 +2,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { Activity } from "react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import { HomePage } from "@/components/home-page";
+import { HomePage, type HomeData } from "@/components/home-page";
 import { TEST_JWT, stubApi } from "@/test/api-stub";
+
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const draft = {
   name: "Acme",
@@ -17,9 +21,18 @@ const draft = {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
+const productId = "11111111-1111-4111-8111-111111111111";
+const empty: HomeData = { products: [], documentCounts: {}, sessions: [] };
+
+function openCreateForm() {
+  fireEvent.click(screen.getAllByRole("button", { name: "New product" })[0]);
+}
+
 function fillCreateForm() {
+  openCreateForm();
   fireEvent.change(screen.getByLabelText("Name"), {
     target: { value: draft.name },
   });
@@ -38,49 +51,80 @@ function fillCreateForm() {
   fireEvent.change(screen.getByLabelText("Voice"), { target: { value: draft.voice } });
 }
 
-test("home page explains the flow without operator links", () => {
-  render(<HomePage apiUrl="http://localhost:8000/" products={[]} />);
+test("home page explains the product and offers a first product", () => {
+  render(<HomePage apiUrl="http://localhost:8000/" data={empty} />);
 
-  expect(
-    screen.getByRole("heading", { level: 1, name: "Knowledge base copilot" }),
-  ).toBeDefined();
+  expect(screen.getByRole("heading", { level: 1, name: "Products" })).toBeDefined();
   expect(screen.queryByRole("link", { name: "API health" })).toBeNull();
-  expect(screen.getByText(/answers by voice/i)).toBeDefined();
-  expect(screen.getByRole("button", { name: "Create product" })).toBeDefined();
-  expect(screen.getByText("No products yet.")).toBeDefined();
+  expect(screen.getByText(/answers out loud/i)).toBeDefined();
+  expect(screen.getByText("Set up your first product")).toBeDefined();
+  expect(screen.getAllByRole("button", { name: "New product" })).toHaveLength(2);
 });
 
-test("home page links each product in the org", () => {
-  render(
-    <HomePage
-      apiUrl="http://localhost:8000"
-      products={[{ id: "11111111-1111-4111-8111-111111111111", ...draft }]}
-    />,
-  );
+function session(product_id: string, created_at: string) {
+  return {
+    id: created_at,
+    product_id,
+    room: "r",
+    user_id: null,
+    created_at,
+    ended_at: null,
+    turn_count: 0,
+    action_count: 0,
+    handoff_count: 0,
+  };
+}
+
+test("each product is a card with its documents and latest session", () => {
+  const otherId = "22222222-2222-4222-8222-222222222222";
+  const data: HomeData = {
+    products: [
+      { id: productId, ...draft },
+      { id: otherId, ...draft, name: "Ledgerly" },
+    ],
+    documentCounts: { [productId]: 6, [otherId]: 0 },
+    sessions: [
+      session(productId, "2026-11-01T10:00:00Z"),
+      session(productId, "2026-11-03T08:00:00Z"),
+      session(productId, "2026-11-02T23:00:00Z"),
+    ],
+  };
+  render(<HomePage apiUrl="http://localhost:8000" data={data} />);
 
   expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(
-    "/products/11111111-1111-4111-8111-111111111111",
+    `/products/${productId}`,
   );
+  expect(screen.getByText("6 documents")).toBeDefined();
+  expect(screen.getByText("Last session Nov 3")).toBeDefined();
+  expect(screen.getByText("No documents yet")).toBeDefined();
+  expect(screen.getByText("No sessions yet")).toBeDefined();
+  expect(screen.getAllByText("Mina, Achird voice")).toHaveLength(2);
 });
 
-test("a failed product list says so", () => {
-  render(<HomePage apiUrl="http://localhost:8000" products={null} />);
+test("the product list shows a skeleton while it loads", () => {
+  render(<HomePage apiUrl="http://localhost:8000" />);
 
-  expect(screen.getByRole("alert").textContent).toBe("Could not load products.");
+  expect(screen.getByRole("status").textContent).toBe("Loading products");
+  expect(screen.getByRole("button", { name: "New product" })).toBeDefined();
 });
 
-test("creating a product shows that it was saved", async () => {
-  const created = {
-    id: "11111111-1111-4111-8111-111111111111",
-    ...draft,
-  };
+test("a failed product list says what to do and can try again", () => {
+  render(<HomePage apiUrl="http://localhost:8000" data={null} />);
+
+  expect(screen.getByRole("alert").textContent).toContain("Couldn’t load your products");
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+  expect(router.refresh).toHaveBeenCalledOnce();
+});
+
+test("creating a product opens it", async () => {
+  const created = { id: productId, ...draft };
   const calls = stubApi(() => ({ status: 201, body: created }));
-  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
+  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
   fillCreateForm();
+  expect(screen.getByRole("dialog", { name: "New product" })).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
-  expect(await screen.findByRole("status")).toBeDefined();
-  expect(screen.getByRole("status").textContent).toBe("Saved");
+  await vi.waitFor(() => expect(router.push).toHaveBeenCalledWith(`/products/${created.id}`));
   expect(calls).toMatchObject([
     {
       method: "POST",
@@ -89,54 +133,68 @@ test("creating a product shows that it was saved", async () => {
       json: draft,
     },
   ]);
-  expect(screen.getByRole("link", { name: "Open Acme" }).getAttribute("href")).toBe(
-    `/products/${created.id}`,
+});
+
+test("the create button says it is working until the API answers", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) =>
+      String(input) === "/api/auth/token"
+        ? Promise.resolve(Response.json({ token: TEST_JWT }))
+        : new Promise<Response>(() => {}),
+    ),
   );
-  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme Care" } });
-  expect(screen.queryByText("Saved")).toBeNull();
+  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
+  fillCreateForm();
+  fireEvent.click(screen.getByRole("button", { name: "Create product" }));
+
+  const pending = await screen.findByRole("button", { name: "Creating product…" });
+  expect(pending.getAttribute("aria-disabled")).toBe("true");
+  expect(screen.getByRole("form", { name: "Create product" }).getAttribute("aria-busy")).toBe(
+    "true",
+  );
 });
 
 test("a finished create clears when the page hides", async () => {
-  const created = {
-    id: "11111111-1111-4111-8111-111111111111",
-    ...draft,
-  };
-  stubApi(() => ({ status: 201, body: created }));
+  stubApi(() => ({ status: 201, body: { id: productId, ...draft } }));
   function Page({ hidden }: { hidden: boolean }) {
     return (
       <Activity mode={hidden ? "hidden" : "visible"}>
-        <HomePage apiUrl="http://localhost:8000" products={[]} />
+        <HomePage apiUrl="http://localhost:8000" data={empty} />
       </Activity>
     );
   }
   const view = render(<Page hidden={false} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
-  expect(await screen.findByText("Saved")).toBeDefined();
+  await vi.waitFor(() => expect(router.push).toHaveBeenCalled());
 
   view.rerender(<Page hidden />);
   view.rerender(<Page hidden={false} />);
+  openCreateForm();
 
   expect(screen.getByLabelText("Name")).toHaveProperty("value", "");
   expect(screen.getByLabelText("Description")).toHaveProperty("value", "");
   expect(screen.getByLabelText("Agent name")).toHaveProperty("value", "Shawn");
   expect(screen.getByLabelText("Voice")).toHaveProperty("value", "Sulafat");
   expect(screen.queryByText("Saved")).toBeNull();
-  expect(screen.queryByRole("link", { name: "Open Acme" })).toBeNull();
 });
 
-test("an unfinished draft stays when the page hides", () => {
+test("an unfinished draft stays when the sheet closes and the page hides", () => {
   function Page({ hidden }: { hidden: boolean }) {
     return (
       <Activity mode={hidden ? "hidden" : "visible"}>
-        <HomePage apiUrl="http://localhost:8000" products={[]} />
+        <HomePage apiUrl="http://localhost:8000" data={empty} />
       </Activity>
     );
   }
   const view = render(<Page hidden={false} />);
+  openCreateForm();
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Acme" } });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
   view.rerender(<Page hidden />);
   view.rerender(<Page hidden={false} />);
+  openCreateForm();
   expect(screen.getByLabelText("Name")).toHaveProperty("value", "Acme");
 });
 
@@ -149,7 +207,7 @@ test("create shows the api error", async () => {
       ],
     },
   }));
-  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
+  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
@@ -160,12 +218,12 @@ test("create shows the api error", async () => {
 
 test("create survives a response that is not a product", async () => {
   stubApi(() => ({ status: 201, text: "not json" }));
-  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
+  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
   fillCreateForm();
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "Could not save the product.",
+    "Couldn’t save the product. Check your connection and try again.",
   );
 });
 
@@ -175,16 +233,17 @@ test("a description typed on several lines is saved as one paragraph", async () 
     if (/[\r\n]/.test(sent.description)) {
       return { status: 422, body: { detail: [{ loc: ["body", "description"], msg: "x" }] } };
     }
-    return { status: 201, body: { id: "11111111-1111-4111-8111-111111111111", ...sent } };
+    return { status: 201, body: { id: productId, ...sent } };
   });
-  render(<HomePage apiUrl="http://localhost:8000" products={[]} />);
+  render(<HomePage apiUrl="http://localhost:8000" data={empty} />);
   fillCreateForm();
   fireEvent.change(screen.getByLabelText("Description"), {
     target: { value: "Acme resets passwords.\r\n\n  It also unlocks accounts." },
   });
   fireEvent.click(screen.getByRole("button", { name: "Create product" }));
 
-  expect((await screen.findByRole("status")).textContent).toBe("Saved");
+  await vi.waitFor(() => expect(router.push).toHaveBeenCalled());
+  openCreateForm();
   expect(screen.getByLabelText("Description")).toHaveProperty(
     "value",
     "Acme resets passwords. It also unlocks accounts.",
