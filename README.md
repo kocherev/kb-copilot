@@ -202,7 +202,7 @@ The other commands need a key. They need `uv sync --all-packages --group dev` fi
 
 ## MCP
 
-`services/mcp` speaks MCP over stdio. `search_kb` runs the same `kb_rag.search` as the API, against the Qdrant that Compose publishes on `localhost:6333`. `get_product` reads `GET /products/{id}`. The client configuration, the arguments, and a known limit of `get_product` are in `services/mcp/README.md`.
+`services/mcp` speaks MCP over stdio. `search_kb` runs the same `kb_rag.search` as the API, against the Qdrant that Compose publishes on `localhost:6333`. `get_product` reads `GET /products/{id}`. The client configuration and the arguments are in `services/mcp/README.md`.
 
 ## Desktop helper
 
