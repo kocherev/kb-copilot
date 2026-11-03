@@ -22,7 +22,7 @@ afterEach(() => {
 });
 
 function renderCard() {
-  render(<HandoffCard apiUrl="http://localhost:8000" proposal={proposal} />);
+  render(<HandoffCard apiUrl="http://localhost:8000" agentName="Mina" proposal={proposal} />);
 }
 
 test("the card shows the ticket and creates nothing until approved", () => {
@@ -32,7 +32,7 @@ test("the card shows the ticket and creates nothing until approved", () => {
 
   expect(screen.getByRole("heading", { name: proposal.title })).toBeDefined();
   expect(screen.getByText(/Reason for handoff: SSO/)).toBeDefined();
-  expect(screen.getByText(/Nothing is created until you approve/)).toBeDefined();
+  expect(screen.getByText(/Mina proposes this Linear ticket. Nothing is created until you approve/)).toBeDefined();
   expect(calls).toEqual([]);
 });
 
