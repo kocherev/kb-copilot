@@ -23,8 +23,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_async_engine(settings.async_database_url, pool_pre_ping=True)
     app.state.sessions = async_sessionmaker(engine, expire_on_commit=False)
     app.state.jwks = jwks_client(settings.auth_jwks_url)
+    # A large file goes up as one big upsert, so the default 5 s is too short.
     app.state.qdrant = AsyncQdrantClient(
-        url=settings.qdrant_url, api_key=settings.qdrant_api_key or None
+        url=settings.qdrant_url, api_key=settings.qdrant_api_key or None, timeout=120
     )
     # ponytail: assumes one API process. With several, a restart would fail
     # the jobs another process is still running; a worker with leases fixes that.
