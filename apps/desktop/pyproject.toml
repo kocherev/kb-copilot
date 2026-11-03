@@ -1,12 +1,14 @@
 [project]
 name = "kb-desktop"
 version = "0.0.0"
-description = "macOS helper that performs approved mouse and keyboard actions for the support agent."
+description = "macOS helper that shows the support agent the screen and performs the actions the user approves."
 requires-python = ">=3.12"
 dependencies = [
   "livekit>=1.1,<2",
   "pydantic>=2.10",
+  "pyobjc-framework-Cocoa>=10; sys_platform == 'darwin'",
   "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
+  "pyobjc-framework-ScreenCaptureKit>=10; sys_platform == 'darwin'",
 ]
 
 [project.scripts]

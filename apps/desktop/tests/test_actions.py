@@ -4,12 +4,16 @@ import pytest
 from kb_desktop.actions import (
     Action,
     Click,
+    Cursor,
     Display,
     InvalidRequest,
     Key,
+    Screenshot,
     Scroll,
     TypeText,
+    fit,
     handle,
+    parse,
 )
 
 RETINA = Display(width=1512, height=982, scale=2.0)
@@ -122,3 +126,42 @@ def test_bad_payloads_are_rejected_before_anything_runs(
         handle(method, payload, RETINA, lambda action, display: done.append(action))
 
     assert done == []
+
+
+@pytest.mark.parametrize(
+    ("display", "size"),
+    [
+        ((1512, 982), (1386, 900)),
+        ((3840, 2160), (1440, 810)),
+        ((1280, 720), (1280, 720)),
+        ((1440, 900), (1440, 900)),
+    ],
+)
+def test_a_screenshot_fits_the_computer_use_box_and_never_grows(
+    display: tuple[int, int], size: tuple[int, int]
+) -> None:
+    assert fit(*display) == size
+
+
+@pytest.mark.parametrize(
+    ("model", "payload", "message"),
+    [
+        (Screenshot, '{"stream_id": ""}', "stream_id: "),
+        (Screenshot, json.dumps({"stream_id": "s" * 65}), "stream_id: "),
+        (Cursor, '{"state": "dancing", "x": 1, "y": 1, "name": "S"}', "state: "),
+        (Cursor, '{"state": "clicking", "x": 1000, "y": 1, "name": "S"}', "x: "),
+        (Cursor, '{"state": "clicking", "x": 1, "y": 1, "name": ""}', "name: "),
+        (
+            Cursor,
+            json.dumps(
+                {"state": "hidden", "x": 1, "y": 1, "name": "S", "label": "l" * 81}
+            ),
+            "label: ",
+        ),
+    ],
+)
+def test_screenshot_and_cursor_payloads_are_checked(
+    model: type[Screenshot | Cursor], payload: str, message: str
+) -> None:
+    with pytest.raises(InvalidRequest, match=message):
+        parse(model, payload)
