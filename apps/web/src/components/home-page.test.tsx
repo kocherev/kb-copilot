@@ -10,6 +10,8 @@ const draft = {
   description: "Acme helps customers reset passwords.",
   tone: "calm and brief",
   refusal_rules: "Do not invent a refund policy.",
+  agent_name: "Mina",
+  voice: "Achird" as const,
 };
 
 afterEach(() => {
@@ -30,6 +32,10 @@ function fillCreateForm() {
   fireEvent.change(screen.getByLabelText("Refusal rules"), {
     target: { value: draft.refusal_rules },
   });
+  fireEvent.change(screen.getByLabelText("Agent name"), {
+    target: { value: draft.agent_name },
+  });
+  fireEvent.change(screen.getByLabelText("Voice"), { target: { value: draft.voice } });
 }
 
 test("home page explains the flow without operator links", () => {
@@ -113,6 +119,8 @@ test("a finished create clears when the page hides", async () => {
 
   expect(screen.getByLabelText("Name")).toHaveProperty("value", "");
   expect(screen.getByLabelText("Description")).toHaveProperty("value", "");
+  expect(screen.getByLabelText("Agent name")).toHaveProperty("value", "Shawn");
+  expect(screen.getByLabelText("Voice")).toHaveProperty("value", "Sulafat");
   expect(screen.queryByText("Saved")).toBeNull();
   expect(screen.queryByRole("link", { name: "Open Acme" })).toBeNull();
 });

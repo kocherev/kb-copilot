@@ -8,12 +8,19 @@ export function SessionView({
   apiUrl,
   productId,
   productName,
+  agentName,
 }: {
   apiUrl: string;
   productId: string;
   productName: string;
+  agentName: string;
 }) {
   return (
-    <SessionStart apiUrl={apiUrl} productId={productId} productName={productName} />
+    <SessionStart
+      apiUrl={apiUrl}
+      productId={productId}
+      productName={productName}
+      agentName={agentName}
+    />
   );
 }

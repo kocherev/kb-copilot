@@ -11,6 +11,8 @@ const product = {
   description: "Acme helps customers reset passwords.",
   tone: "calm and brief",
   refusal_rules: "Do not invent a refund policy.",
+  agent_name: "Shawn",
+  voice: "Sulafat" as const,
 };
 
 afterEach(() => {
@@ -45,6 +47,8 @@ test("saves config and shows the product's documents", async () => {
   fireEvent.change(screen.getByLabelText("Name"), {
     target: { value: "Acme Care" },
   });
+  fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: "Mina" } });
+  fireEvent.change(screen.getByLabelText("Voice"), { target: { value: "Puck" } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
   expect(
@@ -59,6 +63,8 @@ test("saves config and shows the product's documents", async () => {
     description: product.description,
     tone: product.tone,
     refusal_rules: product.refusal_rules,
+    agent_name: "Mina",
+    voice: "Puck",
   });
   const listed = calls.find((call) => call.method === "GET");
   expect(listed?.url).toBe(`http://localhost:8000/products/${product.id}/documents`);
