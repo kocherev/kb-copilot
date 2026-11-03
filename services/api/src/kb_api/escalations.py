@@ -1,6 +1,7 @@
 """Handoffs the agent proposes. A user approves one before Linear sees it."""
 
 import logging
+from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -37,6 +38,8 @@ log = logging.getLogger(__name__)
 
 TITLE_LIMIT = 120
 AGENT = "agent"
+# A creating row this idle lost its request, so approve may claim it again.
+CREATING_LEASE = timedelta(minutes=2)
 
 NOT_CONNECTED: dict[int | str, dict[str, object]] = {
     409: {"model": ErrorBody, "description": "Linear is not connected for this org"}
@@ -144,16 +147,28 @@ async def propose_escalation(
 
 
 async def move(
-    db: AsyncSession, row: EscalationRow, was: str, to: str, **values: str
+    db: AsyncSession,
+    row: EscalationRow,
+    was: str,
+    to: str,
+    *,
+    idle_for: timedelta | None = None,
+    **values: str,
 ) -> bool:
     """Move the row from `was` to `to`. False when another request moved it first.
 
+    With `idle_for`, the row must also be unchanged for that long.
     The caller commits, so an audit row can join the same transaction."""
+    conditions = [EscalationRow.id == row.id, EscalationRow.status == was]
+    if idle_for is not None:
+        conditions.append(EscalationRow.updated_at <= utcnow() - idle_for)
     moved = await db.execute(
         update(EscalationRow)
-        .where(EscalationRow.id == row.id, EscalationRow.status == was)
+        .where(*conditions)
         .values(status=to, updated_at=utcnow(), **values)
         .returning(EscalationRow.id)
+        # The refresh below reloads the row, so skip evaluating the clause here.
+        .execution_options(synchronize_session=False)
     )
     changed = moved.scalar_one_or_none() is not None
     await db.refresh(row)
@@ -166,7 +181,10 @@ async def move(
         **NOT_FOUND,
         409: {
             "model": ErrorBody,
-            "description": "Dismissed, in progress, or no Linear",
+            "description": (
+                "Dismissed, in progress, or no Linear. A creating escalation"
+                " idle for two minutes can be approved again"
+            ),
         },
         502: {"model": ErrorBody, "description": "Linear did not create the issue"},
         **NOT_CONFIGURED,
@@ -184,7 +202,10 @@ async def approve_escalation(
     if row.status == "created":
         return Escalation.model_validate(row)
     # Only one request wins the claim, so a double click creates one issue.
-    claimed = await move(db, row, "proposed", "creating")
+    # A creating row past its lease lost its request, and the claim renews it.
+    claimed = await move(db, row, "proposed", "creating") or await move(
+        db, row, "creating", "creating", idle_for=CREATING_LEASE
+    )
     await db.commit()
     if not claimed:
         if row.status == "created":
@@ -199,8 +220,6 @@ async def approve_escalation(
             http, authorization, connection.team_id, row.title, row.body
         )
     except (HTTPException, LinearError) as exc:
-        # ponytail: a crash between the claim and this line leaves the row
-        # creating, and approve answers 409 for it. Add a lease timeout if that happens.
         await move(db, row, "creating", "proposed")
         if isinstance(exc, LinearError):
             log.warning("Linear issueCreate failed for %s: %s", row.id, exc)

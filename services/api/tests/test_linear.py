@@ -1,18 +1,19 @@
 import base64
 import json
 from collections.abc import Callable
+from datetime import timedelta
 from urllib.parse import parse_qs, parse_qsl, urlparse
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
-from kb_api.db import LiveSessionRow
+from kb_api.db import LiveSessionRow, utcnow
 from kb_api.linear import GRAPHQL_URL, REVOKE_URL, TOKEN_URL, get_linear_http
 from kb_api.linear_secrets import STATE_TTL_SECONDS
 from kb_api.sessions import get_clock
 from kb_api.settings import load_settings
-from sqlalchemy import Engine
+from sqlalchemy import DateTime, Engine, Uuid, bindparam, text
 from sqlalchemy.orm import Session
 
 KEY = base64.b64encode(bytes(range(32))).decode()
@@ -140,6 +141,17 @@ def propose(http: TestClient, room: str, **fields: str):
     return http.post(
         "/internal/escalations", json=body, headers={"x-internal-token": INTERNAL}
     )
+
+
+def stuck_creating(sync_engine: Engine, id: str, idle: timedelta) -> None:
+    """Leave the escalation as a request that died after its claim would."""
+    update = text(
+        "UPDATE escalations SET status = 'creating', updated_at = :at WHERE id = :id"
+    ).bindparams(
+        bindparam("at", type_=DateTime(timezone=True)), bindparam("id", type_=Uuid())
+    )
+    with sync_engine.begin() as connection:
+        connection.execute(update, {"at": utcnow() - idle, "id": UUID(id)})
 
 
 @pytest.fixture
@@ -515,6 +527,67 @@ def test_a_failed_issue_create_can_be_retried(
     assert retried.json()["issue_identifier"] == "ENG-1"
     actions = [r["action"] for r in rows("audit_log")]
     assert "escalation.approve_failed" in actions
+
+
+def test_approve_reclaims_an_escalation_stuck_in_creating(
+    http: TestClient,
+    linear: FakeLinear,
+    room: str,
+    as_user: Headers,
+    rows,
+    sync_engine: Engine,
+) -> None:
+    connect(http, as_user())
+    id = propose(http, room).json()["id"]
+    stuck_creating(sync_engine, id, timedelta(minutes=10))
+
+    response = http.post(f"/escalations/{id}/approve", headers=as_user())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "created"
+    assert response.json()["issue_identifier"] == "ENG-1"
+    assert len(linear.issues) == 1
+    assert rows("escalations")[0]["status"] == "created"
+
+
+def test_a_recently_claimed_escalation_is_still_in_progress(
+    http: TestClient,
+    linear: FakeLinear,
+    room: str,
+    as_user: Headers,
+    rows,
+    sync_engine: Engine,
+) -> None:
+    connect(http, as_user())
+    id = propose(http, room).json()["id"]
+    stuck_creating(sync_engine, id, timedelta(seconds=10))
+
+    response = http.post(f"/escalations/{id}/approve", headers=as_user())
+
+    assert response.status_code == 409
+    assert linear.issues == []
+    assert rows("escalations")[0]["status"] == "creating"
+
+
+def test_approving_a_stuck_escalation_twice_creates_one_issue(
+    http: TestClient,
+    linear: FakeLinear,
+    room: str,
+    as_user: Headers,
+    sync_engine: Engine,
+) -> None:
+    connect(http, as_user())
+    id = propose(http, room).json()["id"]
+    stuck_creating(sync_engine, id, timedelta(minutes=10))
+    url = f"/escalations/{id}/approve"
+
+    first = http.post(url, headers=as_user())
+    second = http.post(url, headers=as_user())
+
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    assert first.json()["status"] == "created"
+    assert len(linear.issues) == 1
 
 
 def test_approve_after_disconnect_is_a_409_and_stays_proposed(
