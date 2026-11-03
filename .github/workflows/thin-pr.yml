@@ -66,7 +66,7 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
       - name: Run thin-pr
-        uses: kocherev/thin-pr-orchestrator@33ca085a77ee5c31e6c2cb1330cc831122387be7
+        uses: kocherev/thin-pr-orchestrator@655f0ada80f94e5c37412ccc7af3d2222b7d7c22
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           ci-workflow: ci.yml
