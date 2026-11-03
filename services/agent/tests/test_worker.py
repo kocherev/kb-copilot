@@ -10,7 +10,6 @@ from kb_agent import worker
 from kb_agent.product import load_product, product_from_body, product_id_from_metadata
 from kb_agent.prompt import render_system_prompt
 from kb_agent.protocol import AGENT_ERROR_TOPIC
-from qdrant_client import AsyncQdrantClient
 
 PRODUCT_ID = "11111111-1111-4111-8111-111111111111"
 PRODUCT = {
@@ -39,13 +38,6 @@ class _Handler(BaseHTTPRequestHandler):
 
     def log_message(self, message: str, *args: object) -> None:
         return
-
-
-@pytest.fixture(autouse=True)
-def local_qdrant(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        worker, "AsyncQdrantClient", lambda **_: AsyncQdrantClient(":memory:")
-    )
 
 
 @pytest.fixture
@@ -172,3 +164,7 @@ def test_an_error_waits_for_someone_to_join_before_it_is_sent() -> None:
     asyncio.run(run())
 
     assert room.sent[0][0] == AGENT_ERROR_TOPIC
+
+
+def test_the_worker_keeps_one_warm_job_process_not_one_per_cpu() -> None:
+    assert worker.server._num_idle_processes == 1  # pyright: ignore[reportPrivateUsage]

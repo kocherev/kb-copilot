@@ -4,6 +4,7 @@ version = "0.0.0"
 description = "LiveKit Agents worker for the support session."
 requires-python = ">=3.12"
 dependencies = [
+  "httpx>=0.28",
   "kb-rag",
   "livekit-agents[google]>=1.8,<2",
   "pillow>=10",

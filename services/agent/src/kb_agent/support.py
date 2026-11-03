@@ -1,23 +1,33 @@
 import asyncio
 
-from kb_rag import DEFAULT_SETTINGS, Passage, RetrievalSettings, search
 from livekit.agents import Agent, function_tool
 from livekit.agents.llm.tool_context import ToolFlag
-from qdrant_client import AsyncQdrantClient
 
-from kb_agent.citations import cited, supporting_passages
 from kb_agent.handoff import propose_escalation, transcript_excerpt
+from kb_agent.knowledge import Knowledge, Passage
 from kb_agent.latency import log_json
 from kb_agent.protocol import (
     ESCALATION_TOPIC,
     HUD_TOPIC,
     LABEL_LIMIT,
+    SNIPPET_LIMIT,
     Citations,
+    CitedPassage,
     HudPoint,
     Room,
     publish,
 )
 from kb_agent.retrieve import retrieval_record, tool_text
+
+
+def cited(passage: Passage) -> CitedPassage:
+    return CitedPassage(
+        id=passage.id,
+        title=passage.title,
+        source=passage.source,
+        anchor=passage.anchor,
+        snippet=" ".join(passage.text.split())[:SNIPPET_LIMIT],
+    )
 
 
 class SupportAgent(Agent):
@@ -27,17 +37,13 @@ class SupportAgent(Agent):
         self,
         *,
         instructions: str,
-        product_id: str,
-        qdrant: AsyncQdrantClient,
+        knowledge: Knowledge,
         room: Room,
         api_url: str,
-        settings: RetrievalSettings = DEFAULT_SETTINGS,
     ) -> None:
-        self.product_id = product_id
-        self.qdrant = qdrant
+        self.knowledge = knowledge
         self.room = room
         self.api_url = api_url
-        self.settings = settings
         # Passages the searches of the current user turn returned, by id.
         self.turn_passages: dict[str, Passage] = {}
         super().__init__(instructions=instructions)
@@ -56,12 +62,10 @@ class SupportAgent(Agent):
         Args:
             query: The question to look up, in the user's words.
         """
-        found = await search(
-            self.qdrant, self.product_id, query, settings=self.settings
-        )
+        found = await self.knowledge.search(query)
         self.turn_passages.update({p.id: p for p in found.passages})
-        log_json(retrieval_record(self.product_id, found))
-        return tool_text(found)
+        log_json(retrieval_record(self.knowledge.product_id, found))
+        return tool_text(found.abstained, found.passages)
 
     @function_tool(flags=ToolFlag.IGNORE_ON_ENTER)
     async def point_at(self, x: float, y: float, label: str) -> str:
@@ -126,14 +130,13 @@ class SupportAgent(Agent):
 
     async def citations_for(self, message_id: str, text: str) -> Citations | None:
         """The passages of this turn that support an assistant message, if any."""
-        supported = await asyncio.to_thread(
-            supporting_passages,
-            text,
-            list(self.turn_passages.values()),
-            self.settings.dense,
-        )
-        if not supported:
+        if not self.turn_passages:
+            return None
+        ids = await self.knowledge.supported(text, list(self.turn_passages))
+        if not ids:
             return None
         return Citations(
-            message_id=message_id, text=text, passages=[cited(p) for p in supported]
+            message_id=message_id,
+            text=text,
+            passages=[cited(self.turn_passages[i]) for i in ids],
         )

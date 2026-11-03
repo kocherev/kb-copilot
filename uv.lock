@@ -1395,6 +1395,7 @@ name = "kb-agent"
 version = "0.0.0"
 source = { editable = "services/agent" }
 dependencies = [
+    { name = "httpx" },
     { name = "kb-rag" },
     { name = "livekit-agents", extra = ["google"] },
     { name = "pillow" },
@@ -1402,6 +1403,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28" },
     { name = "kb-rag", editable = "packages/rag" },
     { name = "livekit-agents", extras = ["google"], specifier = ">=1.8,<2" },
     { name = "pillow", specifier = ">=10" },

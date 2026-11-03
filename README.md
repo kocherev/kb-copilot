@@ -37,7 +37,7 @@ Then, in the browser:
 
 1. Open http://localhost:3000, choose Create an account, and sign up with any name, an email address, and a password of at least 8 characters. Better Auth creates a personal organization for you. Every product, upload, and session belongs to that organization.
 2. On the home page, fill in Create product. Use the name `Northstar Desk`, which is the fictional product the sample pages describe, and any one-paragraph description, tone, and refusal rules. Choose Create product, then the Open Northstar Desk link.
-3. On the product page, under Documents, choose the files in `demo/docs/billing` and choose Upload documents. The API answers 202 and indexes in the background. Each file shows Queued, then Indexing, then Indexed with a chunk count. The first upload downloads about 1.2 GB of embedding models into the `fastembed` volume. Later uploads and the agent reuse them.
+3. On the product page, under Documents, choose the files in `demo/docs/billing` and choose Upload documents. The API answers 202 and indexes in the background. Each file shows Queued, then Indexing, then Indexed with a chunk count. The first upload downloads about 1.2 GB of embedding models into the `fastembed` volume. Only the API loads them, at start, and the agent asks the API for search results.
 4. Choose Start session at the top of the product page, then Start session again on the next page. Allow the microphone, share your screen, and ask `How do I get a refund?`. The agent speaks the answer. When the answer comes from the documents, the transcript line lists the sections it used.
 
 The sample pages in `demo/docs` are original text under the MIT license in `LICENSE`. The upload form takes up to 20 files of 2 MB each, so upload the other folders in further batches.
@@ -130,12 +130,11 @@ flowchart LR
   web -->|"mic and screen"| room
   api -->|"verify JWT"| web
   api --> pg
-  api -->|"index uploads"| rag
+  api -->|"index, search, citations"| rag
   api -->|"token and dispatch"| room
   rag --> qd
   agent -->|"joins as kb-support"| room
-  agent -->|"product config"| api
-  agent -->|"search_kb, point_at"| rag
+  agent -->|"product config, search, citations"| api
   agent --> gemini
   mcp --> rag
   mcp -->|"get_product"| api
@@ -146,8 +145,8 @@ flowchart LR
 
 - `apps/web` is the Next.js app. Better Auth handles email and password sign-up in the same Postgres and signs the JWTs the API checks. In a session, the shared-screen preview glows while the agent is in the room and watching. An agent cursor with the agent's name tag appears only while it points, then fades out.
 - `services/api` is FastAPI. It scopes products, documents, sessions, and API keys to the caller's organization. An upload waits in Postgres until a loop in the API process indexes it. The loop claims jobs with `SKIP LOCKED`.
-- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. The agent has a name and a Gemini voice that each product sets (Shawn and Sulafat by default), and its prompt says what it can and cannot do. Its tools are `search_kb`, which queries Qdrant in-process, `point_at`, which sends a position to the browser preview, and `handoff_to_human`.
-- `packages/rag` parses, chunks, embeds, and searches. Dense vectors are FastEmbed `google/embeddinggemma-300m`, sparse vectors are `Qdrant/bm25`, and a search abstains when the best dense score is under the threshold in `RetrievalSettings`. No reranker runs by default.
+- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. The agent has a name and a Gemini voice that each product sets (Shawn and Sulafat by default), and its prompt says what it can and cannot do. Its tools are `search_kb`, which calls `POST /internal/search` on the API, `point_at`, which sends a position to the browser preview, and `handoff_to_human`. After each answer the agent calls `POST /internal/citations`. Both internal routes need `X-Internal-Token`. The agent loads no embedding model and does not talk to Qdrant.
+- `packages/rag` parses, chunks, embeds, and searches. Dense vectors are FastEmbed `google/embeddinggemma-300m`, sparse vectors are `Qdrant/bm25`, and a search abstains when the best dense score is under the threshold in `RetrievalSettings`. No reranker runs by default. Only the API process loads the models, with `KB_EMBED_THREADS` (2 in Compose) ONNX threads, and it embeds one passage at a time while indexing. A citation embeds only the answer and compares it with the vector stored for each passage. `docs/decisions/0006-lean-runtime.md` has the numbers.
 - `services/mcp` serves `search_kb` and `get_product` over stdio.
 - `apps/desktop` is a macOS helper that can click, type, press keys, and scroll when the agent calls it over LiveKit RPC. The agent has no tool that calls it yet.
 - `evals` scores retrieval on the sample pages and holds the live answer and judge harness.
@@ -186,7 +185,7 @@ The other commands need a key. They need `uv sync --all-packages --group dev` fi
 
 ## MCP
 
-`services/mcp` speaks MCP over stdio. `search_kb` runs the same `kb_rag.search` as the agent, against the Qdrant that Compose publishes on `localhost:6333`. `get_product` reads `GET /products/{id}`. The client configuration, the arguments, and a known limit of `get_product` are in `services/mcp/README.md`.
+`services/mcp` speaks MCP over stdio. `search_kb` runs the same `kb_rag.search` as the API, against the Qdrant that Compose publishes on `localhost:6333`. `get_product` reads `GET /products/{id}`. The client configuration, the arguments, and a known limit of `get_product` are in `services/mcp/README.md`.
 
 ## Desktop helper
 
