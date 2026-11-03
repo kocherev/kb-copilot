@@ -59,7 +59,7 @@ It answers seven RPC methods, and only from a participant of kind agent. A call 
 | `desktop.click` | `{"x", "y", "button": "left" or "right", "double": bool}` | `{"ok": true}` |
 | `desktop.type` | `{"text"}`, 1 to 500 characters | `{"ok": true}` |
 | `desktop.key` | `{"keys": ["cmd", "shift", "t"]}`, modifiers plus one key | `{"ok": true}` |
-| `desktop.scroll` | `{"x", "y", "dy", "dx"}`, lines from -50 to 50, positive is down and right | `{"ok": true}` |
+| `desktop.scroll` | `{"x", "y", "dy", "dx"}`, lines from -50 to 50, positive is down and right, at least one of dy and dx must be non-zero | `{"ok": true}` |
 
 An RPC reply holds at most 15 KiB, so a screenshot travels as a LiveKit byte stream. It is the main display scaled down to fit 1440 by 900, the size Computer Use recommends, and never scaled up. The helper's own windows are left out of it.
 
