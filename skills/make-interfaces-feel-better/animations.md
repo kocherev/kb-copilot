@@ -10,10 +10,10 @@ Users change intent mid-interaction. If animations aren't interruptible, the int
 
 | | CSS Transitions | CSS Keyframe Animations |
 | --- | --- | --- |
-| Behavior | Interpolate toward latest state | Run on a fixed timeline |
-| Interruptible | Yes, retargets mid-animation | No, restarts from the beginning |
-| Use for | Interactive state changes (hover, toggle, open/close) | Staged sequences that run once (enter animations, loading) |
-| Duration | Fixed; retargets the value mid-flight, not the timeline | Fixed timeline, restarts from the beginning |
+| **Behavior** | Interpolate toward latest state | Run on a fixed timeline |
+| **Interruptible** | Yes — retargets mid-animation | No — restarts from beginning |
+| **Use for** | Interactive state changes (hover, toggle, open/close) | Staged sequences that run once (enter animations, loading) |
+| **Duration** | Fixed; retargets the value mid-flight, not the timeline | Fixed timeline, restarts from the beginning |
 
 ```css
 /* Good — interruptible transition for a toggle */
@@ -37,7 +37,7 @@ Users change intent mid-interaction. If animations aren't interruptible, the int
 /* Closing mid-animation snaps or restarts — feels broken */
 ```
 
-Always prefer CSS transitions for interactive elements. Reserve keyframes for one-shot sequences.
+**Rule:** Always prefer CSS transitions for interactive elements. Reserve keyframes for one-shot sequences.
 
 ## Enter Animations: Split and Stagger
 
@@ -45,10 +45,10 @@ Use this pattern for infrequent staged entrances where sequence helps communicat
 
 ### Step by Step
 
-1. Split into logical groups (title, description, buttons)
-2. Stagger with ~100ms delay between groups
-3. For titles, consider splitting into individual words with ~80ms stagger
-4. Combine `opacity`, `blur`, and `translateY` for the enter effect
+1. **Split** into logical groups (title, description, buttons)
+2. **Stagger** with ~100ms delay between groups
+3. **For titles**, consider splitting into individual words with ~80ms stagger
+4. **Combine** `opacity`, `blur`, and `translateY` for the enter effect
 
 ### Code Example
 
@@ -119,7 +119,7 @@ function PageHeader() {
 
 ## Exit Animations
 
-Exit animations should be softer and less attention-grabbing than enter animations. The user's focus is moving to the next thing, so don't fight for attention.
+Exit animations should be softer and less attention-grabbing than enter animations. The user's focus is moving to the next thing — don't fight for attention.
 
 ### Subtle Exit (Recommended)
 
@@ -176,7 +176,7 @@ Exit animations should be softer and less attention-grabbing than enter animatio
 }
 ```
 
-Key points:
+**Key points:**
 - Use a small fixed `translateY` (e.g., `-12px`) instead of the full container height
 - Keep some directional movement to indicate where the element went
 - Exit duration should be shorter than enter duration (150ms vs 300ms)
@@ -216,7 +216,7 @@ function IconButton({ isActive, icon: Icon }) {
 
 If the project doesn't use Motion (Framer Motion), keep both icons in the DOM and cross-fade them with CSS transitions. Because neither icon unmounts, both enter and exit animate smoothly.
 
-The trick: one icon is absolutely positioned on top of the other. Toggling state cross-fades them: the entering icon scales up from `0.25` while the exiting icon scales down to `0.25`, both with opacity and blur.
+The trick: one icon is absolutely positioned on top of the other. Toggling state cross-fades them — the entering icon scales up from `0.25` while the exiting icon scales down to `0.25`, both with opacity and blur.
 
 ```tsx
 function IconButton({ isActive, ActiveIcon, InactiveIcon }) {
@@ -258,12 +258,12 @@ The non-absolute icon (InactiveIcon) defines the layout size. The absolute icon 
 
 | | Motion (Framer Motion) | CSS transitions (both icons in DOM) |
 | --- | --- | --- |
-| Enter animation | Yes | Yes |
-| Exit animation | Yes (via `AnimatePresence`) | Yes (cross-fade, the icon never unmounts) |
-| Spring physics | Yes | No. Use `cubic-bezier(0.2, 0, 0, 1)` as an approximation |
-| When to use | Project already uses `motion` or `framer-motion` | No motion dependency, or keeping bundle small |
+| **Enter animation** | Yes | Yes |
+| **Exit animation** | Yes (via `AnimatePresence`) | Yes (cross-fade — icon never unmounts) |
+| **Spring physics** | Yes | No — use `cubic-bezier(0.2, 0, 0, 1)` as approximation |
+| **When to use** | Project already uses `motion` or `framer-motion` | No motion dependency, or keeping bundle small |
 
-Check the project's `package.json`. Import from `"motion/react"` when `motion` is installed, or from `"framer-motion"` when `framer-motion` is installed. If both exist, follow the imports already used by the component or its nearest peers. If neither is present, use the CSS cross-fade pattern. Don't add a dependency for icon transitions.
+**Rule:** Check the project's `package.json`. Import from `"motion/react"` when `motion` is installed, or from `"framer-motion"` when `framer-motion` is installed. If both exist, follow the imports already used by the component or its nearest peers. If neither is present, use the CSS cross-fade pattern — don't add a dependency just for icon transitions.
 
 ### When to Animate Icons
 
@@ -274,15 +274,15 @@ Check the project's `package.json`. Import from `"motion/react"` when `motion` i
 | Icons in contextual toolbars | Icons that are always visible |
 | Loading/success state indicators | Icon labels (text next to icon) |
 
-Always use exactly these values for contextual icon animations:
+**Important:** Always use exactly these values for contextual icon animations — do not deviate:
 - `scale`: `0.25` → `1` (never use `0.5` or `0.6`)
 - `opacity`: `0` → `1`
 - `filter`: `"blur(4px)"` → `"blur(0px)"`
-- `transition`: `{ type: "spring", duration: 0.3, bounce: 0 }`. Bounce is always `0`, never `0.1` or any other value
+- `transition`: `{ type: "spring", duration: 0.3, bounce: 0 }` — **bounce must always be `0`**, never `0.1` or any other value
 
 ## Scale on Press
 
-A subtle scale-down on click gives buttons tactile feedback. Always use `scale(0.96)`. Never use a value smaller than `0.95`, because anything below feels exaggerated. Use CSS transitions so a release mid-press returns smoothly.
+A subtle scale-down on click gives buttons tactile feedback. Always use `scale(0.96)`. Never use a value smaller than `0.95` — anything below feels exaggerated. Use CSS transitions for interruptibility — if the user releases mid-press, it should smoothly return.
 
 Not every button needs this. Add a `static` prop to your button component that disables the scale effect when the motion would be distracting.
 
@@ -345,7 +345,7 @@ function Button({ static: isStatic, className, children, ...props }) {
 
 ## Skip Animation on Page Load
 
-Use `initial={false}` on `AnimatePresence` to prevent enter animations from firing on first render. Elements that are already in their default state shouldn't animate in on page load, only on later state changes.
+Use `initial={false}` on `AnimatePresence` to prevent enter animations from firing on first render. Elements that are already in their default state shouldn't animate in on page load — only on subsequent state changes.
 
 ### When It Works
 
@@ -363,7 +363,7 @@ Use `initial={false}` on `AnimatePresence` to prevent enter animations from firi
 </AnimatePresence>
 ```
 
-Works well for: icon swaps, toggles, tabs, segmented controls, and anything else with a default state on page load.
+Works well for: icon swaps, toggles, tabs, segmented controls — anything that has a default state on page load.
 
 ### When It Breaks
 

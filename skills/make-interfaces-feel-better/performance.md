@@ -40,13 +40,13 @@ Never use `transition: all` or Tailwind's `transition-all`. Always specify the e
 
 ### Tailwind `transition-transform` Note
 
-`transition-transform` in Tailwind maps to `transition-property: transform, translate, scale, rotate`, so it covers `translate`, `scale` and `rotate` as well as `transform`. Use this when you're only animating transforms. For multiple non-transform properties, use the bracket syntax: `transition-[scale,opacity,filter]`.
+`transition-transform` in Tailwind maps to `transition-property: transform, translate, scale, rotate` — it covers all transform-related properties, not just `transform`. Use this when you're only animating transforms. For multiple non-transform properties, use the bracket syntax: `transition-[scale,opacity,filter]`.
 
 ## Use `will-change` Sparingly
 
-`will-change` hints the browser to pre-promote an element to its own GPU compositing layer. Without it, the browser promotes the element only when the animation starts, and that one-time layer promotion can cause a micro-stutter on the first frame.
+`will-change` hints the browser to pre-promote an element to its own GPU compositing layer. Without it, the browser promotes the element only when the animation starts — that one-time layer promotion can cause a micro-stutter on the first frame.
 
-This particularly helps when an element is changing `scale`, `rotation`, or moving around with `transform`. For other properties, it doesn't help much, because the browser can't composite them on the GPU anyway.
+This particularly helps when an element is changing `scale`, `rotation`, or moving around with `transform`. For other properties, it doesn't help much — the browser can't composite them on the GPU anyway.
 
 ### Rules
 
@@ -85,4 +85,4 @@ This particularly helps when an element is changing `scale`, `rotation`, or movi
 
 ### When to Skip
 
-Modern browsers are already good at optimizing on their own. Only add `will-change` when you notice first-frame stutter. Safari benefits from it most. Don't add it preemptively to every animated element; each extra compositing layer costs memory.
+Modern browsers are already good at optimizing on their own. Only add `will-change` when you notice first-frame stutter — Safari in particular benefits from it. Don't add it preemptively to every animated element; each extra compositing layer costs memory.
