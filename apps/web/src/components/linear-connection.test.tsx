@@ -84,3 +84,44 @@ test("a refused connect shows the API's reason", async () => {
 
   expect((await screen.findByRole("alert")).textContent).toBe("Linear is not configured");
 });
+
+test("a failed status load can try again", async () => {
+  let up = false;
+  stubApi(() => (up ? { status: 200, body: open } : { status: 502, body: { detail: "down" } }));
+  renderConnection();
+
+  expect((await screen.findByRole("alert")).textContent).toContain(
+    "Couldn’t load the Linear connection",
+  );
+  up = true;
+  fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+  expect(await screen.findByRole("button", { name: "Connect Linear" })).toBeDefined();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("the status shows a skeleton while it loads", () => {
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));
+  renderConnection();
+
+  expect(screen.getByRole("status").textContent).toBe("Loading the Linear connection");
+});
+
+test("disconnect says it is working until the API answers", async () => {
+  stubApi(() => ({ status: 200, body: connected }));
+  renderConnection();
+  const button = await screen.findByRole("button", { name: "Disconnect Linear" });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL) =>
+      String(input) === "/api/auth/token"
+        ? Promise.resolve(Response.json({ token: "t" }))
+        : new Promise<Response>(() => {}),
+    ),
+  );
+
+  fireEvent.click(button);
+
+  const pending = await screen.findByRole("button", { name: "Disconnecting…" });
+  expect(pending.getAttribute("aria-disabled")).toBe("true");
+});

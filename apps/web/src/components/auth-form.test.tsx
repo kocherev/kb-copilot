@@ -64,3 +64,32 @@ test("sign-up sends the name and opens the app", async () => {
   });
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+test("sign-in says it is working until the server answers", async () => {
+  auth.signIn.mockReturnValue(new Promise(() => {}));
+  render(<AuthForm mode="sign-in" />);
+
+  fill("Email", "ada@example.com");
+  fill("Password", "correct-horse");
+  fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+  const pending = await screen.findByRole("button", { name: "Signing in…" });
+  expect(pending.getAttribute("aria-disabled")).toBe("true");
+  fireEvent.click(pending);
+  expect(auth.signIn).toHaveBeenCalledOnce();
+});
+
+test("a sign-up that cannot reach the server says what to do", async () => {
+  auth.signUp.mockRejectedValue(new TypeError("Failed to fetch"));
+  render(<AuthForm mode="sign-up" />);
+
+  fill("Name", "Ada");
+  fill("Email", "ada@example.com");
+  fill("Password", "correct-horse");
+  fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Couldn’t create your account. Check your connection and try again.",
+  );
+  expect(screen.getByRole("button", { name: "Create account" })).toBeDefined();
+});
