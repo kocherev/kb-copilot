@@ -1,10 +1,12 @@
 import asyncio
 import json
+import sys
 from pathlib import Path
 
+import pytest
 from google.genai import types
 from kb_agent.support import NO_COMPUTER, SupportAgent
-from kb_evals.answers import Tool, write_answers
+from kb_evals.answers import Tool, main, write_answers
 from kb_evals.dataset import EvalCase
 from kb_evals.run import RagRetriever
 from kb_rag import Source
@@ -131,3 +133,24 @@ def test_every_agent_tool_answers_as_production_does_without_a_session(
     assert replies["point_at"].startswith("The session preview is not connected")
     assert replies["handoff_to_human"].startswith("Handoff is not available")
     assert replies["operate_computer"] == NO_COMPUTER
+
+
+@pytest.mark.parametrize("value", ["0", "-5"])
+def test_a_limit_below_one_exits_before_any_model_call_or_write(
+    value: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = tmp_path / "a.jsonl"
+    monkeypatch.setattr(
+        sys, "argv", ["kb_evals.answers", "--out", str(out), "--limit", value]
+    )
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+
+    with pytest.raises(SystemExit) as exit_info:
+        main()
+
+    assert exit_info.value.code not in (0, None)
+    assert "at least 1" in capsys.readouterr().err
+    assert not out.exists()
