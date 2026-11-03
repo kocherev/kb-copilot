@@ -8,7 +8,7 @@ from functools import cache
 from typing import Annotated
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from kb_rag import (
     DEFAULT_SETTINGS,
@@ -55,10 +55,11 @@ class ProductConfig(BaseModel):
     refusal_rules: str
 
 
-def fetch_product(api_url: str, product_id: str) -> ProductConfig:
+def fetch_product(api_url: str, product_id: str, token: str = "") -> ProductConfig:
     request_url = f"{api_url.rstrip('/')}/products/{quote(product_id, safe='')}"
+    request = Request(request_url, headers={"X-Internal-Token": token} if token else {})
     try:
-        with urlopen(request_url, timeout=10) as response:
+        with urlopen(request, timeout=10) as response:
             body = json.loads(response.read().decode())
     except HTTPError as exc:
         raise ToolError(f"product config returned {exc.code}") from exc
@@ -89,6 +90,8 @@ def build_server(
     qdrant: Callable[[], AsyncQdrantClient],
     api_url: str,
     settings: RetrievalSettings = DEFAULT_SETTINGS,
+    *,
+    internal_token: str = "",
 ) -> MCPServer:
     mcp = MCPServer(
         "kb-copilot",
@@ -140,7 +143,7 @@ def build_server(
         cleaned = product_id.strip()
         if not cleaned:
             raise ToolError("product_id is required")
-        return await asyncio.to_thread(fetch_product, api_url, cleaned)
+        return await asyncio.to_thread(fetch_product, api_url, cleaned, internal_token)
 
     return mcp
 
@@ -154,7 +157,9 @@ def qdrant_from_env() -> AsyncQdrantClient:
 
 def server_from_env() -> MCPServer:
     return build_server(
-        cache(qdrant_from_env), os.environ.get("API_URL", "http://localhost:8000")
+        cache(qdrant_from_env),
+        os.environ.get("API_URL", "http://localhost:8000"),
+        internal_token=os.environ.get("INTERNAL_API_TOKEN", ""),
     )
 
 
