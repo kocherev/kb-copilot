@@ -58,7 +58,7 @@ test("home page explains the product and offers a first product", () => {
   expect(screen.queryByRole("link", { name: "API health" })).toBeNull();
   expect(screen.getByText(/answers out loud/i)).toBeDefined();
   expect(screen.getByText("Set up your first product")).toBeDefined();
-  expect(screen.getAllByRole("button", { name: "New product" })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: "New product" })).toHaveLength(1);
 });
 
 function session(product_id: string, created_at: string) {

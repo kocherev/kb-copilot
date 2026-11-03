@@ -53,7 +53,7 @@ export function HomePage({ apiUrl, data }: { apiUrl: string; data?: HomeData | n
         <PageHeader
           title="Products"
           description="Upload a product’s help docs, then talk to its voice agent. It answers out loud, sees your shared screen and cites the page behind each answer."
-          actions={<NewProductButton />}
+          actions={data?.products.length === 0 ? null : <NewProductButton />}
         />
         <section aria-label="Products" className="min-w-0">
           {data === undefined || retrying ? (
