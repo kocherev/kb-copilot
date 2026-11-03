@@ -65,19 +65,26 @@ When the gate fails, the printout lists every case that missed: wrong abstain de
 
 ## Live judges
 
-`evals/src/kb_evals/judge.py` has four binary judges, one per failure mode:
+`make eval-answers` answers every row with `gemini-3.8-flash`, the agent's system prompt, and the agent's tools. `search_kb` searches the demo index. `point_at`, `handoff_to_human`, and `operate_computer` return what production returns when there is no screen, no handoff, and no Mac. Each conversation opens with the agent's greeting as the first model turn, then the row's earlier turns and its question, as in a live session.
 
-| Judge | Pass when |
-| --- | --- |
-| `faithful` | Every claim in the answer is supported by the retrieved passages. |
-| `correct` | The answer states every required fact and does not contradict the reference. |
-| `refusal` | The answer says `That is not in the docs.` exactly when the row expects that refusal. |
-| `citation` | The passages the answer cites support it. |
+`evals/src/kb_evals/judge.py` has four binary judges, one per failure mode. Prompt version `judge-v2`:
+
+| Judge | Sees | Pass when |
+| --- | --- | --- |
+| `faithful` | The passages the model's searches returned, the question, the answer | Every claim in the answer is in those passages. What the agent says about itself, such as a handoff offer, is not a claim. |
+| `correct` | The question, the reference answer, the required facts, the answer | The answer states every required fact and does not contradict the reference. |
+| `refusal` | The passages the model saw, the question, the expected behavior for the category, the answer | The answer refuses with `That is not in the docs.` exactly when the row expects that refusal, and otherwise answers, corrects, asks, or answers the covered part, as the category expects. Facts are not graded here. |
+| `citation` | The cited passages and the answer | The cited passages support every claim. A claim with no citation fails. |
+
+Both keys are read from the repo `.env` when it exists:
 
 ```bash
-ANTHROPIC_API_KEY=... make eval-live ANSWERS=path/to/answers.jsonl
+make eval-answers ANSWERS=evals/runs/answers.jsonl
+make eval-live ANSWERS=evals/runs/answers.jsonl
 ```
 
-The answers file has one `{"id", "answer", "cited_passage_ids"}` object per line. Passage ids are the stable point ids `kb_rag` returns. The run writes `evals/runs/<date>-<short sha>.jsonl` with each verdict, its reason, the model id, and the prompt version. The model is `claude-haiku-5-5` unless `KB_JUDGE_MODEL` is set. `evals/runs/` is ignored by git.
+The answers file has one `{"id", "answer", "cited_passage_ids", "passages"}` object per line. `passages` holds `{"id", "source", "text"}` for every passage the model's searches returned. Passage ids are the stable point ids `kb_rag` returns. The run writes `evals/runs/<date>-<short sha>.jsonl` with each verdict, its reason, the model id, and the prompt version. The model is `claude-haiku-5-5` unless `KB_JUDGE_MODEL` is set. `evals/runs/` is ignored by git. A full run of 152 rows takes about 40 minutes.
+
+Live results, and why `judge-v1` numbers are not comparable, are in `docs/decisions/0002-evals.md`.
 
 `make judge-calibrate` compares a run with human labels. The label format is in `evals/labels/README.md`. Why the judges look like this is in `docs/decisions/0002-evals.md`.
