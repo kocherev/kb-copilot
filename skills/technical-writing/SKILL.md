@@ -11,20 +11,20 @@ Pick one of the four modes before writing. Mixing them in one section makes the 
 
 | Mode | Question it answers | In this repo |
 | --- | --- | --- |
-| Tutorial | How do I try it? | README quickstart, from `.env.example` through `docker compose up` |
-| How-to | How do I do this one task? | `services/mcp/README.md`, `evals/README.md` |
+| Tutorial | How do I try it? | README quickstart, from `.env.example` through sign-up, an upload, and a first session |
+| How-to | How do I do this one task? | `services/mcp/README.md`, `apps/desktop/README.md`, `evals/README.md` |
 | Reference | What are the exact fields and commands? | Env vars, HTTP examples, the eval table, `AGENTS.md` commands |
-| Explanation | Why is it shaped this way? | README architecture diagram |
+| Explanation | Why is it shaped this way? | README "How it works", `docs/decisions` |
 
 ## README
 
-Lead with what the program does. Then the diagram, the quickstart, the demo, the eval table, and the MCP client. Reference sections come after a reader can run it.
+Lead with what the program does. The order is Quickstart, How it works, Evals, MCP, Desktop helper, Development, License. Reference sections come after a reader can run it. Run every quickstart command from a clean `.env` before you change the quickstart.
 
-The architecture diagram names `apps/web`, `services/api`, `services/agent`, `services/mcp`, `packages/rag`, and `evals`. If the code path changes, change the diagram in the same commit. The worker searches Qdrant in-process. It does not call the API for `search_kb`.
+The architecture diagram names `apps/web`, `services/api`, `services/agent`, `services/mcp`, `packages/rag`, `apps/desktop`, and `evals`. If the code path changes, change the diagram in the same commit. The worker searches Qdrant in-process. It does not call the API for `search_kb`. A component that exists but is not called yet gets a dotted edge and a sentence saying so.
 
 The eval table copies `make eval`. When the printout changes, replace the numbers from that printout.
 
-Demo pictures show the session screen. If they are not a live recording, say that.
+A picture in the README says whether it is a screenshot or a live recording.
 
 ## Sentences
 
