@@ -1,126 +1,160 @@
 # kb-copilot
 
-Screen-share and voice support over a knowledge base you upload. The agent answers from that knowledge base, cites the passage, and this repo scores those answers before a change lands.
-
-You upload documents, set the product name, description, tone, and refusal rules, then join a LiveKit room with your microphone and your screen. The worker searches the index for that product. A hit lists the sections it used under the spoken line. A miss is the sentence `That is not in the docs.`
-
-## Architecture
-
-```mermaid
-flowchart LR
-  web["apps/web"]
-  api["services/api"]
-  agent["services/agent"]
-  mcp["services/mcp"]
-  rag["packages/rag"]
-  evals["evals"]
-  pg[(Postgres)]
-  qd[(Qdrant)]
-  room["LiveKit room"]
-
-  web -->|"upload, config, token"| api
-  web -->|"mic and screen"| room
-  api --> pg
-  api --> rag
-  rag --> qd
-  agent -->|"join as kb-support"| room
-  agent -->|"load product"| api
-  agent --> rag
-  mcp --> rag
-  mcp -->|"get_product"| api
-  evals --> rag
-  evals --> agent
-```
-
-The browser talks to the API for products, uploads, and the LiveKit token. Postgres stores the product and the ingest job. `packages/rag` parses, chunks, and upserts hybrid vectors into the Qdrant collection `kb_chunks`, filtered by `product_id`. The worker loads the product from the API, joins the room with that id in the dispatch metadata, and calls `search_kb` in-process against the same index. `services/mcp` exposes `search_kb` and `get_product` on stdio. `evals/` runs the retrieval path offline and fails the process when a score drops under `evals/thresholds.json`.
+A voice and screen-share support agent that answers from a knowledge base you upload. You sign in to the web app, create a product (name, description, tone, refusal rules), upload documents, and start a LiveKit session with your microphone and your screen. The agent is one Gemini Live model. It hears you, sees the shared screen, searches the product's documents, and cites the sections it used. An answer the documents do not support is the sentence `That is not in the docs.` Offline evals score retrieval before a change lands.
 
 ## Quickstart
 
-These steps take about five minutes after Docker has built the images.
+You need Docker Compose v2, `openssl`, and a Google API key from https://aistudio.google.com/apikey. The agent runs on Gemini Live and refuses to start without the key.
 
-You need Node.js 22, pnpm 10.33.4, Python 3.12, [uv](https://docs.astral.sh/uv/) 0.13.6, and Docker Compose v2.
+Create `.env`. The `sed` line writes two random secrets and the key pair of the dev LiveKit server that Compose can run for you:
 
 ```bash
 cp .env.example .env
-pnpm install
-uv sync --all-packages --group dev
-docker compose up --build
+sed -i.bak \
+  -e "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=$(openssl rand -hex 32)/" \
+  -e "s/^INTERNAL_API_TOKEN=.*/INTERNAL_API_TOKEN=$(openssl rand -hex 32)/" \
+  -e 's/^LIVEKIT_API_KEY=.*/LIVEKIT_API_KEY=devkey/' \
+  -e 's/^LIVEKIT_API_SECRET=.*/LIVEKIT_API_SECRET=secret/' \
+  .env
+rm .env.bak
 ```
 
-- Web: http://localhost:3000
-- API health: http://localhost:8000/health
-- Qdrant readiness: http://localhost:6333/readyz
+Open `.env` and set `GOOGLE_API_KEY` to your key. The web app exits at start unless `BETTER_AUTH_SECRET` is at least 32 characters and not `replace-me`. The dev LiveKit key pair is public, so use it for local work only.
 
-`/readyz` returns plain text and HTTP 200. Do not parse that body as JSON.
-
-Compose points the API at the `postgres` and `qdrant` hostnames. `.env` keeps `localhost` for commands you run on the host. The API container waits with `scripts/wait_for_http.py`, which checks the status code only. The browser calls the API at `NEXT_PUBLIC_API_URL`. The web server reads products through `API_INTERNAL_URL`, which is `http://api:8000` in Compose.
-
-`.env.example` sets the LiveKit key pair to `replace-me`. The web app, API, Postgres, and Qdrant still start. A placeholder counts as missing, so `POST /sessions` returns 503 with `LiveKit is not configured`. The worker keeps retrying until `LIVEKIT_URL` and a real key pair are set. The two setups are below.
-
-Create a product and index the sample pages. Those pages are original text under the MIT license in `LICENSE`.
-
-```bash
-curl -s -X POST http://localhost:8000/products \
-  -H 'content-type: application/json' \
-  -d '{"name":"Acme","description":"Acme helps customers reset passwords.","tone":"calm and brief","refusal_rules":"Do not invent a refund policy."}'
-```
-
-Use the returned `id`:
-
-```bash
-curl -s -X POST http://localhost:8000/products/<id>/documents \
-  -H 'content-type: application/json' \
-  -d '{"directory":"demo/docs"}'
-```
-
-`directory` must stay inside `KB_DATA_ROOT`. In Compose that root is `/app`, and the image includes `demo/docs`. The job `status` becomes `indexed`. Open http://localhost:3000/products/<id> and choose Start session.
-
-To run the checks without starting the stack:
-
-```bash
-./scripts/check.sh
-make eval
-```
-
-`./scripts/check.sh` already runs the offline eval. `make eval` prints the same table on its own.
-
-### LiveKit Cloud
-
-Set `LIVEKIT_URL`, `LIVEKIT_AGENT_URL`, and `LIVEKIT_API_URL` to the same `wss://<project>.livekit.cloud` URL, and set that project's key pair. Set `GOOGLE_API_KEY`. Leave the `livekit` profile off.
-
-```bash
-docker compose up --build
-```
-
-### Self-hosted server
+Start the stack. The first run builds the API, web, and agent images:
 
 ```bash
 docker compose --profile livekit up --build
 ```
 
-That profile runs `livekit-server --dev`. The dev process does not read `LIVEKIT_API_KEY` or `LIVEKIT_API_SECRET`. Its key pair is `devkey` / `secret`. Put those in `.env`, with `LIVEKIT_URL=ws://localhost:7880`, `LIVEKIT_AGENT_URL=ws://livekit:7880`, and `LIVEKIT_API_URL=http://livekit:7880`. Set `GOOGLE_API_KEY` as well. The browser uses `LIVEKIT_URL`. The agent container uses `LIVEKIT_AGENT_URL`, and the API dispatches through `LIVEKIT_API_URL`, because `localhost` inside a container is not the LiveKit server.
+The `migrate` service applies the database migrations and exits, then the API and the web app start. When the containers are up:
 
-## Demo
+- Web app: http://localhost:3000
+- API health: http://localhost:8000/health
+- Qdrant readiness: http://localhost:6333/readyz
 
-The session page asks for the microphone and the screen, then shows the shared screen next to a transcript. The agent hears you, sees the screen, and answers by voice. A Thinking label shows only while the agent thinks. When the agent calls `point_at`, the page draws a ring and a short label on the picture. The ring sits inside the video, not in the bars around it. It stays in the browser and does not move the mouse or click.
+Then, in the browser:
 
-Under an answer from the docs, the page lists the sections the answer used. Each has a title and a snippet that opens on click. A refusal lists none. The connection line reads Connecting, In the room, Connection lost. Reconnecting, or Session ended. End session leaves the room. If the agent cannot start, the page shows the reason.
+1. Open http://localhost:3000, choose Create an account, and sign up with any name, an email address, and a password of at least 8 characters. Better Auth creates a personal organization for you. Every product, upload, and session belongs to that organization.
+2. On the home page, fill in Create product. Use the name `Northstar Desk`, which is the fictional product the sample pages describe, and any one-paragraph description, tone, and refusal rules. Choose Create product, then the Open Northstar Desk link.
+3. On the product page, under Documents, choose the files in `demo/docs/billing` and choose Upload documents. The API answers 202 and indexes in the background. Each file shows Queued, then Indexing, then Indexed with a chunk count. The first upload downloads about 1.2 GB of embedding models into the `fastembed` volume. Later uploads and the agent reuse them.
+4. Choose Start session at the top of the product page, then Start session again on the next page. Allow the microphone, share your screen, and ask `How do I get a refund?`. The agent speaks the answer. When the answer comes from the documents, the transcript line lists the sections it used.
 
-To see the agent read a real screenshot, run the selfcheck:
+The sample pages in `demo/docs` are original text under the MIT license in `LICENSE`. The upload form takes up to 20 files of 2 MB each, so upload the other folders in further batches.
+
+If something is missing, Compose still starts the rest:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `docker compose logs web` prints `BETTER_AUTH_SECRET must be at least 32 random characters` | Secret is a placeholder | Generate one with `openssl rand -hex 32` |
+| Start session fails with `LiveKit is not configured` (HTTP 503) | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, or `LIVEKIT_API_SECRET` is empty or `replace-me` | Set them, then `docker compose up -d` |
+| The agent container exits | `docker compose logs agent` names the setting, such as `GOOGLE_API_KEY` | Set it, then `docker compose up -d agent` |
+| Product, document, and session routes return 401 | The call has no sign-in | See the API section below |
+
+### Use LiveKit Cloud instead
+
+Leave out `--profile livekit`. In `.env`, set `LIVEKIT_URL`, `LIVEKIT_AGENT_URL`, and `LIVEKIT_API_URL` to the same `wss://<project>.livekit.cloud` URL, and set that project's `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. `GOOGLE_API_KEY` is still required, because the model call goes to Google and not through LiveKit.
 
 ```bash
-GOOGLE_API_KEY=... uv run python -m kb_agent.selfcheck \
-  --image services/agent/tests/fixtures/billing-screen.png \
-  --question "What does the red banner say, and which button fixes it?"
+docker compose up --build
 ```
 
-It prints the reply, the tools called, and the token usage, and exits 1 when no image tokens were billed. Without a key it prints `skipped` and exits 0.
+The browser joins `LIVEKIT_URL`. The agent container joins `LIVEKIT_AGENT_URL`. The API dispatches the agent through `LIVEKIT_API_URL`. On the self-hosted profile these are three different addresses (`ws://localhost:7880`, `ws://livekit:7880`, `http://livekit:7880`), because `localhost` inside a container is not the LiveKit server.
 
-![Session page for Acme before the room connects. The button reads Start session.](docs/session-start.png)
+### Change host ports
 
-## Eval results
+Compose reads these from `.env`. Postgres and Qdrant bind to `127.0.0.1` only.
 
-`make eval` indexes the 46 sample pages in `demo/docs` in memory, runs the 152 rows of `evals/datasets/v1.jsonl` through `kb_rag.search`, and prints this table. It exits 1 when a gated score is below `evals/thresholds.json`. This is that printout for the committed dataset and defaults:
+| Variable | Default | Also change |
+| --- | --- | --- |
+| `WEB_PORT` | 3000 | `BETTER_AUTH_URL` and `CORS_ORIGINS` |
+| `API_PORT` | 8000 | `NEXT_PUBLIC_API_URL`, then rebuild the web image with `--build` |
+| `POSTGRES_PORT` | 5432 | `DATABASE_URL`, which is for commands on the host |
+| `QDRANT_PORT` | 6333 | `QDRANT_URL`, which is for commands on the host |
+| `LIVEKIT_PORT`, `LIVEKIT_TCP_PORT`, `LIVEKIT_UDP_PORT` | 7880, 7881, 7882 | `LIVEKIT_URL`. Media needs the default UDP port 7882 |
+
+Inside Compose the web server calls the API at `API_INTERNAL_URL`, which Compose sets to `http://api:8000`.
+
+### Use the API from the command line
+
+The web app signs you in with Better Auth and sends the API a short-lived JWT (15 minutes). You can do the same from a shell. Sign up, keep the session cookie, and read the token:
+
+```bash
+curl -s -c cookies.txt -H 'content-type: application/json' \
+  -d '{"name":"You","email":"you@example.com","password":"choose-a-long-password"}' \
+  http://localhost:3000/api/auth/sign-up/email
+TOKEN=$(curl -s -b cookies.txt http://localhost:3000/api/auth/token | sed -E 's/.*"token":"([^"]+)".*/\1/')
+```
+
+Create a product, upload documents as multipart form data, and list them:
+
+```bash
+ID=$(curl -s -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"Northstar Desk","description":"Northstar Desk is a help desk for support teams.","tone":"calm and brief","refusal_rules":"Do not invent a policy."}' \
+  http://localhost:8000/products | sed -E 's/.*"id":"([^"]+)".*/\1/')
+curl -s -H "authorization: Bearer $TOKEN" \
+  $(for f in demo/docs/billing/*; do printf -- '-F files=@%s ' "$f"; done) \
+  http://localhost:8000/products/$ID/documents
+curl -s -H "authorization: Bearer $TOKEN" http://localhost:8000/products/$ID/documents
+```
+
+The upload returns 202 and a job. The list shows each document with `status` (`queued`, `indexing`, `indexed`, or `failed`), `chunk_count`, and `error`. A file name that already exists replaces the old document. Delete one with `DELETE /products/$ID/documents/<document id>`.
+
+For a script that outlives 15 minutes, create an organization API key with the JWT and send it the same way. The secret starts with `kb_`, is shown once, and only its hash is stored.
+
+```bash
+curl -s -X POST -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"ci"}' http://localhost:8000/api-keys
+```
+
+`scripts/smoke.py` walks the same flow against a running stack, including the agent's first reaction in the room. The full route list is in `apps/web/openapi.json`.
+
+## How it works
+
+```mermaid
+flowchart LR
+  web["apps/web<br/>Next.js, Better Auth"]
+  api["services/api<br/>FastAPI, ingest queue"]
+  agent["services/agent<br/>Gemini Live"]
+  rag["packages/rag<br/>FastEmbed, Qdrant"]
+  mcp["services/mcp"]
+  desktop["apps/desktop<br/>macOS helper"]
+  evals["evals"]
+  pg[(Postgres)]
+  qd[(Qdrant)]
+  room["LiveKit room"]
+  gemini["Gemini Live API"]
+
+  web -->|"products, uploads, session start"| api
+  web -->|"users and sessions"| pg
+  web -->|"mic and screen"| room
+  api -->|"verify JWT"| web
+  api --> pg
+  api -->|"index uploads"| rag
+  api -->|"token and dispatch"| room
+  rag --> qd
+  agent -->|"joins as kb-support"| room
+  agent -->|"product config"| api
+  agent -->|"search_kb, point_at"| rag
+  agent --> gemini
+  mcp --> rag
+  mcp -->|"get_product"| api
+  desktop -->|"joins with a desktop token"| room
+  agent -.->|"RPC, not wired yet"| desktop
+  evals --> rag
+```
+
+- `apps/web` is the Next.js app. Better Auth handles email and password sign-up in the same Postgres and signs the JWTs the API checks.
+- `services/api` is FastAPI. It scopes products, documents, sessions, and API keys to the caller's organization. An upload waits in Postgres until a loop in the API process indexes it. The loop claims jobs with `SKIP LOCKED`.
+- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. It has two tools. `search_kb` queries Qdrant in-process, and `point_at` draws a highlight on the browser preview.
+- `packages/rag` parses, chunks, embeds, and searches. Dense vectors are FastEmbed `google/embeddinggemma-300m`, sparse vectors are `Qdrant/bm25`, and a search abstains when the best dense score is under the threshold in `RetrievalSettings`. No reranker runs by default.
+- `services/mcp` serves `search_kb` and `get_product` over stdio.
+- `apps/desktop` is a macOS helper that can click, type, press keys, and scroll when the agent calls it over LiveKit RPC. The agent has no tool that calls it yet.
+- `evals` scores retrieval on the sample pages and holds the live answer and judge harness.
+
+## Evals
+
+`make eval` indexes the 46 sample pages in `demo/docs` in memory, runs the 152 rows of `evals/datasets/v1.jsonl` through `kb_rag.search`, and prints this table. It exits 1 when a gated score is below `evals/thresholds.json`. This is the printout for the committed dataset and defaults:
 
 ```text
 category                      owner        n  recall@5    mrr  ctx_prec  facts  abstain  inj_safe
@@ -137,96 +171,36 @@ injection                                 10     0.800  0.367     0.200  0.800  
 overall                                  152     0.869  0.708     0.280  0.863    0.079     0.928
 ```
 
-`k` is 5 against 46 documents. The rows cover direct questions, paraphrases, multi-hop and follow-up questions, off-topic chat, four kinds of unanswerable question, and questions aimed at three pages with prompt-injection text. `owner` says who must catch an unanswerable row.
+`owner` says who must catch an unanswerable row. Retrieval owns off-topic and out-of-scope questions. The answer model owns false-premise, partial, and underspecified ones, which the offline run does not score. Abstention precision and recall (0.800 and 0.286) come from a held-out half of the rows. Metrics, the split, and the judges are in `evals/README.md`. The model choice is in `docs/decisions/0001-retrieval.md`.
 
-- Retrieval owns `off_topic` and `unanswerable_out_of_scope`. It abstains on 10 of 12 off-topic rows and on none of the 15 out-of-scope rows. Those look like real questions to an embedding model and pull real passages, so the answer model has to refuse them.
-- The answer model owns `unanswerable_false_premise`, `unanswerable_partial`, and `unanswerable_underspecified`. Retrieval should return the page that corrects or covers the question, and it does for 0.850 and 0.900 of those rows. Whether the model then refuses, corrects, or asks is checked by the live refusal judge, not by this run.
-- Abstention precision and recall (0.800 and 0.286) are scored on a held-out half. The other half picked the threshold, which is set so a wrong refusal costs ten times a missed one.
+The other commands need a key. They need `uv sync --all-packages --group dev` first.
 
-The run needs no key and opens no room. It took 3 minutes on a machine at load average 110, and about a minute on an idle one. Metrics, the split, and the live judges are in `evals/README.md`. Model choice and latency are in `docs/decisions/0001-retrieval.md`.
+| Command | Needs | What it does |
+| --- | --- | --- |
+| `make eval` | Nothing. The first run downloads the models | The table above |
+| `make eval-answers` | `GOOGLE_API_KEY` | Answers every row in text with `gemini-3.8-flash`, using the agent's prompt and `search_kb`. Writes `evals/runs/answers.jsonl` |
+| `make eval-live` | `ANTHROPIC_API_KEY`, and the file from `make eval-answers` | Judges each answer for faithfulness, correctness, refusal, and citation with `claude-haiku-5-5`. Set `KB_JUDGE_MODEL` to change the judge. Writes a verdict file under `evals/runs/` |
+| `uv run python -m kb_agent.selfcheck --image services/agent/tests/fixtures/billing-screen.png --question "What does the red banner say, and which button fixes it?"` | `GOOGLE_API_KEY` | Streams the image as the shared screen to the live model and prints the reply, the tools called, and the token usage. Exits 1 when no image tokens were billed, which means the model never saw the picture. Without a key it prints `skipped` and exits 0 |
+
+`evals/runs/` is ignored by git. No live score is committed to this repository.
 
 ## MCP
 
-`services/mcp` speaks MCP over stdio. `search_kb` uses the same retrieval function as the agent. `get_product` reads `GET /products/{id}`.
+`services/mcp` speaks MCP over stdio. `search_kb` runs the same `kb_rag.search` as the agent, against the Qdrant that Compose publishes on `localhost:6333`. `get_product` reads `GET /products/{id}`. The client configuration, the arguments, and a known limit of `get_product` are in `services/mcp/README.md`.
 
-The client config and the tool arguments are in `services/mcp/README.md`.
+## Desktop helper
 
-## Layout
+`apps/desktop` is a macOS program that joins a session room and performs mouse and keyboard actions over LiveKit RPC. It answers only the agent participant, and `--dry-run` logs actions without performing them. The agent does not call it yet. Setup, permissions, and the RPC contract are in `apps/desktop/README.md`.
 
-| Path | What it is |
-| --- | --- |
-| `apps/web` | Next.js app. Create a product, edit its config, upload documents, and start a session. |
-| `services/api` | FastAPI. Product config and ingest jobs live in Postgres. `POST /sessions` mints a LiveKit token and dispatches the agent. |
-| `services/agent` | LiveKit Agents worker. It joins a room when dispatched, with `product_id` in the job metadata. |
-| `services/mcp` | MCP server for `search_kb` and `get_product`. |
-| `packages/rag` | Parse, chunk, and hybrid upsert into Qdrant. |
-| `evals` | Golden questions, scorers, and the threshold gate. |
+## Development
 
-The command map for changes is `AGENTS.md`.
-
-## Ingest
-
-Markdown, plain text, HTML, and PDF are accepted. A directory upload stores each file's path relative to that directory, such as `billing/refunds.md`. A file upload stores `upload://<name>`. No absolute local path is stored.
-
-```bash
-curl -s -X POST http://localhost:8000/products/demo/documents \
-  -H 'content-type: application/json' \
-  -d '{"directory":"demo/docs"}'
-```
-
-`POST /products/demo/documents` still works without a product row. A session does not: a missing product returns 404 and does not dispatch.
-
-The job `status` becomes `indexed`. `status_log` records `queued`, then `indexing`, then `indexed`. `GET /ingest-jobs/{id}` returns the same job.
-
-Chunks land in `kb_chunks`, split at headings. Each payload has `product_id`, `source`, `title` (the nearest heading), `anchor` (its slug), and `text`. The dense vector is FastEmbed `google/embeddinggemma-300m` and the sparse vector is `Qdrant/bm25` with Qdrant's IDF modifier, both run locally with no key. The first ingest downloads the models. Search fuses dense and sparse with reciprocal rank fusion and abstains when the best dense cosine is under the threshold in `packages/rag`.
-
-## Product config
-
-`POST /products` stores the config. `GET /products/{id}` reads it. `PUT /products/{id}` replaces it. A blank field is rejected. The description must be one paragraph.
-
-The web app at `/` creates a product. `/products/{id}` edits the four fields and uploads files for that id. A saved config shows the word Saved.
-
-`render_system_prompt` in `services/agent` includes the name, description, tone, and refusal rules.
-
-## Live session
-
-`POST /sessions` with `{"product_id":"<uuid>"}` returns `url`, `token`, and `room`. The token lets the browser join that room and publish the microphone and the screen. The API dispatches the agent named `kb-support` through `LIVEKIT_API_URL`, with job metadata `{"product_id":"<uuid>"}`. Missing or placeholder LiveKit settings return 503 with `LiveKit is not configured`.
-
-The worker loads that product from `GET /products/{id}` and uses it as the system prompt. The model is Gemini Live, `gemini-3.8-live-extended-thinking`, through the LiveKit Google plugin with `GOOGLE_API_KEY`, on a `*.livekit.cloud` URL and on a self-hosted server alike. The worker exits at start with one line when `GOOGLE_API_KEY` or a LiveKit setting is missing or a placeholder. `KB_VOICE` picks the voice (default `Puck`). `AGENT_MAX_SESSION_SECONDS` (default 600) ends a session with a short goodbye. The screen share reaches the model as video frames, about one per second while the user speaks and one per three seconds otherwise.
-
-The agent searches before it answers a product question. `search_kb` queries `kb_chunks`, filtered by `product_id`, and returns the passages as numbered untrusted data plus an `abstained` flag. The agent container reads `QDRANT_URL` (`http://qdrant:6333` in Compose) and passes `QDRANT_API_KEY` when it is set. An abstained search or a passage that does not answer produces `That is not in the docs.`
-
-The worker sends three kinds of message on the room data channel. The names are in `services/agent/src/kb_agent/protocol.py` and `apps/web/src/lib/protocol.ts`, and a test fails when they drift.
-
-| Topic | Payload |
-| --- | --- |
-| `hud` | `{"kind":"point","x":0.5,"y":0.4,"label":"Review status"}`. `x` and `y` are fractions of the shared picture from the top left. |
-| `citations` | `{"message_id":"…","text":"<the assistant message>","passages":[{"id","title","source","anchor","snippet"}]}`. The page attaches it to the transcript line with the same text. Sent only when a passage supports the message. |
-| `agent-error` | `{"message":"…"}`. Sent when the agent cannot start, or its model session dies, so the page is never silent. |
-
-Each realtime model turn is one JSON line on stdout with `kind` `component`, `segment` `realtime`, and `image_tokens`. Each user or assistant turn is another line with the per-turn delays. A knowledge lookup is a line with `kind` `retrieval` and `duration_ms`.
-
-`make eval-answers` answers every eval question with Gemini in text, using the agent's prompt and tool, and `make eval-live` judges the result. Both need keys and write under `evals/runs/`, which git ignores.
-
-The web app links to `/products/{id}/session`. Start session asks for the microphone and the screen, then plays the agent with `RoomAudioRenderer`. A dispatch failure returns HTTP 502 with `Could not dispatch the agent`, and the page shows that text. The response does not include a token.
-
-## Checks
-
-GitHub Actions (`.github/workflows/ci.yml`) runs, on pull requests and on pushes to `main`:
-
-- web lint, typecheck, unit tests, and `pnpm build`
-- Python lint, format check, typecheck, and unit tests
-- offline evals via `make eval`, failing when a score is below `evals/thresholds.json`
-- `docker compose config`
-- a gitleaks scan
+For work on the code you need Node.js 22, pnpm 10.33.4, Python 3.12, [uv](https://docs.astral.sh/uv/) 0.13.6, and Docker Compose v2. One command installs from the lockfiles, lints, typechecks, runs the unit tests and `make eval`, and validates the Compose files:
 
 ```bash
 ./scripts/check.sh
 ```
 
-`check.sh` runs the lint, typecheck, test, eval, and compose steps. It runs gitleaks when the binary is on your `PATH`. CI installs gitleaks itself.
-
-One package at a time:
+It runs gitleaks when the binary is on your `PATH`. CI installs it. Unit tests use a hashed embedder and download no models. One package at a time:
 
 ```bash
 pnpm --filter web test
@@ -234,10 +208,11 @@ uv run pytest services/api/tests
 uv run pytest packages/rag/tests
 uv run pytest services/agent/tests
 uv run pytest services/mcp/tests
+uv run pytest apps/desktop/tests
 uv run pytest evals/tests
 ```
 
-`.env.example` is placeholders. Do not commit `.env`, API keys, or live database passwords.
+`AGENTS.md` has the map of paths and the rules for a change. Architecture decisions are indexed in `docs/decisions/README.md`. Do not commit `.env`, API keys, or live database passwords.
 
 ## License
 

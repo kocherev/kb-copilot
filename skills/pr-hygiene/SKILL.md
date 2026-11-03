@@ -13,7 +13,7 @@ One behavior per pull request. Land it on `main`. Do not force-push a branch som
 
 ## Commits
 
-The subject is an imperative sentence. A conventional prefix (`feat:`, `fix:`, `docs:`) matches the earlier history. Later commits drop the prefix when the sentence is already specific. Either form is fine.
+The subject is a short imperative sentence in sentence case, with no type prefix and no trailing period, as in `Secure document ingest and index it in the background`.
 
 Do not commit `.env`, a key, a token, or a live password. `.env.example` stays placeholders.
 

@@ -26,7 +26,7 @@ That command installs from the lockfiles, lints, typechecks, runs the unit tests
 
 ## Evals
 
-`make eval` prints `cases`, then `hit@k`, `mrr`, `citation_rate`, and `faithfulness`, each with a threshold. Exit status 1 means a score is under `evals/thresholds.json`.
+`make eval` prints a table with one row per category (`recall@5`, `mrr`, `ctx_prec`, `facts`, `abstain`, `inj_safe`), then the gate: each metric with its score and its floor from `evals/thresholds.json`. Exit status 1 means a score is under its floor.
 
 Paste that printout in the pull request when the diff touches retrieval, chunking, embeddings, citations, the system prompt, or the dataset. The table in `README.md` has to match a fresh printout. Copy the numbers. Do not round them into a story.
 
@@ -34,4 +34,4 @@ Web-only copy and styles still go through `./scripts/check.sh`. You do not need 
 
 ## What to assert
 
-For the session UI, rendered transcript text and the `Source:` label are the check. For ingest, the job status and the Qdrant payload are the check. A green import is not done.
+For the session UI, the rendered transcript text and the Sources list under a line are the check. For ingest, the document `status` from `GET /products/{id}/documents` and the Qdrant payload are the check. A green import is not done.
