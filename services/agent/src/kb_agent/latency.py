@@ -8,8 +8,6 @@ from livekit.agents.metrics import (
     TTSMetrics,
 )
 
-ComponentMetric = STTMetrics | LLMMetrics | TTSMetrics | RealtimeModelMetrics
-
 
 def log_json(record: Mapping[str, object]) -> None:
     print(json.dumps(record, sort_keys=True), flush=True)
