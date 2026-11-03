@@ -182,7 +182,6 @@ async def delete_document(
     product: Annotated[ProductRow, Depends(owned_product)],
     db: Annotated[AsyncSession, Depends(get_db)],
     qdrant: Annotated[AsyncQdrantClient, Depends(get_qdrant)],
-    settings: Annotated[RetrievalSettings, Depends(get_retrieval_settings)],
 ) -> Response:
     document = await db.scalar(
         select(DocumentRow).where(
@@ -191,7 +190,7 @@ async def delete_document(
     )
     if document is None:
         raise HTTPException(404, "document not found")
-    await remove_chunks(qdrant, settings, product.id, [document])
+    await remove_chunks(qdrant, product.id, [document])
     await db.delete(document)
     await db.commit()
     return Response(status_code=204)

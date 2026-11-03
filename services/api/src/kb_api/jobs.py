@@ -9,9 +9,9 @@ from uuid import UUID
 from fastapi import HTTPException, Request
 from kb_rag import (
     DEFAULT_SETTINGS,
+    KB_COLLECTION,
     RetrievalSettings,
     delete_source,
-    ensure_collection,
     index_sources,
 )
 from kb_rag.sources import source_from_bytes
@@ -165,7 +165,6 @@ async def fail_interrupted(sessions: Sessions) -> None:
 
 async def remove_chunks(
     qdrant: AsyncQdrantClient,
-    settings: RetrievalSettings,
     product_id: UUID,
     documents: Sequence[DocumentRow],
 ) -> None:
@@ -176,7 +175,9 @@ async def remove_chunks(
     if not documents:
         return
     try:
-        await ensure_collection(qdrant, settings)
+        # Nothing was ever indexed, so there is nothing to delete.
+        if not await qdrant.collection_exists(KB_COLLECTION):
+            return
         for document in documents:
             await delete_source(qdrant, str(product_id), document.source)
     except Exception as exc:

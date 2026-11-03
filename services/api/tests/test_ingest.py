@@ -366,3 +366,17 @@ def test_openapi_describes_the_multipart_upload(http: TestClient) -> None:
 
     assert "202" in post["responses"]
     assert "multipart/form-data" in post["requestBody"]["content"]
+
+
+def test_a_failed_document_can_be_deleted_before_anything_was_indexed(
+    http: TestClient, as_user, product: str, qdrant: AsyncQdrantClient
+) -> None:
+    headers = as_user()
+    path = f"/products/{product}/documents"
+    http.post(path, headers=headers, files=upload(("broken.pdf", b"%PDF-1.1\nnope")))
+    document = http.get(path, headers=headers).json()[0]
+
+    deleted = http.delete(f"{path}/{document['id']}", headers=headers)
+
+    assert deleted.status_code == 204
+    assert http.get(path, headers=headers).json() == []
