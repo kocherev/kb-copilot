@@ -1,9 +1,12 @@
 # thin-pr runs the install and checks as the thin-pr-check user. setup-uv points UV_CACHE_DIR at a runner-owned
 # folder that user cannot write, so each command moves the uv cache into its own home.
 install: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm install --frozen-lockfile && uv sync --frozen --all-packages --group dev
+# The implementer may run these. They run like the checks, so they move the uv cache too.
+# The test check fails when their output is stale.
+generate: ['export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm openapi']
 checks:
   typecheck: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm lint && pnpm typecheck && uv run ruff check . && uv run ruff format --check . && uv run pyright
-  test: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm test && uv run pytest
+  test: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm test && uv run pytest && pnpm openapi && git diff --exit-code apps/web/openapi.json apps/web/src/lib/api/schema.d.ts
 paths:
   allow: ["**"]
   # Workflows, real env files and the lockfiles change only by hand. .env.example stays editable.
