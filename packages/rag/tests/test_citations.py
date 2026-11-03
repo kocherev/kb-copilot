@@ -79,6 +79,20 @@ def test_each_supported_passage_is_cited_once_in_the_order_given(docs: Docs) -> 
     ]
 
 
+def test_a_spoken_restatement_with_filler_and_plurals_cites_its_passage(
+    docs: Docs,
+) -> None:
+    answer = "Your refund takes five business days to reach your card."
+
+    assert docs.supported(answer, [docs.refunds, docs.shipping]) == [docs.refunds]
+
+
+def test_a_restatement_with_a_different_number_cites_nothing(docs: Docs) -> None:
+    answer = "Your refund takes nine business days to reach your card."
+
+    assert docs.supported(answer, [docs.refunds, docs.shipping]) == []
+
+
 def test_an_unrelated_answer_cites_nothing(docs: Docs) -> None:
     both = [docs.refunds, docs.shipping]
 

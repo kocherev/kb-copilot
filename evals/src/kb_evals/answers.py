@@ -1,8 +1,9 @@
 """Answer every eval question with Gemini, for `make eval-live` to judge.
 
-The model gets the agent's system prompt and the agent's search_kb tool over
-the demo index. It answers in text, because the Live model only streams audio.
-Cited passages are chosen the way the live agent chooses them.
+The model gets the agent's system prompt and the agent's tools, with search_kb
+over the demo index. It answers in text, because the Live model only streams
+audio. Cited passages are chosen the way the live agent chooses them. Each row
+records the passages its searches returned, which the judges grade against.
 """
 
 import argparse
@@ -15,6 +16,7 @@ from pathlib import Path
 from google.genai import Client, types
 from kb_agent.prompt import ProductPrompt, render_system_prompt
 from kb_agent.retrieve import tool_text
+from kb_agent.support import NO_COMPUTER
 from kb_rag import Passage, read_directory, supported_ids
 
 from kb_evals.dataset import EvalCase, load_dataset
@@ -27,21 +29,59 @@ PRODUCT = ProductPrompt(
     tone="calm and brief",
     refusal_rules="Do not invent a policy, a price, or a step.",
 )
-SearchTool = Callable[[str], Awaitable[str]]
-Generate = Callable[[str, list[str], SearchTool], Awaitable[str]]
+# A live session opens with the agent's greeting before the user speaks.
+# Without it every answer was a first turn and began with an introduction.
+GREETING = f"Hi, I'm {PRODUCT.agent_name}. How can I help with {PRODUCT.name}?"
+Tool = Callable[..., object]
+Generate = Callable[[str, list[types.Content], list[Tool]], Awaitable[str]]
+
+
+# The prompt names these tools, so the model calls them. An eval row has no
+# shared screen, ticket queue, or Mac, so each says what production says then.
+def point_at(x: float, y: float, label: str) -> str:
+    """Highlight a control on the shared screen.
+
+    Args:
+        x: Horizontal position from 0 (left) to 1 (right).
+        y: Vertical position from 0 (top) to 1 (bottom).
+        label: Short name of the control.
+    """
+    return "The session preview is not connected, so nothing was shown."
+
+
+def handoff_to_human(summary: str, reason: str) -> str:
+    """Propose a support ticket for a person to pick up.
+
+    Args:
+        summary: One sentence naming the customer's problem.
+        reason: Why the docs and you could not solve it.
+    """
+    return (
+        "Handoff is not available for this product. "
+        "Tell the user you cannot hand this off."
+    )
+
+
+def operate_computer(goal: str) -> str:
+    """Do a task on the user's Mac for them, one approved step at a time.
+
+    Args:
+        goal: What to get done, in one sentence.
+    """
+    return NO_COMPUTER
 
 
 def gemini_generate(model: str) -> Generate:
     client = Client()
 
-    async def generate(system: str, turns: list[str], search_kb: SearchTool) -> str:
+    async def generate(
+        system: str, contents: list[types.Content], tools: list[Tool]
+    ) -> str:
         reply = await client.aio.models.generate_content(
             model=model,
-            contents=[
-                types.Content(role="user", parts=[types.Part(text=t)]) for t in turns
-            ],
+            contents=contents,
             config=types.GenerateContentConfig(
-                system_instruction=system, tools=[search_kb]
+                system_instruction=system, tools=[*tools]
             ),
         )
         return reply.text or ""
@@ -67,12 +107,27 @@ async def answer(
         return tool_text(found.abstained, found.passages)
 
     text = await generate(
-        render_system_prompt(PRODUCT), [*case.turns, case.question], search_kb
+        render_system_prompt(PRODUCT),
+        [
+            types.Content(role="model", parts=[types.Part(text=GREETING)]),
+            *(
+                types.Content(role="user", parts=[types.Part(text=turn)])
+                for turn in (*case.turns, case.question)
+            ),
+        ],
+        [search_kb, point_at, handoff_to_human, operate_computer],
     )
     cited = await supported_ids(
         retriever.client, PRODUCT_ID, text, list(seen), settings=retriever.settings
     )
-    return {"id": case.id, "answer": text, "cited_passage_ids": cited}
+    return {
+        "id": case.id,
+        "answer": text,
+        "cited_passage_ids": cited,
+        "passages": [
+            {"id": p.id, "source": p.source, "text": p.text} for p in seen.values()
+        ],
+    }
 
 
 async def write_answers(
