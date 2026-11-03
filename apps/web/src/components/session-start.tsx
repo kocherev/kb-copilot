@@ -1,33 +1,12 @@
 "use client";
 
-import {
-  LiveKitRoom,
-  RoomAudioRenderer,
-  TrackToggle,
-  VideoTrack,
-  useConnectionState,
-  useDataChannel,
-  useTracks,
-  useTranscriptions,
-  useVoiceAssistant,
-} from "@livekit/components-react";
-import { ConnectionState, Track } from "livekit-client";
 import Link from "next/link";
 import { useState } from "react";
 
-import { ScreenHud } from "@/components/screen-hud";
-import { TranscriptPanel } from "@/components/transcript-panel";
+import { SessionRoom } from "@/components/session-room";
 import { Button } from "@/components/ui/button";
 import { browserApi, type SessionGrant } from "@/lib/api/client";
-import {
-  HUD_TOPIC,
-  applyHudMessage,
-  emptyHud,
-  sessionLoad,
-  sessionPublish,
-  transcriptLines,
-  type HudState,
-} from "@/lib/session";
+import { sessionLoad } from "@/lib/session";
 
 const linkClass =
   "text-sm underline underline-offset-4 focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]";
@@ -76,7 +55,11 @@ export function SessionStart({
         {productName}
       </h1>
       {session ? (
-        <SessionRoom url={session.url} token={session.token} />
+        <SessionRoom
+          url={session.url}
+          token={session.token}
+          onRestart={() => setSession(null)}
+        />
       ) : (
         <>
           <p className="text-pretty text-sm leading-6 text-muted-foreground">
@@ -94,77 +77,5 @@ export function SessionStart({
         </>
       )}
     </main>
-  );
-}
-
-export function SessionRoom({ url, token }: { url: string; token: string }) {
-  const [roomError, setRoomError] = useState<string | null>(null);
-  return (
-    <LiveKitRoom
-      serverUrl={url}
-      token={token}
-      connect
-      audio={sessionPublish.audio}
-      video={sessionPublish.video}
-      screen={sessionPublish.screen}
-      onError={(error) => setRoomError(error.message)}
-      className="flex min-w-0 flex-col gap-6"
-    >
-      <RoomAudioRenderer />
-      {roomError ? (
-        <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
-          {roomError}
-        </p>
-      ) : null}
-      <SessionBody />
-    </LiveKitRoom>
-  );
-}
-
-function ScreenStage() {
-  const [hud, setHud] = useState<HudState>(emptyHud);
-  const assistant = useVoiceAssistant();
-  useDataChannel(HUD_TOPIC, (message) => {
-    const raw = new TextDecoder().decode(message.payload);
-    setHud((current) => applyHudMessage(current, raw));
-  });
-  const tracks = useTracks([Track.Source.ScreenShare], { onlySubscribed: false });
-  const shared = tracks.find((track) => track.publication);
-  const thinking = hud.thinking || assistant.state === "thinking";
-  return (
-    <section aria-label="Shared screen" className="flex min-w-0 flex-col gap-2">
-      <div className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-muted">
-        {shared ? (
-          <VideoTrack trackRef={shared} className="h-full w-full object-contain" />
-        ) : (
-          <p className="px-4 py-8 text-sm leading-6 text-muted-foreground">
-            Share your screen so the agent can see it.
-          </p>
-        )}
-        <ScreenHud thinking={thinking} point={hud.point} />
-      </div>
-      <p className="text-pretty text-sm leading-6 text-muted-foreground">
-        The highlight is drawn on this preview. It does not move your mouse.
-      </p>
-    </section>
-  );
-}
-
-function SessionBody() {
-  const state = useConnectionState();
-  const lines = transcriptLines(useTranscriptions());
-  const label = state === ConnectionState.Connected ? "In the room" : "Connecting";
-  return (
-    <>
-      <p role="status" className="text-sm text-muted-foreground">
-        {label}
-      </p>
-      <div className="flex flex-wrap gap-3">
-        <TrackToggle source={Track.Source.Microphone} aria-label="Microphone" />
-        <TrackToggle source={Track.Source.ScreenShare} aria-label="Screen share" />
-      </div>
-      <ScreenStage />
-      <TranscriptPanel lines={lines} />
-    </>
   );
 }

@@ -5,7 +5,8 @@ description = "LiveKit Agents worker for the support session."
 requires-python = ">=3.12"
 dependencies = [
   "kb-rag",
-  "livekit-agents[openai]>=1.8,<2",
+  "livekit-agents[google]>=1.8,<2",
+  "pillow>=10",
 ]
 
 [tool.uv.sources]

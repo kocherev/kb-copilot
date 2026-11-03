@@ -7,70 +7,56 @@ afterEach(() => {
   cleanup();
 });
 
+const passage = {
+  id: "p1",
+  title: "Refund timing",
+  source: `file:///docs/${"c".repeat(180)}.md`,
+  anchor: "refund-timing",
+  snippet: "Refunds reach the card in five business days.",
+};
+
 test("transcript shows an empty state, one character, and a long string", () => {
   const { rerender } = render(<TranscriptPanel lines={[]} />);
 
   expect(screen.getByText("Waiting for speech.")).toBeDefined();
-  expect(
-    screen.getByText("A cited answer shows Source: and the file name."),
-  ).toBeDefined();
+  expect(screen.getByRole("log")).toBeDefined();
 
   rerender(
     <TranscriptPanel
-      lines={[{ id: "one", speaker: "You", text: "A", sources: [] }]}
+      lines={[{ id: "one", speaker: "You", text: "A", citations: [] }]}
     />,
   );
   expect(screen.getByText("A")).toBeDefined();
   expect(screen.queryByText("Waiting for speech.")).toBeNull();
-  expect(
-    screen.queryByText("A cited answer shows Source: and the file name."),
-  ).toBeNull();
   expect(screen.queryByRole("list", { name: "Sources" })).toBeNull();
 
   const long = "B".repeat(400);
   rerender(
     <TranscriptPanel
-      lines={[{ id: "long", speaker: "Agent", text: long, sources: [] }]}
+      lines={[{ id: "long", speaker: "Agent", text: long, citations: [] }]}
     />,
   );
-  const text = screen.getByText(long);
-  expect(text.className).toMatch(/anywhere/);
+  expect(screen.getByText(long).className).toMatch(/anywhere/);
 });
 
-test("transcript shows a cited source and a not-in-docs answer", () => {
-  const source = `file:///docs/${"c".repeat(180)}.md`;
-  const { rerender } = render(
+test("a cited answer shows the section title and an expandable snippet", () => {
+  render(
     <TranscriptPanel
       lines={[
         {
           id: "cited",
           speaker: "Agent",
           text: "Refunds take 5 business days.",
-          sources: [source],
+          citations: [passage],
         },
       ]}
     />,
   );
 
   expect(screen.getByText("Refunds take 5 business days.")).toBeDefined();
-  const citation = screen.getByText(`Source: ${"c".repeat(180)}.md`);
-  expect(citation.className).toMatch(/anywhere/);
-  expect(citation.className).toMatch(/border-l-2/);
-  expect(citation.getAttribute("title")).toBe(source);
   expect(screen.getByRole("list", { name: "Sources" })).toBeDefined();
-
-  rerender(
-    <TranscriptPanel
-      lines={[
-        {
-          id: "missing",
-          speaker: "Agent",
-          text: "That is not in the docs.",
-          sources: [],
-        },
-      ]}
-    />,
-  );
-  expect(screen.getByText("That is not in the docs.")).toBeDefined();
-  expect(screen.queryByRole("list", { name: "Sources" })).toBeNull();
+  expect(screen.getByText(/Refund timing/)).toBeDefined();
+  expect(screen.getByText(`(${"c".repeat(180)}.md)`)).toBeDefined();
+  const snippet = screen.getByText("Refunds reach the card in five business days.");
+  expect(snippet.closest("details")?.hasAttribute("open")).toBe(false);
 });

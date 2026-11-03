@@ -1,8 +1,7 @@
 import { expect, test } from "vitest";
 
 import {
-  applyHudMessage,
-  emptyHud,
+  connectionLabel,
   sessionLoad,
   sessionPublish,
   sourceLabel,
@@ -25,21 +24,6 @@ test("session response keeps the livekit url token and room", () => {
     },
   });
   expect(sessionPublish).toEqual({ audio: true, video: false, screen: true });
-});
-
-test("hud messages move the preview highlight", () => {
-  const thinking = applyHudMessage(emptyHud, '{"kind":"thinking","active":true}');
-  expect(thinking.thinking).toBe(true);
-  const pointed = applyHudMessage(
-    thinking,
-    '{"kind":"point","x":1.4,"y":-0.2,"label":" Review status "}',
-  );
-  expect(pointed.point).toEqual({ x: 1, y: 0, label: "Review status" });
-  expect(pointed.thinking).toBe(true);
-  expect(applyHudMessage(pointed, "not-json")).toEqual(pointed);
-  expect(applyHudMessage(pointed, '{"kind":"thinking","active":false}').thinking).toBe(
-    false,
-  );
 });
 
 test("session errors stay readable", () => {
@@ -66,64 +50,61 @@ test("source label uses the file name", () => {
   expect(sourceLabel("notes.md")).toBe("notes.md");
 });
 
-test("transcript lines keep short and unbroken text", () => {
+const passage = {
+  id: "p1",
+  title: "Refund timing",
+  source: "billing/refunds.md",
+  anchor: "refund-timing",
+  snippet: "Refunds take five business days.",
+};
+
+function item(id: string, identity: string, text: string) {
+  return { text, participantInfo: { identity }, streamInfo: { id } };
+}
+
+test("transcript lines keep short and unbroken text and drop blanks", () => {
   const long = "A".repeat(400);
+
   const lines = transcriptLines([
-    {
-      text: "",
-      participantInfo: { identity: "user" },
-      streamInfo: { id: "empty" },
-    },
-    {
-      text: "A",
-      participantInfo: { identity: "user:user-a" },
-      streamInfo: { id: "one" },
-    },
-    {
-      text: long,
-      participantInfo: { identity: "agent-1" },
-      streamInfo: { id: "long" },
-    },
+    item("empty", "user", ""),
+    item("blank", "agent-1", "   "),
+    item("one", "user:user-a", "A"),
+    item("long", "agent-1", long),
   ]);
 
   expect(lines).toEqual([
-    { id: "one", speaker: "You", text: "A", sources: [] },
-    { id: "long", speaker: "Agent", text: long, sources: [] },
+    { id: "one", speaker: "You", text: "A", citations: [] },
+    { id: "long", speaker: "Agent", text: long, citations: [] },
   ]);
 });
 
-test("transcript lines keep a cited source and drop an empty line", () => {
-  const source = `file:///docs/${"b".repeat(80)}.md`;
-  const lines = transcriptLines([
-    {
-      text: "   ",
-      participantInfo: { identity: "agent-1" },
-      streamInfo: { id: "blank" },
-    },
-    {
-      text: `Refunds take 5 business days.\nSource: ${source}\nSource: ${source}`,
-      participantInfo: { identity: "agent-1" },
-      streamInfo: { id: "cited" },
-    },
-    {
-      text: "That is not in the docs.",
-      participantInfo: { identity: "agent-1" },
-      streamInfo: { id: "missing" },
-    },
-  ]);
+test("a citations message attaches to the agent line with the same text", () => {
+  const citations = [
+    { messageId: "m1", text: "Refunds take  five business days.", passages: [passage] },
+  ];
 
-  expect(lines).toEqual([
-    {
-      id: "cited",
-      speaker: "Agent",
-      text: "Refunds take 5 business days.",
-      sources: [source],
-    },
-    {
-      id: "missing",
-      speaker: "Agent",
-      text: "That is not in the docs.",
-      sources: [],
-    },
+  const lines = transcriptLines(
+    [
+      item("a", "user", "Refunds take five business days."),
+      item("b", "agent-1", "Refunds take five\nbusiness days. "),
+      item("c", "agent-1", "That is not in the docs."),
+    ],
+    citations,
+  );
+
+  expect(lines.map((line) => line.citations)).toEqual([[], [passage], []]);
+});
+
+test("every connection state has a plain label", () => {
+  expect(
+    ["connecting", "connected", "reconnecting", "signalReconnecting", "disconnected"].map(
+      connectionLabel,
+    ),
+  ).toEqual([
+    "Connecting",
+    "In the room",
+    "Connection lost. Reconnecting",
+    "Connection lost. Reconnecting",
+    "Session ended",
   ]);
 });

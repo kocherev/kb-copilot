@@ -132,14 +132,17 @@ jobs:
         run: |
           uv run python -c "from kb_rag.models import DEFAULT_SETTINGS as s; s.dense.query('warm'); s.sparse.query('warm')"
           chmod -R a+rwX .cache/fastembed
-      - name: Use the dev LiveKit key pair and throwaway auth secrets
+      # The agent gets a made-up Google key. The smoke test expects it to tell
+      # the room that the model could not start, and fails if the room stays silent.
+      - name: Use the dev LiveKit key pair and throwaway secrets
         run: |
           cp .env.example .env
           sed -i -e 's/^LIVEKIT_API_KEY=.*/LIVEKIT_API_KEY=devkey/' \
             -e 's/^LIVEKIT_API_SECRET=.*/LIVEKIT_API_SECRET=secret/' \
+            -e 's/^GOOGLE_API_KEY=.*/GOOGLE_API_KEY=ci-not-a-real-key/' \
             -e "s/^BETTER_AUTH_SECRET=.*/BETTER_AUTH_SECRET=$(openssl rand -hex 32)/" \
             -e "s/^INTERNAL_API_TOKEN=.*/INTERNAL_API_TOKEN=$(openssl rand -hex 16)/" .env
-      - run: docker compose --profile livekit up -d --build --wait postgres qdrant api web livekit
+      - run: docker compose --profile livekit up -d --build --wait postgres qdrant api web livekit agent
       - run: uv run python scripts/smoke.py
       - run: uv run pytest services/api/tests/test_ingest_live.py
         env:

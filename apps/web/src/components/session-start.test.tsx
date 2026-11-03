@@ -4,84 +4,35 @@ import { afterEach, expect, test, vi } from "vitest";
 import { SessionStart } from "@/components/session-start";
 import { TEST_JWT, stubApi } from "@/test/api-stub";
 
-const transcriptions = vi.hoisted(() => ({
-  current: [] as {
-    text: string;
-    participantInfo: { identity: string };
-    streamInfo: { id: string };
-  }[],
-}));
-
-vi.mock("@livekit/components-react", () => ({
-  LiveKitRoom: ({
-    children,
-    serverUrl,
+vi.mock("@/components/session-room", () => ({
+  SessionRoom: ({
+    url,
     token,
-    audio,
-    video,
-    screen: shareScreen,
-    connect,
+    onRestart,
   }: {
-    children?: React.ReactNode;
-    serverUrl?: string;
-    token?: string;
-    audio?: boolean;
-    video?: boolean;
-    screen?: boolean;
-    connect?: boolean;
+    url: string;
+    token: string;
+    onRestart: () => void;
   }) => (
-    <div
-      data-url={serverUrl}
-      data-token={token}
-      data-audio={String(audio)}
-      data-video={String(video)}
-      data-screen={String(shareScreen)}
-      data-connect={String(connect)}
-    >
-      {children}
+    <div data-url={url} data-token={token}>
+      In the room
+      <button type="button" onClick={onRestart}>
+        New session
+      </button>
     </div>
   ),
-  RoomAudioRenderer: () => <div data-testid="agent-audio" />,
-  VideoTrack: () => <div data-testid="shared-video" />,
-  useConnectionState: () => "connected",
-  useDataChannel: () => undefined,
-  useTracks: () => [],
-  useTranscriptions: () => transcriptions.current,
-  useVoiceAssistant: () => ({ state: "listening" }),
-  TrackToggle: ({
-    "aria-label": label,
-  }: {
-    "aria-label"?: string;
-  }) => <button type="button">{label}</button>,
-}));
-
-vi.mock("livekit-client", () => ({
-  ConnectionState: { Connected: "connected" },
-  Track: {
-    Source: { Microphone: "microphone", ScreenShare: "screen_share" },
-  },
 }));
 
 const productId = "11111111-1111-4111-8111-111111111111";
+const grant = { url: "ws://localhost:7880", token: "signed-token", room: "kb-room" };
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-  transcriptions.current = [];
 });
 
-test("start session posts the product and joins with mic and screen", async () => {
-  transcriptions.current = [
-    {
-      text: "C".repeat(80),
-      participantInfo: { identity: "agent-1" },
-      streamInfo: { id: "line-1" },
-    },
-  ];
-  const calls = stubApi(() => ({
-    status: 201,
-    body: { url: "ws://localhost:7880", token: "signed-token", room: "kb-room" },
-  }));
+test("start session posts the product and joins the room", async () => {
+  const calls = stubApi(() => ({ status: 201, body: grant }));
 
   render(
     <SessionStart
@@ -110,51 +61,20 @@ test("start session posts the product and joins with mic and screen", async () =
       form: null,
     },
   ]);
-  const root = room.parentElement;
-  expect(root?.getAttribute("data-url")).toBe("ws://localhost:7880");
-  expect(root?.getAttribute("data-token")).toBe("signed-token");
-  expect(root?.getAttribute("data-audio")).toBe("true");
-  expect(root?.getAttribute("data-video")).toBe("false");
-  expect(root?.getAttribute("data-screen")).toBe("true");
-  expect(root?.getAttribute("data-connect")).toBe("true");
-  expect(screen.getByTestId("agent-audio")).toBeDefined();
-  expect(screen.getByRole("button", { name: "Microphone" })).toBeDefined();
-  expect(screen.getByRole("button", { name: "Screen share" })).toBeDefined();
-  expect(screen.getByText("Share your screen so the agent can see it.")).toBeDefined();
-  expect(
-    screen.getByText("The highlight is drawn on this preview. It does not move your mouse."),
-  ).toBeDefined();
-  const spoken = screen.getByText("C".repeat(80));
-  expect(spoken.className).toMatch(/anywhere/);
-  expect(screen.getByText("Agent")).toBeDefined();
-  expect(screen.queryByRole("list", { name: "Sources" })).toBeNull();
+  expect(room.getAttribute("data-url")).toBe("ws://localhost:7880");
+  expect(room.getAttribute("data-token")).toBe("signed-token");
 });
 
-test("session transcript shows a cited source from the agent", async () => {
-  transcriptions.current = [
-    {
-      text: "Refunds take 5 business days.\nSource: file:///docs/billing.md",
-      participantInfo: { identity: "agent-1" },
-      streamInfo: { id: "cited" },
-    },
-  ];
-  stubApi(() => ({
-    status: 201,
-    body: { url: "ws://localhost:7880", token: "signed-token", room: "kb-room" },
-  }));
-
+test("a new session after the room ends goes back to the start button", async () => {
+  stubApi(() => ({ status: 201, body: grant }));
   render(
-    <SessionStart
-      apiUrl="http://localhost:8000"
-      productId={productId}
-      productName="Acme"
-    />,
+    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Start session" }));
+  fireEvent.click(await screen.findByRole("button", { name: "New session" }));
 
-  expect(await screen.findByText("Refunds take 5 business days.")).toBeDefined();
-  expect(screen.getByText("Source: billing.md")).toBeDefined();
-  expect(screen.getByRole("list", { name: "Sources" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Start session" })).toBeDefined();
+  expect(screen.queryByText("In the room")).toBeNull();
 });
 
 test("a dispatch failure shows the error", async () => {
