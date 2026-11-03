@@ -22,6 +22,7 @@ test("the header gives the start, length and counts", () => {
 
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Nov 3, 2026, 10:00 AM UTC");
   expect(screen.getByText("2:05, 2 turns, 1 action, 1 handoff")).toBeDefined();
+  expect(screen.getByText("Room kb-room")).toBeDefined();
   expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(
     `/products/${replay.product_id}`,
   );

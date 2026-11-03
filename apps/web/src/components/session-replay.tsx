@@ -76,6 +76,9 @@ export function SessionReplay({
         <p className="text-sm leading-6 text-muted-foreground tabular-nums">
           {summaryLine(replay)}
         </p>
+        <p className="font-mono text-xs leading-5 text-muted-foreground [overflow-wrap:anywhere]">
+          Room {replay.room}
+        </p>
       </div>
       {replay.turns.length === 0 ? (
         <p className="text-pretty text-sm leading-6 text-muted-foreground">
