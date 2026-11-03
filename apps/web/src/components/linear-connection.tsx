@@ -2,14 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import { PendingLabel } from "@/components/product-form";
 import { Button } from "@/components/ui/button";
+import { InlineError } from "@/components/ui/inline-error";
+import { InlineStatus } from "@/components/ui/inline-status";
+import { Loading, Skeleton } from "@/components/ui/skeleton";
+import { Surface } from "@/components/ui/surface";
 import { browserApi, errorDetail, type LinearStatus } from "@/lib/api/client";
 import type { LinearNotice } from "@/lib/linear";
 
-const notices: Record<LinearNotice, string> = {
-  connected: "Linear connected.",
-  denied: "Linear access was not granted.",
-  failed: "Could not connect Linear. Try again.",
+const notices: Record<LinearNotice, { tone: "success" | "warning"; text: string }> = {
+  connected: { tone: "success", text: "Linear connected." },
+  denied: { tone: "warning", text: "Linear access was not granted." },
+  failed: { tone: "warning", text: "Couldn’t connect Linear. Try again." },
 };
 
 async function fetchStatus(apiUrl: string): Promise<LinearStatus | null> {
@@ -19,6 +24,18 @@ async function fetchStatus(apiUrl: string): Promise<LinearStatus | null> {
   } catch {
     return null;
   }
+}
+
+export function LinearSkeleton() {
+  return (
+    <Surface>
+      <Loading label="Loading the Linear connection" className="flex min-w-0 flex-col gap-3">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-3.5 w-3/4" />
+        <Skeleton className="mt-2 h-8 w-36 rounded-control" />
+      </Loading>
+    </Surface>
+  );
 }
 
 export function LinearConnection({
@@ -32,6 +49,9 @@ export function LinearConnection({
   const [loadError, setLoadError] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The callback's outcome describes the connection it made, so it goes
+  // when that connection does.
+  const [shownNotice, setShownNotice] = useState(notice);
 
   const refresh = useCallback(
     () =>
@@ -48,7 +68,16 @@ export function LinearConnection({
     void refresh();
   }, [refresh]);
 
+  function retry() {
+    setLoadError(false);
+    setStatus(null);
+    void refresh();
+  }
+
   async function connect() {
+    if (pending) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -56,18 +85,22 @@ export function LinearConnection({
         "/integrations/linear/connect",
       );
       if (!data) {
-        setError(errorDetail(detail, "Could not start the Linear connection."));
+        setError(errorDetail(detail, "Couldn’t start the Linear connection. Try again."));
+        setPending(false);
         return;
       }
+      // Stay pending while the browser leaves for Linear.
       window.location.assign(data.url);
     } catch {
-      setError("Could not start the Linear connection.");
-    } finally {
+      setError("Couldn’t start the Linear connection. Try again.");
       setPending(false);
     }
   }
 
   async function disconnect() {
+    if (pending) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -75,66 +108,90 @@ export function LinearConnection({
         "/integrations/linear",
       );
       if (!response.ok) {
-        setError(errorDetail(detail, "Could not disconnect Linear."));
+        setError(errorDetail(detail, "Couldn’t disconnect Linear. Try again."));
         return;
       }
+      setShownNotice(null);
       await refresh();
     } catch {
-      setError("Could not disconnect Linear.");
+      setError("Couldn’t disconnect Linear. Try again.");
     } finally {
       setPending(false);
     }
   }
 
+  if (loadError) {
+    return (
+      <InlineError onRetry={retry}>
+        Couldn’t load the Linear connection. Check that the API is running, then try again.
+      </InlineError>
+    );
+  }
+  if (status === null) {
+    return <LinearSkeleton />;
+  }
   return (
-    <section aria-labelledby="linear-heading" className="flex min-w-0 flex-col gap-4">
-      <h2 id="linear-heading" className="text-balance text-sm font-medium text-foreground">
-        Linear
-      </h2>
-      <p className="text-pretty text-sm leading-6 text-muted-foreground">
-        When the agent cannot solve a problem, it can propose a Linear ticket. You
-        approve each ticket on the session page before it is created.
-      </p>
-      {notice ? (
-        <p role="status" className="text-pretty text-sm leading-6 text-foreground">
-          {notices[notice]}
+    <Surface className="flex min-w-0 animate-enter flex-col gap-4">
+      {shownNotice ? (
+        <InlineStatus tone={notices[shownNotice].tone}>{notices[shownNotice].text}</InlineStatus>
+      ) : null}
+      {!status.enabled ? (
+        <p className="text-sm text-pretty text-muted-foreground">
+          Linear isn’t set up on this server. Set <Code>LINEAR_CLIENT_ID</Code>,{" "}
+          <Code>LINEAR_CLIENT_SECRET</Code> and <Code>LINEAR_TOKEN_KEY</Code> for the API, then
+          restart it.
         </p>
-      ) : null}
-      {error ? (
-        <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
-          {error}
-        </p>
-      ) : null}
-      {loadError ? (
-        <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
-          Could not load the Linear connection.
-        </p>
-      ) : null}
-      {status === null && !loadError ? (
-        <p className="text-sm leading-6 text-muted-foreground">Loading.</p>
-      ) : null}
-      {status && !status.enabled ? (
-        <p className="text-pretty text-sm leading-6 text-muted-foreground">
-          Linear is not set up on this server. Set LINEAR_CLIENT_ID,
-          LINEAR_CLIENT_SECRET, and LINEAR_TOKEN_KEY.
-        </p>
-      ) : null}
-      {status?.enabled && status.connected ? (
+      ) : status.connected ? (
         <>
-          <p className="text-pretty text-sm leading-6 text-foreground [overflow-wrap:anywhere]">
-            Connected to {status.workspace_name}. Tickets go to {status.team_name} (
-            {status.team_key}).
-          </p>
-          <Button type="button" variant="outline" disabled={pending} onClick={() => void disconnect()}>
-            Disconnect Linear
+          <div className="flex min-w-0 flex-col gap-1">
+            <StateLabel connected />
+            <p className="text-sm text-pretty text-foreground [overflow-wrap:anywhere]">
+              Connected to {status.workspace_name}. Tickets go to {status.team_name} (
+              {status.team_key}).
+            </p>
+          </div>
+          <Button
+            variant="destructive-outline"
+            aria-disabled={pending}
+            onClick={() => void disconnect()}
+          >
+            <PendingLabel pending={pending} label="Disconnect Linear" pendingLabel="Disconnecting…" />
           </Button>
         </>
-      ) : null}
-      {status?.enabled && !status.connected ? (
-        <Button type="button" disabled={pending} onClick={() => void connect()}>
-          Connect Linear
-        </Button>
-      ) : null}
-    </section>
+      ) : (
+        <>
+          <div className="flex min-w-0 flex-col gap-1">
+            <StateLabel connected={false} />
+            <p className="text-sm text-pretty text-muted-foreground">
+              Connect a workspace to let the agent file tickets there.
+            </p>
+          </div>
+          <Button aria-disabled={pending} onClick={() => void connect()}>
+            <PendingLabel pending={pending} label="Connect Linear" pendingLabel="Opening Linear…" />
+          </Button>
+        </>
+      )}
+      {error ? <InlineError>{error}</InlineError> : null}
+    </Surface>
+  );
+}
+
+function StateLabel({ connected }: { connected: boolean }) {
+  return (
+    <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+      <span
+        aria-hidden
+        className={`size-2 rounded-full ${connected ? "bg-success" : "bg-subtle-foreground"}`}
+      />
+      {connected ? "Connected" : "Not connected"}
+    </p>
+  );
+}
+
+function Code({ children }: { children: string }) {
+  return (
+    <code className="rounded-md bg-surface-sunken px-1.5 py-0.5 font-mono text-[0.8125em] text-foreground">
+      {children}
+    </code>
   );
 }
