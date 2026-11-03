@@ -176,6 +176,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
+      # For an API or agent run on the host. Containers use http://jaeger:4318.
+      - "127.0.0.1:${OTLP_PORT:-4318}:4318"
 
 volumes:
   postgres-data:
