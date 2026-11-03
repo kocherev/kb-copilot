@@ -43,7 +43,7 @@ export function ScreenGlow({
     return (
       <div
         data-glow={watching ? "static" : "off"}
-        className={`rounded-md ${watching ? "ring-2 ring-[color-mix(in_oklch,var(--hui-color-border-accent-emphasis)_45%,transparent)]" : ""}`}
+        className={`rounded-panel ${watching ? "ring-2 ring-[color-mix(in_oklch,var(--hui-color-border-accent-emphasis)_45%,transparent)]" : ""}`}
       >
         {children}
       </div>
