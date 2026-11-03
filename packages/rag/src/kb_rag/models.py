@@ -12,6 +12,11 @@ if TYPE_CHECKING:
     from fastembed.rerank.cross_encoder import TextCrossEncoder
 
 
+# One text at a time. A batch pads every text to the longest one, so on a
+# 1,600-chunk upload the default of 256 took 7.8 GB, and 8 took more CPU than 1.
+EMBED_BATCH = 1
+
+
 class DenseEmbedder(Protocol):
     def size(self) -> int: ...
 
@@ -72,7 +77,10 @@ class FastEmbedDense:
         return TextEmbedding.get_embedding_size(self.name)
 
     def passages(self, texts: list[str]) -> list[list[float]]:
-        return [vector.tolist() for vector in _dense(self.name).passage_embed(texts)]
+        return [
+            vector.tolist()
+            for vector in _dense(self.name).passage_embed(texts, batch_size=EMBED_BATCH)
+        ]
 
     def query(self, text: str) -> list[float]:
         return next(iter(_dense(self.name).query_embed(text))).tolist()
