@@ -27,3 +27,8 @@ test("stagger delays each item by one step and stops growing after eight", () =>
   expect(stagger(3).animationDelay).toBe("calc(var(--stagger-step) * 3)");
   expect(stagger(40).animationDelay).toBe("calc(var(--stagger-step) * 8)");
 });
+
+test("the enter animation keeps no last frame, so fixed children stay fixed", () => {
+  const globals = readFileSync(join(__dirname, "../app/globals.css"), "utf8");
+  expect(globals).toMatch(/--animate-enter: enter [^;]* backwards;/);
+});

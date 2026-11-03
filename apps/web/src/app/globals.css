@@ -3,7 +3,6 @@
    beat a utility class. Unlayered, they did. */
 @import "../styles/honest-ui-theme.css" layer(base);
 @import "../styles/tokens.css";
-@import "tw-animate-css";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -84,7 +83,9 @@
   --ease-in-out: var(--motion-ease-in-out);
   --ease-drawer: var(--motion-ease-drawer);
 
-  --animate-enter: enter var(--duration-enter) var(--motion-ease-out) both;
+  /* backwards, not both: a filled last frame keeps a transform and a filter
+     on the element, and a position: fixed child then scrolls with it. */
+  --animate-enter: enter var(--duration-enter) var(--motion-ease-out) backwards;
   --animate-exit: exit var(--duration-fast) var(--motion-ease-out) both;
   --animate-shimmer: shimmer 1.6s linear infinite;
 
