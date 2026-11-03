@@ -41,7 +41,9 @@ jobs:
     timeout-minutes: 30
     # contents: push the branch, and delete it on cancel. checks: one check per step and rule. issues: the progress
     # comment and command replies. pull-requests: open or update the draft, read reviews, reply on the draft.
+    # actions: start ci.yml on the pushed branch, because a push with the job's token starts no workflow.
     permissions:
+      actions: write
       contents: write
       checks: write
       issues: write
@@ -64,6 +66,7 @@ jobs:
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
       - name: Run thin-pr
-        uses: kocherev/thin-pr-orchestrator@9497ee4679cf9b683b25053a75dc473cd34fbbec
+        uses: kocherev/thin-pr-orchestrator@33ca085a77ee5c31e6c2cb1330cc831122387be7
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          ci-workflow: ci.yml

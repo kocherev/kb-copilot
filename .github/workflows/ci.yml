@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # thin-pr starts it on the branches it pushes.
+  workflow_dispatch:
 
 permissions:
   contents: read
