@@ -76,6 +76,8 @@ services:
       LINEAR_CLIENT_SECRET: ${LINEAR_CLIENT_SECRET:-}
       LINEAR_REDIRECT_URI: ${LINEAR_REDIRECT_URI:-http://localhost:3000/api/integrations/linear/callback}
       LINEAR_TOKEN_KEY: ${LINEAR_TOKEN_KEY:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: kb-api
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -145,6 +147,8 @@ services:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       KB_VOICE: ${KB_VOICE:-Puck}
       AGENT_MAX_SESSION_SECONDS: ${AGENT_MAX_SESSION_SECONDS:-600}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: kb-agent
     depends_on:
       api:
         condition: service_healthy
@@ -162,6 +166,18 @@ services:
       - "${LIVEKIT_PORT:-7880}:7880"
       - "${LIVEKIT_TCP_PORT:-7881}:7881"
       - "${LIVEKIT_UDP_PORT:-7882}:7882/udp"
+
+  # Optional trace viewer. Enable it with: docker compose --profile observability up
+  # and set OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318 in .env. Traces are
+  # kept in memory, so they are gone when it stops.
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
+      # For an API or agent run on the host. Containers use http://jaeger:4318.
+      - "127.0.0.1:${OTLP_PORT:-4318}:4318"
 
 volumes:
   postgres-data:

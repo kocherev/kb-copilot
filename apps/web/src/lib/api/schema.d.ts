@@ -111,6 +111,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Replay */
+        get: operations["get_replay_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sessions/{room}/desktop-token": {
         parameters: {
             query?: never;
@@ -369,6 +386,29 @@ export interface components {
             /** State */
             state: string;
         };
+        /** Citation */
+        Citation: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Source */
+            source: string;
+        };
+        /** DesktopAction */
+        DesktopAction: {
+            /** Event */
+            event: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Task */
+            task: string | null;
+            /** Detail */
+            detail: string;
+        };
         /** DesktopGrant */
         DesktopGrant: {
             /** Url */
@@ -430,6 +470,22 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** Handoff */
+        Handoff: {
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Issue Identifier */
+            issue_identifier: string | null;
+            /** Issue Url */
+            issue_url: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** Health */
         Health: {
             /**
@@ -472,28 +528,6 @@ export interface components {
             team_name?: string | null;
             /** Team Key */
             team_key?: string | null;
-        };
-        /** LiveSession */
-        LiveSession: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Product Id
-             * Format: uuid
-             */
-            product_id: string;
-            /** Room */
-            room: string;
-            /** User Id */
-            user_id: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
         };
         /** Me */
         Me: {
@@ -561,6 +595,64 @@ export interface components {
              */
             transcript: string;
         };
+        /** Replay */
+        Replay: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+            /** Room */
+            room: string;
+            /** User Id */
+            user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Turn Count */
+            turn_count: number;
+            /** Action Count */
+            action_count: number;
+            /** Handoff Count */
+            handoff_count: number;
+            /** Turns */
+            turns: components["schemas"]["Turn"][];
+            /** Actions */
+            actions: components["schemas"]["DesktopAction"][];
+            /** Handoffs */
+            handoffs: components["schemas"]["Handoff"][];
+        };
+        /** Search */
+        Search: {
+            /** Query */
+            query: string;
+            /** Passages */
+            passages: components["schemas"]["SearchedPassage"][];
+            /** Abstained */
+            abstained: boolean;
+            /** Duration Ms */
+            duration_ms: number;
+        };
+        /** SearchedPassage */
+        SearchedPassage: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Source */
+            source: string;
+            /** Score */
+            score: number;
+        };
         /** SessionCreate */
         SessionCreate: {
             /**
@@ -577,6 +669,71 @@ export interface components {
             token: string;
             /** Room */
             room: string;
+        };
+        /** SessionSummary */
+        SessionSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Product Id
+             * Format: uuid
+             */
+            product_id: string;
+            /** Room */
+            room: string;
+            /** User Id */
+            user_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Turn Count */
+            turn_count: number;
+            /** Action Count */
+            action_count: number;
+            /** Handoff Count */
+            handoff_count: number;
+        };
+        /** Turn */
+        Turn: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Text */
+            text: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Ended At
+             * Format: date-time
+             */
+            ended_at: string;
+            /** Searches */
+            searches: components["schemas"]["Search"][];
+            /** Citations */
+            citations: components["schemas"]["Citation"][];
+            /** Latency */
+            latency: {
+                [key: string]: number;
+            };
+            /** Image Tokens */
+            image_tokens: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1140,7 +1297,9 @@ export interface operations {
     };
     list_sessions_sessions_get: {
         parameters: {
-            query?: never;
+            query?: {
+                product_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1153,7 +1312,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LiveSession"][];
+                    "application/json": components["schemas"]["SessionSummary"][];
                 };
             };
             /** @description Missing or invalid credentials */
@@ -1172,6 +1331,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1259,6 +1427,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    get_replay_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Replay"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No organization for this caller */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description No such session in this org */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

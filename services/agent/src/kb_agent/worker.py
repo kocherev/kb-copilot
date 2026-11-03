@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import os
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 
 from livekit import rtc
 from livekit.agents import (
@@ -16,7 +16,7 @@ from livekit.agents.llm import ChatMessage
 from livekit.agents.voice.events import CloseReason
 
 from kb_agent.config import require_settings
-from kb_agent.knowledge import Knowledge, api_client
+from kb_agent.knowledge import api_client
 from kb_agent.latency import log_json
 from kb_agent.product import (
     load_product,
@@ -39,6 +39,7 @@ from kb_agent.session import (
     room_options,
 )
 from kb_agent.support import SupportAgent
+from kb_agent.turns import LoggedKnowledge, TurnLog
 
 LISTENER_WAIT_SECONDS = 30
 # LiveKit keeps one warm job process per CPU by default, 8 in the Docker VM.
@@ -78,15 +79,17 @@ async def report_failure(room: rtc.Room, exc: Exception) -> None:
 
 
 def publish_citations(
-    session: AgentSession, agent: SupportAgent, room: rtc.Room
+    session: AgentSession, agent: SupportAgent, room: rtc.Room, turns: TurnLog
 ) -> None:
     async def cite(message: ChatMessage) -> None:
+        found = None
         try:
             found = await agent.citations_for(message.id, message.text_content or "")
             if found is not None:
                 await publish(room, CITATIONS_TOPIC, found)
         except Exception as exc:
             log_json({"event": "citations_failed", "error": type(exc).__name__})
+        turns.assistant(message, [p.id for p in found.passages] if found else [])
 
     @session.on("conversation_item_added")
     def on_item(ev: ConversationItemAddedEvent) -> None:
@@ -94,8 +97,38 @@ def publish_citations(
             return
         if ev.item.role == "user":
             agent.new_user_turn()
+            turns.user(ev.item)
         elif ev.item.role == "assistant":
             spawn(cite(ev.item))
+
+
+def enable_tracing(
+    room: str, product_id: str
+) -> Callable[[], Coroutine[None, None, None]] | None:
+    """Export LiveKit's session traces over OTLP. Returns the flush to run at the end.
+
+    Off unless OTEL_EXPORTER_OTLP_ENDPOINT is set, and then nothing loads.
+    """
+    if not os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+        return None
+    from livekit.agents.telemetry import set_tracer_provider
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    provider = TracerProvider()
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    # The conversation stays in the replay, where it is redacted.
+    set_tracer_provider(
+        provider,
+        metadata={"kb.room": room, "kb.product_id": product_id},
+        allow_pii=False,
+    )
+
+    async def flush() -> None:
+        await asyncio.to_thread(provider.force_flush)
+
+    return flush
 
 
 @server.rtc_session(agent_name=AGENT_NAME)
@@ -106,10 +139,14 @@ async def entrypoint(ctx: JobContext) -> None:
     try:
         product_id = product_id_from_metadata(ctx.job.metadata)
         user = user_from_metadata(ctx.job.metadata)
-        knowledge = Knowledge(
-            product_id, api_client(api_url, os.environ.get("INTERNAL_API_TOKEN", ""))
-        )
+        token = os.environ.get("INTERNAL_API_TOKEN", "")
+        turns = TurnLog(ctx.room.name, api_client(api_url, token))
+        knowledge = LoggedKnowledge(product_id, api_client(api_url, token), turns)
         ctx.add_shutdown_callback(knowledge.aclose)
+        ctx.add_shutdown_callback(turns.flush)
+        flush_traces = enable_tracing(ctx.room.name, product_id)
+        if flush_traces is not None:
+            ctx.add_shutdown_callback(flush_traces)
         product = await asyncio.to_thread(load_product, ctx.job.metadata, api_url)
         session = build_session(product.voice)
         agent = SupportAgent(
@@ -120,8 +157,8 @@ async def entrypoint(ctx: JobContext) -> None:
             user=user,
             agent_name=product.agent_name,
         )
-        attach_logs(session)
-        publish_citations(session, agent, ctx.room)
+        attach_logs(session, turns)
+        publish_citations(session, agent, ctx.room, turns)
 
         async def closed(ev: CloseEvent) -> None:
             if ev.reason == CloseReason.ERROR:
