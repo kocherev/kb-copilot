@@ -1,16 +1,11 @@
 import os
 from dataclasses import dataclass
 from functools import cache
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
+from fastembed import SparseTextEmbedding, TextEmbedding
+from fastembed.rerank.cross_encoder import TextCrossEncoder
 from qdrant_client.models import SparseVector
-
-# fastembed pulls in onnxruntime, so it loads with the first model. The agent
-# imports this module for its types and never loads a model.
-if TYPE_CHECKING:
-    from fastembed import SparseTextEmbedding, TextEmbedding
-    from fastembed.rerank.cross_encoder import TextCrossEncoder
-
 
 # One text at a time. A batch pads every text to the longest one, so on a
 # 1,600-chunk upload the default of 256 took 7.8 GB, and 8 took more CPU than 1.
@@ -47,23 +42,17 @@ def _threads() -> int | None:
 
 
 @cache
-def _dense(name: str) -> "TextEmbedding":
-    from fastembed import TextEmbedding
-
+def _dense(name: str) -> TextEmbedding:
     return TextEmbedding(name, threads=_threads())
 
 
 @cache
-def _sparse(name: str) -> "SparseTextEmbedding":
-    from fastembed import SparseTextEmbedding
-
+def _sparse(name: str) -> SparseTextEmbedding:
     return SparseTextEmbedding(name)
 
 
 @cache
-def _reranker(name: str) -> "TextCrossEncoder":
-    from fastembed.rerank.cross_encoder import TextCrossEncoder
-
+def _reranker(name: str) -> TextCrossEncoder:
     return TextCrossEncoder(name, threads=_threads())
 
 
@@ -72,8 +61,6 @@ class FastEmbedDense:
     name: str
 
     def size(self) -> int:
-        from fastembed import TextEmbedding
-
         return TextEmbedding.get_embedding_size(self.name)
 
     def passages(self, texts: list[str]) -> list[list[float]]:
