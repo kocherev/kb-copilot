@@ -42,4 +42,4 @@ make bakeoff   # when a model or the threshold changes
 
 Update `evals/thresholds.json` and the README table from the printout. Do not invent a score.
 
-The first run downloads about 1.2 GB of FastEmbed models. In Compose the `api` and `agent` containers share them in the `fastembed` volume.
+The first run downloads about 1.2 GB of FastEmbed models. In Compose only the `api` container loads them, from the `fastembed` volume. The agent asks the API.
