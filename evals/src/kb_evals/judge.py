@@ -5,32 +5,23 @@ compares a run file with human labels. Neither runs in CI.
 """
 
 import argparse
-import asyncio
 import json
 import os
 import subprocess
-import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 import anthropic
-from kb_rag import NOT_IN_DOCS, Passage, read_directory
+from kb_rag import NOT_IN_DOCS
 
 from kb_evals.dataset import EvalCase, load_dataset
-from kb_evals.run import (
-    DATASET_PATH,
-    DOCS_PATH,
-    ROOT,
-    THRESHOLDS_PATH,
-    RagRetriever,
-    load_thresholds,
-)
+from kb_evals.run import DATASET_PATH, ROOT
 
 DEFAULT_MODEL = "claude-haiku-5-5"
-PROMPT_VERSION = "judge-v1"
+PROMPT_VERSION = "judge-v2"
 JUDGES = ("faithful", "correct", "refusal", "citation")
 RUNS_PATH = ROOT / "evals" / "runs"
 _SCHEMA = {
@@ -49,10 +40,20 @@ Complete = Callable[[str, str], str]
 
 
 @dataclass(frozen=True)
+class Seen:
+    """A passage the answering model's searches returned."""
+
+    id: str
+    source: str
+    text: str
+
+
+@dataclass(frozen=True)
 class Answer:
     id: str
     answer: str
     cited_passage_ids: tuple[str, ...]
+    passages: tuple[Seen, ...]
 
 
 @dataclass(frozen=True)
@@ -88,9 +89,22 @@ def load_answers(path: Path) -> list[Answer]:
         if not isinstance(cited, list) or not all(isinstance(c, str) for c in cited):
             raise ValueError(f"{where} cited_passage_ids must be a list of strings")
         answers.append(
-            Answer(id=case_id, answer=answer, cited_passage_ids=tuple(cited))
+            Answer(case_id, answer, tuple(cited), _seen(raw.get("passages"), where))
         )
     return answers
+
+
+def _seen(raw: object, where: str) -> tuple[Seen, ...]:
+    if not isinstance(raw, list):
+        raise ValueError(f"{where} passages must be a list")
+    seen: list[Seen] = []
+    for item in raw:
+        if not isinstance(item, dict) or not all(
+            isinstance(item.get(f), str) for f in ("id", "source", "text")
+        ):
+            raise ValueError(f"{where} each passage needs string id, source, text")
+        seen.append(Seen(item["id"], item["source"], item["text"]))
+    return tuple(seen)
 
 
 def parse_verdict(text: str) -> tuple[bool, str]:
@@ -103,17 +117,20 @@ def parse_verdict(text: str) -> tuple[bool, str]:
     return passed, reason
 
 
-def judge_prompt(
-    judge: str, case: EvalCase, answer: Answer, passages: list[Passage]
-) -> str:
+def judge_prompt(judge: str, case: EvalCase, answer: Answer) -> str:
     question = f"<question>{case.query}</question>"
     reply = f"<answer>{answer.answer}</answer>"
+    passages = _passages(answer.passages)
     if judge == "faithful":
         return (
-            f"{_passages(passages)}\n{question}\n{reply}\n"
+            f"{passages}\n{question}\n{reply}\n"
+            "The passages are what the assistant's searches returned. "
             "Pass when every factual claim in the answer is stated in or follows "
             f"directly from the passages. The exact reply {NOT_IN_DOCS!r} makes "
-            "no claim and passes. A clarifying question makes no claim and passes."
+            "no claim and passes. A clarifying question makes no claim and passes. "
+            "What the assistant says about itself, such as offering a handoff to "
+            "a person or saying it cannot hand off, is not a claim about the "
+            "product."
         )
     if judge == "correct":
         facts = "\n".join(f"- {fact}" for fact in case.required_facts) or "- (none)"
@@ -126,13 +143,21 @@ def judge_prompt(
         )
     if judge == "refusal":
         return (
-            f"{question}\n<expected>{_expected_behavior(case)}</expected>\n{reply}\n"
-            f"Pass when the answer refuses with exactly {NOT_IN_DOCS!r} if and only "
-            "if the expected behavior is that refusal, and otherwise follows the "
-            "expected behavior."
+            f"{passages}\n{question}\n"
+            f"<expected>{_expected_behavior(case)}</expected>\n{reply}\n"
+            "The passages are what the assistant's searches returned. Grade only "
+            "whether the answer chose the expected behavior: answer, refuse, "
+            "correct the premise, or ask. A full refusal is the sentence "
+            f"{NOT_IN_DOCS!r}, optionally followed by an offer to hand off to a "
+            "person or a note that it cannot. Pass when the answer is a full "
+            "refusal if and only if the expected behavior is that refusal, and "
+            "otherwise does what the expected behavior says, in any wording. Use "
+            "the passages to tell which parts of the question the docs cover. Do "
+            "not grade whether the facts are right or supported; other checks do "
+            "that."
         )
     if judge == "citation":
-        cited = [p for p in passages if p.id in answer.cited_passage_ids]
+        cited = [p for p in answer.passages if p.id in answer.cited_passage_ids]
         return (
             f"{_passages(cited)}\n{reply}\n"
             "These are the only passages the answer cites. Pass when they support "
@@ -144,16 +169,12 @@ def judge_prompt(
 
 
 def run_judges(
-    complete: Complete,
-    model: str,
-    case: EvalCase,
-    answer: Answer,
-    passages: list[Passage],
+    complete: Complete, model: str, case: EvalCase, answer: Answer
 ) -> list[Verdict]:
     verdicts: list[Verdict] = []
     for judge in JUDGES:
         passed, reason = parse_verdict(
-            complete(SYSTEM, judge_prompt(judge, case, answer, passages))
+            complete(SYSTEM, judge_prompt(judge, case, answer))
         )
         verdicts.append(Verdict(case.id, judge, passed, reason, model, PROMPT_VERSION))
     return verdicts
@@ -239,7 +260,7 @@ def anthropic_complete(model: str) -> Complete:
     return complete
 
 
-def _passages(passages: list[Passage]) -> str:
+def _passages(passages: Sequence[Seen]) -> str:
     body = "\n".join(
         f'<passage id="{p.id}" source="{p.source}">{p.text}</passage>' for p in passages
     )
@@ -269,20 +290,16 @@ def _short_sha() -> str:
     return found.stdout.strip()
 
 
-async def _live(answers_path: Path) -> Path:
+def _live(answers_path: Path) -> Path:
     model = judge_model()
     complete = anthropic_complete(model)
-    k, _limits = load_thresholds(THRESHOLDS_PATH)
     cases = {case.id: case for case in load_dataset(DATASET_PATH)}
-    retriever = RagRetriever()
-    await retriever.index(read_directory(DOCS_PATH))
     verdicts: list[Verdict] = []
     for answer in load_answers(answers_path):
         case = cases.get(answer.id)
         if case is None:
             raise ValueError(f"answer {answer.id} is not in the dataset")
-        found = await retriever.search(case.query, k)
-        verdicts.extend(run_judges(complete, model, case, answer, list(found.passages)))
+        verdicts.extend(run_judges(complete, model, case, answer))
     RUNS_PATH.mkdir(exist_ok=True)
     output = RUNS_PATH / f"{date.today().isoformat()}-{_short_sha()}.jsonl"
     output.write_text(
@@ -305,8 +322,7 @@ def main() -> int:
     if args.command == "run":
         if not os.environ.get("ANTHROPIC_API_KEY"):
             raise SystemExit("ANTHROPIC_API_KEY is required")
-        warnings.filterwarnings("ignore", message="Payload indexes have no effect")
-        print(f"wrote {asyncio.run(_live(args.answers))}")
+        print(f"wrote {_live(args.answers)}")
         return 0
     results = calibrate(
         load_labeled(args.run, "passed"), load_labeled(args.labels, "label")

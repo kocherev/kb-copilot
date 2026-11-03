@@ -33,6 +33,21 @@ A stored vector covers a whole passage (up to 120 words), so a sentence scores l
 
 Precision is the share of cited passages from a page the dataset expects. Recall is the share of expected sections cited. The three cutoffs are in `packages/rag/src/kb_rag/citations.py`. They were picked on the same 116 rows they are scored on, so treat the table as a guide. The gold answers are close to the passages' wording, which helps the word-overlap check more than a spoken paraphrase would. `make eval-answers` then `make eval-live` judges real model answers.
 
+### Word matching, 2026-11-03
+
+The first live run (Gemini `gemini-3.8-flash` answers on commit `68eee03`) cited nothing for 94 of 152 answers. The four-word sentence minimum was not the cause: no substantive sentence in that run was shorter, and lowering it to two changed no citation. Of the 117 answers to a question with a source, 54 had a sentence at 0.55 cosine or more that failed the 90% word check. The missing words were filler a speaker adds ("your", "from", "when", "then", "they") or a plural ("requests" against "request"). In a six-word sentence one such word is 17% of it.
+
+The check now skips a short list of filler words and drops a plural "s" from words of five letters or more, on both sides. Negations still count. The cutoffs did not change.
+
+Same method as above, re-run on the 117 rows that name a source today, with each question's top five passages. "Live" uses the 152 answers of that run. They were written before this change, so the passages are the question's top five, not the ones Gemini saw.
+
+| Rule | Gold precision | Gold recall | Gold cited per answer | Live precision | Live recall | Live answers with a citation |
+| --- | --- | --- | --- | --- | --- | --- |
+| Before | 94.0% (94/100) | 63.7% | 0.85 | 79.0% (49/62) | 33.6% | 54 of 117 |
+| After | 92.5% (99/107) | 66.4% | 0.91 | 82.5% (66/80) | 44.5% | 70 of 117 |
+
+The first table reports 116 rows and 46.9% recall for this rule. This count finds 117 rows with a source and 63.7%. The script behind the first table was not kept, so compare rows of this table only with each other. Of the two new off-page citations on gold answers, one is wrong (a sentence about free Light agents cited the seats section of the invite page) and one supports the sentence from a second page. Lowering the word check to 85% would lift live recall to 51% at 91.1% gold precision. It was not done, because the cutoffs were picked on these rows.
+
 ### Threads and batch size
 
 Indexing 197 chunks of three files on the host, one text per batch:

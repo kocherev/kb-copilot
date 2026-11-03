@@ -7,6 +7,7 @@ from kb_evals.judge import (
     JUDGES,
     PROMPT_VERSION,
     Answer,
+    Seen,
     calibrate,
     judge_prompt,
     load_answers,
@@ -15,7 +16,7 @@ from kb_evals.judge import (
     pass_rates,
     run_judges,
 )
-from kb_rag import NOT_IN_DOCS, Passage
+from kb_rag import NOT_IN_DOCS
 
 CASE = EvalCase(
     "refund",
@@ -26,9 +27,9 @@ CASE = EvalCase(
     ("billing/refunds.md",),
     (),
 )
-CITED = Passage("p1", "eval", "billing/refunds.md", "", "", "Refunds take 5 days.", 1.0)
-UNCITED = Passage("p2", "eval", "billing/invoices.md", "", "", "Invoices are PDF.", 0.5)
-ANSWER = Answer("refund", "Refunds take 5 business days.", ("p1",))
+CITED = Seen("p1", "billing/refunds.md", "Refunds take 5 days.")
+UNCITED = Seen("p2", "billing/invoices.md", "Invoices are PDF.")
+ANSWER = Answer("refund", "Refunds take 5 business days.", ("p1",), (CITED, UNCITED))
 
 
 def test_parse_verdict_reads_pass_and_reason() -> None:
@@ -42,30 +43,49 @@ def test_parse_verdict_reads_pass_and_reason() -> None:
 def test_load_answers_validates_rows(tmp_path: Path) -> None:
     path = tmp_path / "answers.jsonl"
     path.write_text(
-        '{"id": "refund", "answer": "x", "cited_passage_ids": ["p1"]}\n',
+        '{"id": "refund", "answer": "x", "cited_passage_ids": ["p1"], '
+        '"passages": [{"id": "p1", "source": "billing/refunds.md", '
+        '"text": "Refunds take 5 days."}]}\n',
         encoding="utf-8",
     )
-    assert load_answers(path) == [Answer("refund", "x", ("p1",))]
+    assert load_answers(path) == [Answer("refund", "x", ("p1",), (CITED,))]
 
     path.write_text('{"id": "refund", "answer": "x"}\n', encoding="utf-8")
     with pytest.raises(ValueError, match="cited_passage_ids"):
         load_answers(path)
 
+    path.write_text(
+        '{"id": "refund", "answer": "x", "cited_passage_ids": [], '
+        '"passages": [{"id": "p1"}]}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="passage"):
+        load_answers(path)
+
 
 def test_citation_prompt_shows_only_cited_passages() -> None:
-    prompt = judge_prompt("citation", CASE, ANSWER, [CITED, UNCITED])
+    prompt = judge_prompt("citation", CASE, ANSWER)
 
     assert 'id="p1"' in prompt
     assert "Invoices are PDF." not in prompt
+
+
+def test_faithful_and_refusal_prompts_show_the_passages_the_model_saw() -> None:
+    for judge in ("faithful", "refusal"):
+        prompt = judge_prompt(judge, CASE, ANSWER)
+
+        assert "Refunds take 5 days." in prompt
+        assert "Invoices are PDF." in prompt
+        assert "hand off" in prompt
 
 
 def test_refusal_prompt_states_the_expected_behavior() -> None:
     outside = EvalCase("fr", "off_topic", "Capital of France?", NOT_IN_DOCS, (), (), ())
 
     assert f"Refuse with exactly: {NOT_IN_DOCS}" in judge_prompt(
-        "refusal", outside, ANSWER, []
+        "refusal", outside, ANSWER
     )
-    assert "Do not refuse" in judge_prompt("refusal", CASE, ANSWER, [CITED])
+    assert "Do not refuse" in judge_prompt("refusal", CASE, ANSWER)
 
 
 def test_run_judges_asks_once_per_judge_and_scores() -> None:
@@ -73,7 +93,7 @@ def test_run_judges_asks_once_per_judge_and_scores() -> None:
         passed = "<required_facts>" not in user
         return json.dumps({"pass": passed, "reason": "stub"})
 
-    verdicts = run_judges(complete, "model-x", CASE, ANSWER, [CITED])
+    verdicts = run_judges(complete, "model-x", CASE, ANSWER)
 
     assert [v.judge for v in verdicts] == list(JUDGES)
     assert {(v.model, v.prompt_version) for v in verdicts} == {

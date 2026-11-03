@@ -189,16 +189,16 @@ overall                                  152     0.869  0.708     0.280  0.863  
 
 `owner` says who must catch an unanswerable row. Retrieval owns off-topic and out-of-scope questions. The answer model owns false-premise, partial, and underspecified ones, which the offline run does not score. Abstention precision and recall (0.800 and 0.286) come from a held-out half of the rows. Metrics, the split, and the judges are in `evals/README.md`. The model choice is in `docs/decisions/0001-retrieval.md`.
 
-The other commands need a key. They need `uv sync --all-packages --group dev` first.
+The other commands need a key. They need `uv sync --all-packages --group dev` first. `make eval-answers` and `make eval-live` read the keys from the repo `.env`; a value set in the shell wins.
 
 | Command | Needs | What it does |
 | --- | --- | --- |
 | `make eval` | Nothing. The first run downloads the models | The table above |
-| `make eval-answers` | `GOOGLE_API_KEY` | Answers every row in text with `gemini-3.8-flash`, using the agent's prompt and `search_kb`. Writes `evals/runs/answers.jsonl` |
+| `make eval-answers` | `GOOGLE_API_KEY` | Answers every row in text with `gemini-3.8-flash`, using the agent's prompt and tools. Writes `evals/runs/answers.jsonl` with each answer, its citations, and the passages its searches returned |
 | `make eval-live` | `ANTHROPIC_API_KEY`, and the file from `make eval-answers` | Judges each answer for faithfulness, correctness, refusal, and citation with `claude-haiku-5-5`. Set `KB_JUDGE_MODEL` to change the judge. Writes a verdict file under `evals/runs/` |
 | `uv run python -m kb_agent.selfcheck --image services/agent/tests/fixtures/billing-screen.png --question "What does the red banner say, and which button fixes it?"` | `GOOGLE_API_KEY` | Streams the image as the shared screen to the live model and prints the reply, the tools called, and the token usage. Exits 1 when no image tokens were billed, which means the model never saw the picture. Without a key it prints `skipped` and exits 0 |
 
-`evals/runs/` is ignored by git. No live score is committed to this repository.
+`evals/runs/` is ignored by git. The live scores, with the date, commit, and model ids of each run, are in `docs/decisions/0002-evals.md`.
 
 ## MCP
 
