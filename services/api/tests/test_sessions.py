@@ -455,7 +455,11 @@ def test_the_agent_records_each_desktop_step_in_the_session_audit_log(
     assert row["org_id"] == "org-a"
     assert row["actor"] == "agent"
     assert str(row["target"]).startswith("session:")
-    assert json.loads(str(row["details"])) == step["details"]
+    # Postgres returns JSONB as a dict; SQLite returns the JSON text.
+    details = row["details"]
+    if isinstance(details, str):
+        details = json.loads(details)
+    assert details == step["details"]
 
 
 @pytest.mark.parametrize(
