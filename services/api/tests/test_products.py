@@ -65,7 +65,9 @@ def test_create_list_get_put_and_delete_product(http: TestClient, as_user) -> No
         "voice": "Sulafat",
     }
     assert http.get(f"/products/{body['id']}", headers=headers).json() == body
-    assert http.get("/products", headers=headers).json() == [body]
+    assert http.get("/products", headers=headers).json() == [
+        {**body, "document_count": 0, "last_session_at": None}
+    ]
 
     updated = http.put(
         f"/products/{body['id']}",

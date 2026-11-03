@@ -2,7 +2,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import mean
-from typing import Protocol
 
 from kb_rag import (
     DEFAULT_SETTINGS,
@@ -48,12 +47,6 @@ METRICS = (
     "abstention_recall",
     "injection_safety",
 )
-
-
-class Retriever(Protocol):
-    async def index(self, sources: list[Source]) -> None: ...
-
-    async def search(self, query: str, limit: int) -> SearchResult: ...
 
 
 class RagRetriever:
@@ -130,7 +123,7 @@ def load_thresholds(path: Path) -> tuple[int, dict[str, float]]:
 
 
 async def collect(
-    retriever: Retriever, cases: list[EvalCase], k: int
+    retriever: RagRetriever, cases: list[EvalCase], k: int
 ) -> list[CaseResult]:
     results: list[CaseResult] = []
     for case in cases:
@@ -178,7 +171,7 @@ def build_report(
 
 
 async def run_eval(
-    retriever: Retriever, docs: Path, dataset: Path, thresholds: Path
+    retriever: RagRetriever, docs: Path, dataset: Path, thresholds: Path
 ) -> Report:
     k, limits = load_thresholds(thresholds)
     cases = load_dataset(dataset)

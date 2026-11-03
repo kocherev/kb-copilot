@@ -1,7 +1,6 @@
 """The API's two knowledge routes, answered in this process from a kb_rag index.
 
-For selfcheck and tests. kb_rag is a dev dependency of the agent: the worker
-never imports this module.
+For selfcheck and tests. The worker never imports this module.
 """
 
 import json

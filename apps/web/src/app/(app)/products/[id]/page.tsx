@@ -1,4 +1,3 @@
-import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { ProductEditor } from "@/components/product-editor";
@@ -43,8 +42,6 @@ async function ProductRoute({
   params,
 }: Pick<PageProps<"/products/[id]">, "params">) {
   const { id } = await params;
-  // The API client tags each request with Math.random, so render per request.
-  await connection();
   const loaded = await loadProduct(id);
   return <ProductEditor apiUrl={publicApiUrl()} loaded={loaded} />;
 }

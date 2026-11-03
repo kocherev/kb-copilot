@@ -1,21 +1,29 @@
 import { headers } from "next/headers";
+import { connection } from "next/server";
+import { cache } from "react";
 
-import { apiClient, publicApiUrl, type ApiClient, type Product } from "@/lib/api/client";
+import { apiClient, publicApiUrl, type ApiClient, type ProductSummary } from "@/lib/api/client";
 import { auth } from "@/lib/auth";
 import { productLoad, type ProductLoad } from "@/lib/product";
 import { replayLoad, type ReplayLoad } from "@/lib/replay";
 
 // Inside Compose the browser's API URL points at the web container itself.
-export function serverApiUrl(): string {
+function serverApiUrl(): string {
   return process.env.API_INTERNAL_URL ?? publicApiUrl();
 }
 
+// One JWT per server request, shared by every API call that request makes.
+const requestToken = cache(async () => {
+  const { token } = await auth.api.getToken({ headers: await headers() });
+  return token;
+});
+
 export async function serverApi(): Promise<ApiClient> {
-  const requestHeaders = await headers();
-  return apiClient(serverApiUrl(), async () => {
-    const { token } = await auth.api.getToken({ headers: requestHeaders });
-    return token;
-  });
+  // openapi-fetch draws a Math.random request id, which Next refuses in a
+  // prerender. headers() alone does not stop one: partial prefetching resolves
+  // session data in the shell.
+  await connection();
+  return apiClient(serverApiUrl(), requestToken);
 }
 
 export async function loadProduct(id: string): Promise<ProductLoad> {
@@ -42,7 +50,7 @@ export async function loadReplay(id: string): Promise<ReplayLoad> {
   }
 }
 
-export async function loadProducts(): Promise<Product[] | null> {
+export async function loadProducts(): Promise<ProductSummary[] | null> {
   try {
     const api = await serverApi();
     const { data } = await api.GET("/products");

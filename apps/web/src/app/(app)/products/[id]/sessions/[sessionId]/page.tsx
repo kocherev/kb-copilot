@@ -1,6 +1,5 @@
 import { SearchX } from "lucide-react";
 import Link from "next/link";
-import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { SessionReplay } from "@/components/session-replay";
@@ -55,8 +54,6 @@ async function ReplayRoute({
   params,
 }: Pick<PageProps<"/products/[id]/sessions/[sessionId]">, "params">) {
   const { id, sessionId } = await params;
-  // The API client tags each request with Math.random, so render per request.
-  await connection();
   const [product, loaded] = await Promise.all([loadProduct(id), loadReplay(sessionId)]);
   if (
     product.status === "ready" &&

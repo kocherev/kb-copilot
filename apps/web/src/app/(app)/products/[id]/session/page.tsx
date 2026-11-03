@@ -1,9 +1,8 @@
 import { CircleAlert, SearchX } from "lucide-react";
 import Link from "next/link";
-import { connection } from "next/server";
 import { Suspense } from "react";
 
-import { SessionView } from "@/components/session-view";
+import { SessionStart } from "@/components/session-start";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Loading, Skeleton } from "@/components/ui/skeleton";
@@ -39,8 +38,6 @@ async function SessionRoute({
   params,
 }: Pick<PageProps<"/products/[id]/session">, "params">) {
   const { id } = await params;
-  // The API client draws a random request id, which a prerender may not do.
-  await connection();
   const loaded = await loadProduct(id);
   if (loaded.status !== "ready") {
     const missing = loaded.status === "missing";
@@ -69,7 +66,7 @@ async function SessionRoute({
     );
   }
   return (
-    <SessionView
+    <SessionStart
       apiUrl={publicApiUrl()}
       productId={loaded.product.id}
       productName={loaded.product.name}

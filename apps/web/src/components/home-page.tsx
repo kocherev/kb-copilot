@@ -12,27 +12,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { InlineError } from "@/components/ui/inline-error";
 import { PageHeader } from "@/components/ui/page-header";
 import { Loading, Skeleton } from "@/components/ui/skeleton";
-import type { Product, SessionSummary } from "@/lib/api/client";
+import type { ProductSummary } from "@/lib/api/client";
 import { stagger } from "@/lib/motion";
-
-export type HomeData = {
-  products: Product[];
-  documentCounts: Record<string, number>;
-  sessions: SessionSummary[];
-};
-
-function lastSessionAt(sessions: SessionSummary[], productId: string): string | null {
-  let latest: string | null = null;
-  for (const session of sessions) {
-    if (
-      session.product_id === productId &&
-      (latest === null || Date.parse(session.created_at) > Date.parse(latest))
-    ) {
-      latest = session.created_at;
-    }
-  }
-  return latest;
-}
 
 // UTC, so the server render and hydration print the same day.
 const day = new Intl.DateTimeFormat("en-US", {
@@ -41,8 +22,14 @@ const day = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
-// `data` is undefined while the list loads and null when it failed.
-export function HomePage({ apiUrl, data }: { apiUrl: string; data?: HomeData | null }) {
+// `products` is undefined while the list loads and null when it failed.
+export function HomePage({
+  apiUrl,
+  products,
+}: {
+  apiUrl: string;
+  products?: ProductSummary[] | null;
+}) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [retrying, startRetry] = useTransition();
@@ -53,16 +40,16 @@ export function HomePage({ apiUrl, data }: { apiUrl: string; data?: HomeData | n
         <PageHeader
           title="Products"
           description="Upload a product’s help docs, then talk to its voice agent. It answers out loud, sees your shared screen and cites the page behind each answer."
-          actions={data?.products.length === 0 ? null : <NewProductButton />}
+          actions={products?.length === 0 ? null : <NewProductButton />}
         />
         <section aria-label="Products" className="min-w-0">
-          {data === undefined || retrying ? (
+          {products === undefined || retrying ? (
             <ProductGridSkeleton />
-          ) : data === null ? (
+          ) : products === null ? (
             <InlineError onRetry={() => startRetry(() => router.refresh())}>
               Couldn’t load your products. Check that the API is running, then try again.
             </InlineError>
-          ) : data.products.length === 0 ? (
+          ) : products.length === 0 ? (
             <EmptyState
               icon={Boxes}
               title="Set up your first product"
@@ -71,14 +58,8 @@ export function HomePage({ apiUrl, data }: { apiUrl: string; data?: HomeData | n
             />
           ) : (
             <ul className="grid min-w-0 list-none grid-cols-1 gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">
-              {data.products.map((product, index) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  documentCount={data.documentCounts[product.id] ?? 0}
-                  lastSession={lastSessionAt(data.sessions, product.id)}
-                  index={index}
-                />
+              {products.map((product, index) => (
+                <ProductCard key={product.id} product={product} index={index} />
               ))}
             </ul>
           )}
@@ -127,17 +108,7 @@ function NewProductButton() {
   );
 }
 
-function ProductCard({
-  product,
-  documentCount,
-  lastSession,
-  index,
-}: {
-  product: Product;
-  documentCount: number;
-  lastSession: string | null;
-  index: number;
-}) {
+function ProductCard({ product, index }: { product: ProductSummary; index: number }) {
   return (
     <li
       style={stagger(index)}
@@ -172,21 +143,23 @@ function ProductCard({
           <dt className="sr-only">Documents</dt>
           <dd className="flex items-center gap-1.5">
             <FileText aria-hidden className="size-3.5" />
-            {documentCount === 0
+            {product.document_count === 0
               ? "No documents yet"
-              : documentCount === 1
+              : product.document_count === 1
                 ? "1 document"
-                : `${documentCount} documents`}
+                : `${product.document_count} documents`}
           </dd>
         </div>
         <div>
           <dt className="sr-only">Last session</dt>
           <dd className="flex items-center gap-1.5">
             <Clock aria-hidden className="size-3.5" />
-            {lastSession === null ? (
+            {product.last_session_at === null ? (
               "No sessions yet"
             ) : (
-              <time dateTime={lastSession}>Last session {day.format(new Date(lastSession))}</time>
+              <time dateTime={product.last_session_at}>
+                Last session {day.format(new Date(product.last_session_at))}
+              </time>
             )}
           </dd>
         </div>

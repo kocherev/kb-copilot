@@ -93,3 +93,15 @@ test("a product that failed to load says why and offers to try again", () => {
   expect(screen.getByRole("button", { name: "Try again" })).toBeDefined();
   expect(screen.queryByLabelText("Name")).toBeNull();
 });
+
+test("field hints name the agent, or say the agent when the name is empty", () => {
+  stubApi(() => ({ status: 200, body: [] }));
+  render(<ProductEditor apiUrl="http://localhost:8000" loaded={{ status: "ready", product }} />);
+
+  expect(screen.getByText("How Shawn should sound, such as “calm and brief”.")).toBeDefined();
+  expect(screen.getByText("What Shawn must not do.")).toBeDefined();
+
+  fireEvent.change(screen.getByLabelText("Agent name"), { target: { value: " " } });
+  expect(screen.getByText("How the agent should sound, such as “calm and brief”.")).toBeDefined();
+  expect(screen.getByText("What the agent must not do.")).toBeDefined();
+});

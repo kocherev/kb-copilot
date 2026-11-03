@@ -2,14 +2,14 @@ import type { Replay, Turn } from "@/lib/api/client";
 
 const PRODUCT = "11111111-1111-4111-8111-111111111111";
 
-export const passage = {
+const passage = {
   id: "p1",
   title: "Reset a password",
   source: "upload://reset.md",
   score: 0.91,
 };
 
-export const question: Turn = {
+const question: Turn = {
   id: "t1",
   role: "user",
   text: "How do I reset my password?",

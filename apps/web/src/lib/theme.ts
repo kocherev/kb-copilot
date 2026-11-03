@@ -21,7 +21,7 @@ function resolve(preference: ThemePreference): "light" | "dark" {
 
 // Every color transition firing at once smears the switch, so transitions are
 // off for the frame the theme changes in.
-export function applyTheme(preference: ThemePreference) {
+function applyTheme(preference: ThemePreference) {
   const root = document.documentElement;
   const next = resolve(preference);
   if (root.dataset.theme === next) {

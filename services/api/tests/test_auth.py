@@ -98,7 +98,9 @@ def test_api_key_acts_for_its_org_until_revoked(
 
     product = http.post("/products", json=VALID, headers=machine)
     assert product.status_code == 201
-    assert http.get("/products", headers=owner).json() == [product.json()]
+    assert http.get("/products", headers=owner).json() == [
+        {**product.json(), "document_count": 0, "last_session_at": None}
+    ]
     assert http.get("/api-keys", headers=machine).status_code == 403
     assert http.get("/me", headers=machine).status_code == 403
 
