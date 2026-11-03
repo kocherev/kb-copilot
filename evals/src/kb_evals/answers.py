@@ -1,8 +1,8 @@
 """Answer every eval question with Gemini, for `make eval-live` to judge.
 
-The model gets the agent's system prompt and the agent's search_kb tool over
-the demo index. It answers in text, because the Live model only streams audio.
-Cited passages are chosen the way the live agent chooses them.
+The model gets the agent's system prompt and the agent's tools, with search_kb
+over the demo index. It answers in text, because the Live model only streams
+audio. Cited passages are chosen the way the live agent chooses them.
 """
 
 import argparse
@@ -28,8 +28,11 @@ PRODUCT = ProductPrompt(
     tone="calm and brief",
     refusal_rules="Do not invent a policy, a price, or a step.",
 )
+# A live session opens with the agent's greeting before the user speaks.
+# Without it every answer was a first turn and began with an introduction.
+GREETING = f"Hi, I'm {PRODUCT.agent_name}. How can I help with {PRODUCT.name}?"
 Tool = Callable[..., object]
-Generate = Callable[[str, list[str], list[Tool]], Awaitable[str]]
+Generate = Callable[[str, list[types.Content], list[Tool]], Awaitable[str]]
 
 
 # The prompt names these tools, so the model calls them. An eval row has no
@@ -70,13 +73,15 @@ def operate_computer(goal: str) -> str:
 def gemini_generate(model: str) -> Generate:
     client = Client()
 
-    async def generate(system: str, turns: list[str], tools: list[Tool]) -> str:
+    async def generate(
+        system: str, contents: list[types.Content], tools: list[Tool]
+    ) -> str:
         reply = await client.aio.models.generate_content(
             model=model,
-            contents=[
-                types.Content(role="user", parts=[types.Part(text=t)]) for t in turns
-            ],
-            config=types.GenerateContentConfig(system_instruction=system, tools=[*tools]),
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system, tools=[*tools]
+            ),
         )
         return reply.text or ""
 
@@ -102,7 +107,13 @@ async def answer(
 
     text = await generate(
         render_system_prompt(PRODUCT),
-        [*case.turns, case.question],
+        [
+            types.Content(role="model", parts=[types.Part(text=GREETING)]),
+            *(
+                types.Content(role="user", parts=[types.Part(text=turn)])
+                for turn in (*case.turns, case.question)
+            ),
+        ],
         [search_kb, point_at, handoff_to_human, operate_computer],
     )
     cited = await supported_ids(
