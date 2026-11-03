@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, StringConstraints
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from kb_api import linear
@@ -37,6 +37,8 @@ router = APIRouter(tags=["escalations"], responses=AUTH_ERRORS)
 log = logging.getLogger(__name__)
 
 TITLE_LIMIT = 120
+# Each proposal is a card the user must read, so one session carries only a few.
+MAX_PROPOSALS_PER_SESSION = 3
 AGENT = "agent"
 # A creating row this idle lost its request, so approve may claim it again.
 CREATING_LEASE = timedelta(minutes=2)
@@ -46,6 +48,14 @@ NOT_CONNECTED: dict[int | str, dict[str, object]] = {
 }
 NOT_FOUND: dict[int | str, dict[str, object]] = {
     404: {"model": ErrorBody, "description": "No such escalation in this org"}
+}
+TOO_MANY: dict[int | str, dict[str, object]] = {
+    429: {
+        "model": ErrorBody,
+        "description": (
+            "The session already has the maximum number of handoff proposals"
+        ),
+    }
 }
 
 
@@ -107,6 +117,7 @@ async def owned_escalation(db: AsyncSession, org_id: str, id: UUID) -> Escalatio
     responses={
         404: {"model": ErrorBody, "description": "No such session"},
         **NOT_CONNECTED,
+        **TOO_MANY,
         **NOT_CONFIGURED,
     },
 )
@@ -123,6 +134,14 @@ async def propose_escalation(
         raise HTTPException(404, "session not found")
     if await load_connection(db, session.org_id) is None:
         raise HTTPException(409, "Linear is not connected")
+    # Every status counts, so a dismissed proposal still uses its slot.
+    proposed = await db.scalar(
+        select(func.count())
+        .select_from(EscalationRow)
+        .where(EscalationRow.room == session.room)
+    )
+    if (proposed or 0) >= MAX_PROPOSALS_PER_SESSION:
+        raise HTTPException(429, "too many handoffs proposed in this session")
     product = await db.get(ProductRow, session.product_id)
     assert product is not None  # the session row cascades with its product
     row = EscalationRow(
