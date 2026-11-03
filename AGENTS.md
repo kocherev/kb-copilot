@@ -23,7 +23,7 @@ Auth: every product, document, session, and API-key route needs `Authorization: 
 
 ## Commands
 
-From a clean checkout, one command installs, lints, typechecks, runs unit tests, runs the offline eval, and checks the Compose file:
+From a clean checkout, one command installs, lints, typechecks, runs unit tests, builds the web app, runs the offline eval, and checks the Compose file:
 
 ```bash
 ./scripts/check.sh

@@ -1,0 +1,158 @@
+/* Design tokens. Components use the Tailwind names from globals.css, not
+   these variables. Contrast pairs are measured in the UI direction notes. */
+
+:root,
+[data-theme="light"] {
+  --bg: oklch(0.985 0.003 85);
+  --surface: oklch(1 0 0);
+  --surface-sunken: oklch(0.962 0.004 85);
+  --surface-hover: oklch(0.95 0.005 85);
+  --fg: oklch(0.22 0.01 85);
+  --fg-muted: oklch(0.48 0.012 85);
+  --fg-subtle: oklch(0.6 0.01 85);
+  --line: oklch(0.22 0.01 85 / 0.1);
+  --line-strong: oklch(0.22 0.01 85 / 0.18);
+  --line-control: oklch(0.64 0.01 85);
+
+  --brand: oklch(0.5 0.085 200);
+  --brand-hover: oklch(0.45 0.075 200);
+  --brand-fg: oklch(1 0 0);
+  --brand-text: oklch(0.5 0.085 200);
+  --brand-soft: oklch(0.955 0.016 200);
+  --brand-soft-fg: oklch(0.4 0.06 200);
+  --focus: oklch(0.56 0.09 200);
+
+  --danger: oklch(0.52 0.17 27);
+  --danger-hover: oklch(0.47 0.16 27);
+  --danger-fg: oklch(1 0 0);
+  --danger-soft: oklch(0.965 0.013 27);
+  --success: oklch(0.5 0.11 152);
+  --success-soft: oklch(0.96 0.03 152);
+  --warning: oklch(0.52 0.11 70);
+  --warning-soft: oklch(0.965 0.025 85);
+
+  --chart-1: oklch(0.5 0.085 200);
+  --chart-2: oklch(0.7 0.09 175);
+  --chart-3: oklch(0.38 0.05 230);
+  --chart-4: oklch(0.78 0.12 85);
+  --chart-5: oklch(0.62 0.1 285);
+
+  --elev-ring: 0 0 0 1px var(--line);
+  --elev-soft: 0 1px 2px oklch(0.22 0.01 85 / 0.05), 0 4px 12px -2px oklch(0.22 0.01 85 / 0.06);
+  --elev-float: 0 2px 4px oklch(0.22 0.01 85 / 0.06), 0 12px 32px -4px oklch(0.22 0.01 85 / 0.14);
+}
+
+[data-theme="dark"] {
+  --bg: oklch(0.17 0.005 85);
+  --surface: oklch(0.215 0.006 85);
+  --surface-sunken: oklch(0.145 0.005 85);
+  --surface-hover: oklch(0.255 0.006 85);
+  --fg: oklch(0.94 0.006 85);
+  --fg-muted: oklch(0.72 0.01 85);
+  --fg-subtle: oklch(0.58 0.01 85);
+  --line: oklch(1 0 0 / 0.09);
+  --line-strong: oklch(1 0 0 / 0.16);
+  --line-control: oklch(0.52 0.01 85);
+
+  --brand: oklch(0.74 0.1 195);
+  --brand-hover: oklch(0.79 0.09 195);
+  --brand-fg: oklch(0.18 0.02 200);
+  --brand-text: oklch(0.76 0.1 195);
+  --brand-soft: oklch(0.27 0.04 200);
+  --brand-soft-fg: oklch(0.84 0.08 195);
+  --focus: oklch(0.7 0.11 197);
+
+  --danger: oklch(0.71 0.15 25);
+  --danger-hover: oklch(0.76 0.13 25);
+  --danger-fg: oklch(0.18 0.02 25);
+  --danger-soft: oklch(0.25 0.04 25);
+  --success: oklch(0.74 0.13 152);
+  --success-soft: oklch(0.25 0.04 152);
+  --warning: oklch(0.8 0.12 80);
+  --warning-soft: oklch(0.26 0.035 80);
+
+  --chart-1: oklch(0.74 0.1 195);
+  --chart-2: oklch(0.6 0.08 175);
+  --chart-3: oklch(0.85 0.04 220);
+  --chart-4: oklch(0.82 0.12 85);
+  --chart-5: oklch(0.7 0.1 285);
+
+  --elev-ring: 0 0 0 1px var(--line);
+  --elev-soft: 0 1px 2px oklch(0 0 0 / 0.3), 0 4px 12px -2px oklch(0 0 0 / 0.3);
+  --elev-float: 0 2px 4px oklch(0 0 0 / 0.35), 0 12px 32px -4px oklch(0 0 0 / 0.5);
+}
+
+:root {
+  --z-sticky: 10;
+  --z-stage: 20;
+  --z-overlay: 40;
+  --z-toast: 50;
+
+  --motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --motion-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-press: 120ms;
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-enter: 260ms;
+  --duration-slow: 300ms;
+  --stagger-step: 40ms;
+
+  /* How far things travel. Reduced motion collapses these, so every enter
+     and exit becomes a plain fade without each component checking. */
+  --motion-y: 8px;
+  --motion-exit-y: -6px;
+  --motion-blur: 4px;
+  --motion-scale: 0.97;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-y: 0px;
+    --motion-exit-y: 0px;
+    --motion-blur: 0px;
+    --motion-scale: 1;
+    --duration-enter: 150ms;
+    --stagger-step: 0ms;
+  }
+}
+
+/* Point Honest UI at the same palette, so the homepage button, the focus ring
+   and the agent cursor follow the theme. */
+:root {
+  --hui-color-background-base-primary: var(--surface);
+  --hui-color-background-base-primary-hover: var(--surface-hover);
+  --hui-color-background-base-secondary: var(--surface-sunken);
+  --hui-color-background-neutral-secondary: var(--surface-sunken);
+  --hui-color-background-neutral-secondary-hover: var(--surface-hover);
+  --hui-color-background-neutral-emphasis: var(--fg);
+  --hui-color-background-accent-emphasis: var(--brand);
+  --hui-color-background-accent-emphasis-hover: var(--brand-hover);
+  --hui-color-background-danger-emphasis: var(--danger);
+  --hui-color-background-danger-primary: var(--danger-soft);
+  --hui-color-foreground-base-primary: var(--fg);
+  --hui-color-foreground-base-secondary: var(--fg-muted);
+  --hui-color-foreground-base-tertiary: var(--fg-subtle);
+  --hui-color-foreground-base-emphasis: var(--surface);
+  --hui-color-foreground-accent-emphasis: var(--brand-fg);
+  --hui-color-foreground-danger-primary: var(--danger);
+  --hui-color-foreground-danger-emphasis: var(--danger-fg);
+  --hui-color-border-base-primary: var(--line);
+  --hui-color-border-base-secondary: var(--line-strong);
+  --hui-color-border-base-tertiary: var(--line-control);
+  --hui-color-border-base-focus: var(--focus);
+  --hui-color-border-accent-emphasis: var(--focus);
+  --hui-color-border-danger-emphasis: var(--danger);
+  --hui-color-border-danger-emphasis-hover: var(--danger-hover);
+  --hui-radius-1: 0.375rem;
+  --hui-radius-2: 0.625rem;
+  --hui-ease-out: var(--motion-ease-out);
+  --font-love-sans: var(--font-sans-face);
+  --font-jetbrains-mono: var(--font-mono-face);
+}
+
+/* The Honest UI theme fades color on <html> for 400ms, which smears a theme
+   switch. The toggle suppresses transitions for that one frame instead. */
+[data-theme] {
+  transition: none;
+}

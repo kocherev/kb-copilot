@@ -238,7 +238,7 @@ Setup details, the RPC contract, and limits are in `apps/desktop/README.md`. The
 
 ## Development
 
-For work on the code you need Node.js 22, pnpm 10.33.4, Python 3.12, [uv](https://docs.astral.sh/uv/) 0.13.6, and Docker Compose v2. One command installs from the lockfiles, lints, typechecks, runs the unit tests and `make eval`, and validates the Compose files:
+For work on the code you need Node.js 22, pnpm 10.33.4, Python 3.12, [uv](https://docs.astral.sh/uv/) 0.13.6, and Docker Compose v2. One command installs from the lockfiles, lints, typechecks, runs the unit tests, builds the web app, runs `make eval`, and validates the Compose files:
 
 ```bash
 ./scripts/check.sh
