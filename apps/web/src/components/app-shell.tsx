@@ -59,7 +59,7 @@ export function AppShell({ account, children }: { account: ReactNode; children: 
                 key={href}
                 href={href}
                 aria-current={matches(pathname) ? "page" : undefined}
-                className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-muted-foreground transition-[color,background-color] duration-150 ease-out hover:bg-surface-hover hover:text-foreground aria-[current=page]:bg-surface-sunken aria-[current=page]:text-foreground pointer-coarse:h-10 ${focusRing}`}
+                className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-muted-foreground transition-[color,background-color,box-shadow] duration-150 ease-out hover:bg-surface-hover hover:text-foreground aria-[current=page]:bg-surface aria-[current=page]:text-foreground aria-[current=page]:shadow-soft pointer-coarse:h-10 ${focusRing}`}
               >
                 <Icon aria-hidden className="size-4" />
                 <span className="max-sm:sr-only">{label}</span>
