@@ -1,166 +1,189 @@
-import json
-from collections.abc import Callable
-from pathlib import Path
-from uuid import UUID, uuid4
+"""Upload, list and delete a product's documents. The queue indexes them."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from kb_rag import (
-    DEFAULT_SETTINGS,
-    RetrievalSettings,
-    Source,
-    index_sources,
-    validate_product_id,
-)
-from kb_rag.sources import check_upload, iter_documents, read_source, source_from_bytes
+from collections.abc import AsyncGenerator, AsyncIterator
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from kb_rag.sources import MAX_BYTES, check_upload
+from pydantic import BaseModel, ConfigDict
 from qdrant_client import AsyncQdrantClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import UploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
 
-from kb_api.jobs import IngestJob, JobStore, PostgresJobStore
-from kb_api.settings import load_settings
+from kb_api.auth import AUTH_ERRORS, ErrorBody, Principal, get_principal
+from kb_api.db import DocumentRow, IngestJobRow, ProductRow, get_db
+from kb_api.jobs import JobStatus, Upload, get_qdrant, queue_documents, remove_chunks
+from kb_api.products import NOT_FOUND, owned_product
 
-router = APIRouter()
+MAX_FILES = 20
+# The form fields and part headers add a little to the files themselves.
+MAX_REQUEST_BYTES = MAX_FILES * MAX_BYTES + 100_000
+
+router = APIRouter(tags=["documents"], responses=AUTH_ERRORS)
+
+UPLOAD_ERRORS: dict[int | str, dict[str, object]] = {
+    400: {"model": ErrorBody, "description": "Missing, invalid or duplicate files"},
+    404: NOT_FOUND[404],
+    413: {"model": ErrorBody, "description": "The upload is too large"},
+}
+MULTIPART_FILES = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "multipart/form-data": {
+                "schema": {
+                    "type": "object",
+                    "required": ["files"],
+                    "properties": {
+                        "files": {
+                            "type": "array",
+                            "items": {"type": "string", "format": "binary"},
+                        }
+                    },
+                }
+            }
+        },
+    }
+}
 
 
-def get_job_store() -> JobStore:
-    store = PostgresJobStore(load_settings().database_url)
-    store.ensure_schema()
-    return store
+class IngestJob(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    product_id: UUID
+    status: JobStatus
+    chunk_count: int
+    error: str | None
 
 
-def get_qdrant() -> AsyncQdrantClient:
-    settings = load_settings()
-    return AsyncQdrantClient(
-        url=settings.qdrant_url,
-        api_key=settings.qdrant_api_key or None,
-    )
+class Document(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    source: str
+    title: str
+    status: JobStatus
+    chunk_count: int
+    error: str | None
+    job_id: UUID
 
 
-def get_retrieval_settings() -> RetrievalSettings:
-    return DEFAULT_SETTINGS
+async def capped(stream: AsyncIterator[bytes]) -> AsyncGenerator[bytes, None]:
+    """Stop reading the request body once it is larger than any valid upload."""
+    total = 0
+    async for chunk in stream:
+        total += len(chunk)
+        if total > MAX_REQUEST_BYTES:
+            raise HTTPException(413, "upload is too large")
+        yield chunk
 
 
-def resolve_directory(data_root: str, directory: str) -> Path:
-    if not directory.strip():
-        raise ValueError("directory is required")
-    root = Path(data_root).resolve()
+async def read_uploads(request: Request) -> list[Upload]:
+    if not request.headers.get("content-type", "").startswith("multipart/form-data"):
+        raise HTTPException(400, "send the files as multipart/form-data")
     try:
-        candidate = (root / directory).resolve()
-    except (OSError, RuntimeError) as exc:
-        raise ValueError("directory is invalid") from exc
-    if not candidate.is_relative_to(root):
-        raise ValueError("directory must stay inside the data root")
-    if not candidate.is_dir():
-        raise ValueError("directory not found")
-    return candidate
-
-
-async def run_ingest(
-    store: JobStore,
-    qdrant: AsyncQdrantClient,
-    product_id: str,
-    load_sources: Callable[[], list[Source]],
-    settings: RetrievalSettings = DEFAULT_SETTINGS,
-) -> IngestJob:
-    job = IngestJob(
-        id=uuid4(),
-        product_id=product_id,
-        status="queued",
-        status_log=["queued"],
-    )
-    store.create(job)
-    job.status = "indexing"
-    job.status_log.append("indexing")
-    store.save(job)
+        form = await MultiPartParser(
+            request.headers,
+            capped(request.stream()),
+            max_files=MAX_FILES,
+            max_fields=0,
+        ).parse()
+    except MultiPartException as exc:
+        raise HTTPException(400, exc.message) from exc
     try:
-        # shortcut: index inside the request. Revisit when a folder needs a worker.
-        # shortcut: removed files stay indexed. Revisit when delete is an API.
-        sources = load_sources()
-        if not sources:
-            raise ValueError("no supported documents")
-        job.chunk_count = await index_sources(
-            qdrant, product_id, sources, settings=settings
-        )
-    except Exception as exc:
-        job.status = "failed"
-        job.error = str(exc)
-        job.status_log.append("failed")
-        store.save(job)
-        return job
-    job.status = "indexed"
-    job.status_log.append("indexed")
-    store.save(job)
-    return job
+        uploads: list[Upload] = []
+        for upload in form.getlist("files"):
+            if not isinstance(upload, UploadFile) or not upload.filename:
+                raise HTTPException(400, "files must be file uploads")
+            if upload.size is not None and upload.size > MAX_BYTES:
+                raise HTTPException(400, f"{upload.filename} exceeds {MAX_BYTES} bytes")
+            data = await upload.read()
+            try:
+                uploads.append((check_upload(upload.filename, data), data))
+            except ValueError as exc:
+                raise HTTPException(400, str(exc)) from exc
+    finally:
+        await form.close()
+    names = [name for name, _ in uploads]
+    if not names:
+        raise HTTPException(400, "files are required")
+    if len(set(names)) != len(names):
+        raise HTTPException(400, "file names must be unique")
+    return uploads
 
 
-async def loader_from_request(request: Request) -> Callable[[], list[Source]]:
-    content_type = request.headers.get("content-type", "")
-    if "application/json" in content_type:
-        try:
-            payload = await request.json()
-        except json.JSONDecodeError as exc:
-            raise ValueError("body must be JSON") from exc
-        if not isinstance(payload, dict):
-            raise ValueError("body must be an object")
-        directory = payload.get("directory")
-        if not isinstance(directory, str):
-            raise ValueError("directory is required")
-        folder = resolve_directory(load_settings().data_root, directory)
-        paths = iter_documents(folder)
-        if not paths:
-            raise ValueError("directory has no supported documents")
-
-        def load_directory() -> list[Source]:
-            return [read_source(path, folder) for path in paths]
-
-        return load_directory
-
-    form = await request.form()
-    uploads = form.getlist("files")
-    if not uploads:
-        raise ValueError("files are required")
-    pending: list[tuple[str, bytes]] = []
-    for upload in uploads:
-        if not isinstance(upload, UploadFile):
-            raise ValueError("file body must be bytes")
-        filename = upload.filename
-        if not isinstance(filename, str):
-            raise ValueError("file name is required")
-        data = await upload.read()
-        check_upload(filename, data)
-        pending.append((filename, data))
-
-    def load_uploads() -> list[Source]:
-        return [source_from_bytes(filename, data) for filename, data in pending]
-
-    return load_uploads
-
-
-@router.post("/products/{product_id}/documents", status_code=201)
+@router.post(
+    "/products/{product_id}/documents",
+    status_code=202,
+    responses=UPLOAD_ERRORS,
+    openapi_extra=MULTIPART_FILES,
+)
 async def create_documents(
-    product_id: str,
     request: Request,
-    store: JobStore = Depends(get_job_store),
-    qdrant: AsyncQdrantClient = Depends(get_qdrant),
-    settings: RetrievalSettings = Depends(get_retrieval_settings),
+    product: Annotated[ProductRow, Depends(owned_product)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IngestJob:
-    try:
-        validate_product_id(product_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    try:
-        load_sources = await loader_from_request(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return await run_ingest(store, qdrant, product_id.strip(), load_sources, settings)
+    uploads = await read_uploads(request)
+    job = await queue_documents(db, product.id, uploads)
+    request.app.state.wake.set()
+    return IngestJob.model_validate(job)
 
 
-@router.get("/ingest-jobs/{job_id}")
-def read_job(job_id: str, store: JobStore = Depends(get_job_store)) -> IngestJob:
-    try:
-        parsed = UUID(job_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="job id must be a UUID") from exc
-    job = store.get(parsed)
+@router.get("/products/{product_id}/documents", responses=NOT_FOUND)
+async def list_documents(
+    product: Annotated[ProductRow, Depends(owned_product)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[Document]:
+    rows = await db.scalars(
+        select(DocumentRow)
+        .where(DocumentRow.product_id == product.id)
+        .order_by(DocumentRow.title)
+    )
+    return [Document.model_validate(row) for row in rows]
+
+
+@router.delete(
+    "/products/{product_id}/documents/{document_id}",
+    status_code=204,
+    responses={
+        **NOT_FOUND,
+        409: {"model": ErrorBody, "description": "The document is still indexing"},
+    },
+)
+async def delete_document(
+    document_id: UUID,
+    product: Annotated[ProductRow, Depends(owned_product)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    qdrant: Annotated[AsyncQdrantClient, Depends(get_qdrant)],
+) -> Response:
+    document = await db.scalar(
+        select(DocumentRow).where(
+            DocumentRow.id == document_id, DocumentRow.product_id == product.id
+        )
+    )
+    if document is None:
+        raise HTTPException(404, "document not found")
+    await remove_chunks(qdrant, product.id, [document])
+    await db.delete(document)
+    await db.commit()
+    return Response(status_code=204)
+
+
+@router.get("/ingest-jobs/{job_id}", responses=NOT_FOUND)
+async def read_job(
+    job_id: UUID,
+    principal: Annotated[Principal, Depends(get_principal)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> IngestJob:
+    job = await db.scalar(
+        select(IngestJobRow)
+        .join(ProductRow, ProductRow.id == IngestJobRow.product_id)
+        .where(IngestJobRow.id == job_id, ProductRow.org_id == principal.org_id)
+    )
     if job is None:
-        raise HTTPException(status_code=404, detail="ingest job not found")
-    return job
+        raise HTTPException(404, "ingest job not found")
+    return IngestJob.model_validate(job)

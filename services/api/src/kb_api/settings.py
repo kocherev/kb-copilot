@@ -8,11 +8,9 @@ PLACEHOLDERS = {"", "replace-me"}
 
 
 class Settings(BaseSettings):
-    # Ingest still connects with psycopg, so this stays a plain postgresql:// URL.
     database_url: str = "postgresql://kb:replace-me@localhost:5432/kb"
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
-    data_root: str = Field(default=".", validation_alias="KB_DATA_ROOT")
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
