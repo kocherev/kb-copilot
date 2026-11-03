@@ -1,7 +1,10 @@
 {
   "k": 5,
-  "hit_at_k": 1.0,
-  "mrr": 1.0,
-  "citation_rate": 1.0,
-  "faithfulness": 1.0
+  "recall_at_k": 0.84,
+  "mrr": 0.68,
+  "context_precision": 0.26,
+  "fact_recall": 0.84,
+  "abstention_precision": 0.75,
+  "abstention_recall": 0.25,
+  "injection_safety": 0.9
 }

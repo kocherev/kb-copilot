@@ -1,13 +1,43 @@
-"""Parse, chunk, and upsert hybrid vectors."""
+"""Parse, chunk, index, and search product documents in Qdrant."""
 
-from kb_rag.index import collection_name, document_from_passage, vector_params
-from kb_rag.pipeline import KB_COLLECTION, index_sources, search_chunks
+from kb_rag.models import (
+    DEFAULT_SETTINGS,
+    FastEmbedDense,
+    FastEmbedReranker,
+    FastEmbedSparse,
+    RetrievalSettings,
+)
+from kb_rag.pipeline import (
+    KB_COLLECTION,
+    NOT_IN_DOCS,
+    Passage,
+    SearchResult,
+    delete_source,
+    ensure_collection,
+    index_sources,
+    search,
+    should_abstain,
+    validate_product_id,
+)
+from kb_rag.sources import Source, read_directory, source_from_bytes
 
 __all__ = [
+    "DEFAULT_SETTINGS",
+    "FastEmbedDense",
+    "FastEmbedReranker",
+    "FastEmbedSparse",
     "KB_COLLECTION",
-    "collection_name",
-    "document_from_passage",
+    "NOT_IN_DOCS",
+    "Passage",
+    "RetrievalSettings",
+    "SearchResult",
+    "Source",
+    "delete_source",
+    "ensure_collection",
     "index_sources",
-    "search_chunks",
-    "vector_params",
+    "read_directory",
+    "search",
+    "should_abstain",
+    "source_from_bytes",
+    "validate_product_id",
 ]

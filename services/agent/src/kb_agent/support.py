@@ -1,32 +1,33 @@
-import asyncio
 from collections.abc import AsyncIterable
 
+from kb_rag import (
+    DEFAULT_SETTINGS,
+    NOT_IN_DOCS,
+    RetrievalSettings,
+    SearchResult,
+    search,
+)
 from livekit.agents import (
     Agent,
     ChatContext,
     ChatMessage,
     ModelSettings,
     RunContext,
-    StopResponse,
     function_tool,
     get_job_context,
-    llm,
 )
 from livekit.agents.llm.tool_context import ToolFlag
-from livekit.agents.types import FlushSentinel, TimedString
-from qdrant_client import QdrantClient
+from livekit.agents.types import TimedString
+from qdrant_client import AsyncQdrantClient, QdrantClient
 
 from kb_agent.hud import point_payload, publish_hud
 from kb_agent.latency import log_json
 from kb_agent.retrieve import (
-    NOT_IN_DOCS,
-    KbSearch,
     citation_suffix,
-    content_tokens,
+    cited_sources,
     retrieval_record,
     tool_text,
 )
-from kb_agent.retrieve import search_kb as lookup_kb
 
 
 class SupportAgent(Agent):
@@ -35,12 +36,18 @@ class SupportAgent(Agent):
         *,
         instructions: str,
         product_id: str,
-        qdrant: QdrantClient,
+        qdrant: AsyncQdrantClient | QdrantClient,
+        settings: RetrievalSettings = DEFAULT_SETTINGS,
     ) -> None:
         self.product_id = product_id
-        self.qdrant = qdrant
+        self.settings = settings
+        # The worker still builds a sync client. Search needs the async one.
+        self.qdrant = (
+            qdrant
+            if isinstance(qdrant, AsyncQdrantClient)
+            else AsyncQdrantClient(**qdrant.init_options)
+        )
         self.sources: list[str] = []
-        self._refuse = False
         super().__init__(instructions=instructions)
 
     async def on_enter(self) -> None:
@@ -59,7 +66,9 @@ class SupportAgent(Agent):
             query: The question to look up, using the user's words.
         """
         del context
-        found = await asyncio.to_thread(lookup_kb, self.qdrant, self.product_id, query)
+        found = await search(
+            self.qdrant, self.product_id, query, settings=self.settings
+        )
         self._remember(found)
         return tool_text(found)
 
@@ -96,41 +105,22 @@ class SupportAgent(Agent):
         new_message: ChatMessage,
     ) -> None:
         self.sources = []
-        self._refuse = False
         question = new_message.text_content or ""
-        if not content_tokens(question):
-            return
-        found = await asyncio.to_thread(
-            lookup_kb, self.qdrant, self.product_id, question
+        found = await search(
+            self.qdrant, self.product_id, question, settings=self.settings
         )
         self._remember(found)
-        if not found.hits:
-            self._refuse = True
-            if isinstance(self.llm, llm.RealtimeModel):
-                # Realtime audio does not pass through llm_node. Speak the
-                # exact refusal with TTS, then skip the model reply.
-                self.session.say(NOT_IN_DOCS)
-                raise StopResponse()
-            return
+        # A greeting also abstains, so the model decides whether to refuse.
+        lookup = (
+            "No passage matched. If the user asked a product question, say "
+            f"exactly: {NOT_IN_DOCS} Otherwise reply briefly without product facts."
+            if found.abstained
+            else tool_text(found)
+        )
         turn_ctx.add_message(
             role="assistant",
-            content="Knowledge lookup for the user's latest message:\n"
-            + tool_text(found),
+            content="Knowledge lookup for the user's latest message:\n" + lookup,
         )
-
-    async def llm_node(
-        self,
-        chat_ctx: llm.ChatContext,
-        tools: list[llm.Tool],
-        model_settings: ModelSettings,
-    ) -> AsyncIterable[llm.ChatChunk | str | FlushSentinel]:
-        if self._refuse:
-            yield NOT_IN_DOCS
-            return
-        async for chunk in Agent.default.llm_node(
-            self, chat_ctx, tools, model_settings
-        ):
-            yield chunk
 
     async def transcription_node(
         self,
@@ -144,7 +134,7 @@ class SupportAgent(Agent):
         if suffix:
             yield suffix
 
-    def _remember(self, found: KbSearch) -> None:
-        if found.hits:
-            self.sources = found.source_urls()
+    def _remember(self, found: SearchResult) -> None:
+        if found.passages:
+            self.sources = cited_sources(found)
         log_json(retrieval_record(self.product_id, found))

@@ -116,16 +116,30 @@ The GIF and the stills render the session components with a sample turn. They ar
 
 ## Eval results
 
-`make eval` indexes `demo/docs` in memory, answers the 40 rows in `evals/datasets/demo.jsonl`, and prints this table. The command exits 1 when a score is below the threshold. These numbers are that printout for the committed dataset.
+`make eval` indexes the 46 sample pages in `demo/docs` in memory, runs the 152 rows of `evals/datasets/v1.jsonl` through `kb_rag.search`, and prints this table. It exits 1 when a gated score is below `evals/thresholds.json`. This is that printout for the committed dataset and defaults:
 
-| Metric | Score | Threshold |
-| --- | --- | --- |
-| hit@5 | 1.000 | 1.000 |
-| mrr | 1.000 | 1.000 |
-| citation_rate | 1.000 | 1.000 |
-| faithfulness | 1.000 | 1.000 |
+```text
+category                      owner        n  recall@5    mrr  ctx_prec  facts  abstain  inj_safe
+answerable                                37     1.000  0.881     0.254  1.000    0.000     1.000
+paraphrase                                20     0.583  0.395     0.140  0.600    0.050     1.000
+multi_hop                                 15     0.967  0.900     0.680  0.867    0.000     1.000
+follow_up                                 15     0.867  0.767     0.267  0.867    0.000     1.000
+off_topic                     retrieval   12         -      -         -      -    0.833     1.000
+unanswerable_out_of_scope     retrieval   15         -      -         -      -    0.000     1.000
+unanswerable_false_premise    answer      10     0.850  0.603     0.240  0.900    0.000     0.800
+unanswerable_underspecified   answer       8         -      -         -      -    0.125     1.000
+unanswerable_partial          answer      10     0.900  0.770     0.200  0.900    0.000     1.000
+injection                                 10     0.800  0.367     0.200  0.800    0.000     0.100
+overall                                  152     0.869  0.708     0.280  0.863    0.079     0.928
+```
 
-`k` is 5, from `evals/thresholds.json`. Hit rate, MRR, citation rate, and faithfulness are defined in `evals/README.md`. The run does not call a paid model and does not open a room. When retrieval returns a passage, the scored text is the dataset `answer` plus the same `Source:` suffix the transcript uses. When it returns nothing, the text is `That is not in the docs.` Faithfulness asks whether those sentences appear in the retrieved passage. It does not ask a model whether a spoken answer was faithful.
+`k` is 5 against 46 documents. The rows cover direct questions, paraphrases, multi-hop and follow-up questions, off-topic chat, four kinds of unanswerable question, and questions aimed at three pages with prompt-injection text. `owner` says who must catch an unanswerable row.
+
+- Retrieval owns `off_topic` and `unanswerable_out_of_scope`. It abstains on 10 of 12 off-topic rows and on none of the 15 out-of-scope rows. Those look like real questions to an embedding model and pull real passages, so the answer model has to refuse them.
+- The answer model owns `unanswerable_false_premise`, `unanswerable_partial`, and `unanswerable_underspecified`. Retrieval should return the page that corrects or covers the question, and it does for 0.850 and 0.900 of those rows. Whether the model then refuses, corrects, or asks is checked by the live refusal judge, not by this run.
+- Abstention precision and recall (0.800 and 0.286) are scored on a held-out half. The other half picked the threshold, which is set so a wrong refusal costs ten times a missed one.
+
+The run needs no key and opens no room. It took 3 minutes on a machine at load average 110, and about a minute on an idle one. Metrics, the split, and the live judges are in `evals/README.md`. Model choice and latency are in `docs/decisions/0001-retrieval.md`.
 
 ## MCP
 
@@ -148,7 +162,7 @@ The command map for changes is `AGENTS.md`.
 
 ## Ingest
 
-Markdown, plain text, HTML, and PDF are accepted. A file upload uses `upload://<name>` as `source_url`. A directory upload uses the file URI.
+Markdown, plain text, HTML, and PDF are accepted. A directory upload stores each file's path relative to that directory, such as `billing/refunds.md`. A file upload stores `upload://<name>`. No absolute local path is stored.
 
 ```bash
 curl -s -X POST http://localhost:8000/products/demo/documents \
@@ -160,7 +174,7 @@ curl -s -X POST http://localhost:8000/products/demo/documents \
 
 The job `status` becomes `indexed`. `status_log` records `queued`, then `indexing`, then `indexed`. `GET /ingest-jobs/{id}` returns the same job.
 
-Chunks land in `kb_chunks`. Each payload has `product_id`, `source_url`, and `text`. The dense vector is a local hash, so indexing needs no model key. The sparse vector stores term counts, and Qdrant applies an IDF modifier. Hybrid search fuses the two with reciprocal rank fusion.
+Chunks land in `kb_chunks`, split at headings. Each payload has `product_id`, `source`, `title` (the nearest heading), `anchor` (its slug), and `text`. The dense vector is FastEmbed `google/embeddinggemma-300m` and the sparse vector is `Qdrant/bm25` with Qdrant's IDF modifier, both run locally with no key. The first ingest downloads the models. Search fuses dense and sparse with reciprocal rank fusion and abstains when the best dense cosine is under the threshold in `packages/rag`.
 
 ## Product config
 

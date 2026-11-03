@@ -1,12 +1,14 @@
+import asyncio
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from kb_api.ingest import get_job_store, get_qdrant
+from kb_api.ingest import get_job_store, get_qdrant, get_retrieval_settings
 from kb_api.jobs import MemoryJobStore
 from kb_api.settings import load_settings
-from kb_rag.pipeline import KB_COLLECTION
-from qdrant_client import QdrantClient
+from kb_rag import KB_COLLECTION
+from kb_rag.testing import HASH_SETTINGS
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 VALID = {
@@ -173,9 +175,10 @@ def test_mutations_write_audit_rows(http: TestClient, as_user, rows) -> None:
 def test_created_product_can_be_indexed(http: TestClient, as_user) -> None:
     from kb_api.main import app
 
-    qdrant = QdrantClient(":memory:")
+    qdrant = AsyncQdrantClient(":memory:")
     app.dependency_overrides[get_job_store] = lambda: MemoryJobStore()
     app.dependency_overrides[get_qdrant] = lambda: qdrant
+    app.dependency_overrides[get_retrieval_settings] = lambda: HASH_SETTINGS
     headers = as_user()
     product_id = http.post("/products", json=VALID, headers=headers).json()["id"]
 
@@ -197,17 +200,21 @@ def test_created_product_can_be_indexed(http: TestClient, as_user) -> None:
     assert uploaded.status_code == 201
     assert uploaded.json()["status"] == "indexed"
     assert uploaded.json()["product_id"] == product_id
-    points, _offset = qdrant.scroll(
-        collection_name=KB_COLLECTION,
-        scroll_filter=Filter(
-            must=[FieldCondition(key="product_id", match=MatchValue(value=product_id))]
-        ),
-        with_payload=True,
-        limit=10,
+    points, _offset = asyncio.run(
+        qdrant.scroll(
+            collection_name=KB_COLLECTION,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="product_id", match=MatchValue(value=product_id))
+                ]
+            ),
+            with_payload=True,
+            limit=10,
+        )
     )
     assert points
     assert points[0].payload is not None
-    assert points[0].payload["source_url"] == "upload://notes.md"
+    assert points[0].payload["source"] == "upload://notes.md"
 
 
 def test_browser_origin_can_call_the_api(http: TestClient) -> None:
