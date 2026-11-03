@@ -6,9 +6,16 @@ Nothing here touches the operating system, so it runs on any platform.
 import json
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 # Gemini Computer Use describes points on a 1000 by 1000 grid, 0 to 999.
 GRID = 1000
@@ -96,6 +103,12 @@ class Scroll(Pointer):
 
     dy: int = Field(default=0, ge=-50, le=50)
     dx: int = Field(default=0, ge=-50, le=50)
+
+    @model_validator(mode="after")
+    def _moves(self) -> Self:
+        if self.dy == 0 and self.dx == 0:
+            raise ValueError("dy and dx cannot both be 0; give at least one non-zero")
+        return self
 
 
 Action = Click | TypeText | Key | Scroll

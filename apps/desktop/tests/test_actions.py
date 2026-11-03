@@ -44,7 +44,8 @@ def test_the_grid_maps_to_logical_points_not_pixels(
 ) -> None:
     assert Click(x=x, y=y).at(RETINA) == point
     # The same grid on a screen that is not scaled lands on its own width.
-    assert Scroll(x=x, y=y).at(Display(width=1000, height=1000, scale=1.0)) == (x, y)
+    flat = Display(width=1000, height=1000, scale=1.0)
+    assert Scroll(x=x, y=y, dy=1).at(flat) == (x, y)
 
 
 def test_a_click_reaches_the_executor_with_the_display_to_map_it() -> None:
@@ -64,6 +65,12 @@ def test_a_click_reaches_the_executor_with_the_display_to_map_it() -> None:
 def test_a_scroll_reaches_the_executor() -> None:
     assert run("desktop.scroll", '{"x": 0, "y": 500, "dy": 3}') == [
         Scroll(x=0, y=500, dy=3, dx=0)
+    ]
+
+
+def test_a_sideways_scroll_reaches_the_executor() -> None:
+    assert run("desktop.scroll", '{"x": 0, "y": 500, "dx": -2}') == [
+        Scroll(x=0, y=500, dy=0, dx=-2)
     ]
 
 
@@ -114,6 +121,8 @@ def test_type_and_key_pass_through() -> None:
         ),
         ("desktop.scroll", '{"x": 0, "y": 0, "dy": 51}', "dy: "),
         ("desktop.scroll", '{"x": 0, "y": 0, "dx": -51}', "dx: "),
+        ("desktop.scroll", '{"x": 500, "y": 500}', "dy and dx"),
+        ("desktop.scroll", '{"x": 0, "y": 0, "dy": 0, "dx": 0}', "dy and dx"),
         ("desktop.info", '{"x": 1}', "x: "),
     ],
 )
