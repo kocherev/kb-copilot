@@ -154,6 +154,10 @@ def test_allow_for_this_task_skips_the_wait_for_later_steps() -> None:
     assert room.actions() == ["desktop.click", "desktop.type", "desktop.key"]
     proposals = published(room, "computer")[:-1]
     assert [p["needs_approval"] for p in proposals] == [True, False]
+    # The tray shows exactly what is typed, not only what the model intends.
+    assert proposals[1]["description"] == (
+        'Type the seats: types "4242" and presses enter'
+    )
 
 
 @pytest.mark.parametrize(
@@ -194,6 +198,7 @@ def test_a_stop_during_an_allowed_task_ends_it_before_the_next_step() -> None:
         return reply(CLICK)
 
     said, _ = run_task(room, cast(Script, stop_after_first))
+    assert "Click Save" not in str(published(room, "computer"))
 
     assert said == "The user stopped the task."
     assert room.actions() == ["desktop.click"]

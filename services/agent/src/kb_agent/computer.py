@@ -38,6 +38,7 @@ APPROVAL_SECONDS = 60
 SCREENSHOT_SECONDS = 15
 RPC_SECONDS = 15
 WAIT_LIMIT_SECONDS = 5
+DESCRIPTION_LIMIT = 200
 # Mirrors SCREENSHOT_TOPIC in apps/desktop/src/kb_desktop/main.py.
 SCREENSHOT_TOPIC = "desktop.screenshot"
 # Gemini Computer Use puts points on a 1000 by 1000 grid, 0 to 999.
@@ -145,6 +146,8 @@ class Step:
 
     call: types.FunctionCall
     intent: str
+    # What the user approves: the intent plus the exact text or keys.
+    description: str = ""
     rpcs: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     point: tuple[int, int] | None = None
     warning: str = ""
@@ -169,6 +172,7 @@ def step_for(call: types.FunctionCall) -> Step:
     blocked = "block" in str(decision)
     point: tuple[int, int] | None = None
     rpcs: list[tuple[str, dict[str, Any]]] = []
+    exact = ""
     if name in ("click", "double_click", "right_click", "scroll"):
         point = (grid(args.get("x")), grid(args.get("y")))
     match name:
@@ -181,17 +185,23 @@ def step_for(call: types.FunctionCall) -> Step:
                 click["button"] = "right"
             rpcs = [("desktop.click", click)]
         case "type":
-            rpcs = [("desktop.type", {"text": str(args.get("text", ""))})]
+            text = str(args.get("text", ""))
+            rpcs = [("desktop.type", {"text": text})]
+            exact = f"types {json.dumps(text, ensure_ascii=False)}"
             if args.get("press_enter"):
                 rpcs.append(("desktop.key", {"keys": ["enter"]}))
+                exact += " and presses enter"
         case "press_key":
-            rpcs = [("desktop.key", {"keys": key_name(str(args.get("key", "")))})]
+            keys = key_name(str(args.get("key", "")))
+            rpcs = [("desktop.key", {"keys": keys})]
+            exact = f"presses {'+'.join(keys)}"
         case "hotkey":
-            keys = args.get("keys")
-            if not isinstance(keys, list):
+            listed = args.get("keys")
+            if not isinstance(listed, list):
                 raise Unsupported("hotkey needs a list of keys")
-            names = [name for key in keys for name in key_name(str(key))]
-            rpcs = [("desktop.key", {"keys": names})]
+            keys = [part for key in listed for part in key_name(str(key))]
+            rpcs = [("desktop.key", {"keys": keys})]
+            exact = f"presses {'+'.join(keys)}"
         case "scroll":
             assert point is not None
             lines = max(
@@ -211,7 +221,11 @@ def step_for(call: types.FunctionCall) -> Step:
             pass
         case _:
             raise Unsupported(f"{name} is not available on this computer")
-    return Step(call, intent[:LABEL_LIMIT] or name, rpcs, point, warning, blocked)
+    label = intent[:LABEL_LIMIT] or name
+    description = f"{label}: {exact}" if exact else label
+    return Step(
+        call, label, description[:DESCRIPTION_LIMIT], rpcs, point, warning, blocked
+    )
 
 
 class Approvals:
@@ -490,6 +504,8 @@ class ComputerTask:
                         "The safety check blocked this step: "
                         f"{step.warning or step.intent}. Nothing was done.",
                     )
+                if self.approvals.stopped:
+                    return "stopped", "The user stopped the task."
                 ended = await self.approve(step)
                 if ended is not None:
                     return ended
@@ -519,7 +535,7 @@ class ComputerTask:
             ActionProposal(
                 id=proposal,
                 task=self.id,
-                description=step.intent,
+                description=step.description,
                 x=step.point[0] / GRID if step.point else None,
                 y=step.point[1] / GRID if step.point else None,
                 needs_approval=needs_approval,
@@ -529,7 +545,7 @@ class ComputerTask:
         await self.audit(
             "proposed",
             proposal=proposal,
-            action=step.intent,
+            action=step.description,
             rpcs=json.dumps(step.rpcs)[:1000],
             needs_approval=needs_approval,
         )
@@ -537,9 +553,9 @@ class ComputerTask:
             "about-to-click", self.agent_name, self.point, step.intent
         )
         if not needs_approval:
-            await self.say(f"Doing: {step.intent}")
+            await self.say(f"Doing: {step.description}")
             return None
-        await self.say(f"Asking the user to allow on screen: {step.intent}")
+        await self.say(f"Asking the user to allow on screen: {step.description}")
         decision = await self.approvals.wait(proposal, APPROVAL_SECONDS)
         if decision is None:
             await self.audit("timed_out", proposal=proposal)
