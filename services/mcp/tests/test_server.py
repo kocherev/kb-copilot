@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import pytest
-from kb_mcp.server import build_server, qdrant_from_env
+from kb_mcp.server import build_server, qdrant_from_env, server_from_env
 from kb_rag import Source, index_sources, read_directory
 from kb_rag.testing import HASH_SETTINGS
 from mcp import Client, StdioServerParameters
@@ -18,6 +18,8 @@ from qdrant_client import AsyncQdrantClient
 DEMO = Path(__file__).resolve().parents[3] / "demo" / "docs"
 REFUND_QUESTION = "How long do refunds take?"
 OTHER_QUESTION = "When does zephyr ship?"
+INTERNAL_TOKEN = "internal-secret"
+WRONG_TOKEN = "wrong-secret"
 PRODUCT = {
     "id": "demo",
     "name": "Northstar Desk",
@@ -69,7 +71,10 @@ def api_url() -> Iterator[str]:
         def do_GET(self) -> None:
             product_id = unquote(urlparse(self.path).path.removeprefix("/products/"))
             found = products.get(product_id)
-            if found is None:
+            if self.headers.get("X-Internal-Token") != INTERNAL_TOKEN:
+                payload = b'{"detail":"unauthorized"}'
+                status = 401
+            elif found is None:
                 payload = b'{"detail":"product not found"}'
                 status = 404
             else:
@@ -99,7 +104,9 @@ def api_url() -> Iterator[str]:
 @pytest.fixture
 def server(api_url: str) -> MCPServer:
     qdrant = _indexed()
-    return build_server(lambda: qdrant, api_url, HASH_SETTINGS)
+    return build_server(
+        lambda: qdrant, api_url, HASH_SETTINGS, internal_token=INTERNAL_TOKEN
+    )
 
 
 def test_client_lists_search_kb_and_get_product(server: MCPServer) -> None:
@@ -205,6 +212,42 @@ def test_get_product_for_a_missing_id_does_not_return_another_product(
         assert "Northstar Desk" not in text
         assert "Do not invent a policy" not in text
         assert result.structured_content is None
+
+
+@pytest.mark.parametrize("token", [WRONG_TOKEN, ""])
+def test_get_product_with_a_wrong_token_is_a_tool_error(
+    api_url: str, token: str
+) -> None:
+    qdrant = _indexed()
+    server = build_server(lambda: qdrant, api_url, HASH_SETTINGS, internal_token=token)
+
+    result = _run(
+        server,
+        lambda client: client.call_tool("get_product", {"product_id": "demo"}),
+    )
+
+    assert result.is_error is True
+    assert result.structured_content is None
+    text = _text(result)
+    assert "401" in text
+    assert WRONG_TOKEN not in text
+    assert INTERNAL_TOKEN not in text
+    assert "Northstar Desk" not in text
+
+
+def test_server_from_env_sends_the_internal_api_token(
+    api_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("API_URL", api_url)
+    monkeypatch.setenv("INTERNAL_API_TOKEN", INTERNAL_TOKEN)
+
+    result = _run(
+        server_from_env(),
+        lambda client: client.call_tool("get_product", {"product_id": "demo"}),
+    )
+
+    assert result.is_error is False
+    assert result.structured_content == PRODUCT
 
 
 def test_stdio_client_lists_the_same_tools() -> None:
