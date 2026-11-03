@@ -33,4 +33,4 @@ pnpm --filter web typecheck
 pnpm --filter web test
 ```
 
-`./scripts/check.sh` runs those, plus the Python checks and `make eval`. `pnpm build` is part of CI. Run it when the change touches routing or a server fetch.
+`./scripts/check.sh` runs those, then `pnpm build`, the Python checks and `make eval`. The build is the only step that prerenders pages, so it catches a client hook such as `usePathname` that needs a `Suspense` boundary.

@@ -1,37 +1,40 @@
 import { headers } from "next/headers";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { AppShell } from "@/components/app-shell";
 import { SignOutButton } from "@/components/sign-out-button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { auth } from "@/lib/auth";
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
-    <>
-      <Suspense fallback={null}>
-        <AccountBar />
-      </Suspense>
+    <AppShell
+      account={
+        <Suspense fallback={<Skeleton className="h-8 w-24 rounded-full" />}>
+          <Account />
+        </Suspense>
+      }
+    >
       {children}
-    </>
+    </AppShell>
   );
 }
 
-async function AccountBar() {
+async function Account() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
     redirect("/sign-in");
   }
   return (
-    <header className="mx-auto flex w-full max-w-3xl min-w-0 items-center justify-end gap-3 px-6 pt-6">
-      <p className="min-w-0 truncate text-sm text-muted-foreground">{session.user.email}</p>
-      <Link
-        href="/settings"
-        className="text-sm underline underline-offset-4 focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]"
+    <div className="flex min-w-0 items-center gap-2">
+      <p
+        title={session.user.email}
+        className="min-w-0 truncate text-meta text-muted-foreground max-md:sr-only md:max-w-48"
       >
-        Settings
-      </Link>
+        {session.user.email}
+      </p>
       <SignOutButton />
-    </header>
+    </div>
   );
 }

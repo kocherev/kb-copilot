@@ -1,5 +1,6 @@
 "use client";
 
+import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -10,14 +11,15 @@ export function SignOutButton() {
   return (
     <Button
       variant="ghost"
-      size="sm"
+      className="rounded-full max-sm:px-2.5"
       onClick={async () => {
         await authClient.signOut();
         router.replace("/sign-in");
         router.refresh();
       }}
     >
-      Sign out
+      <LogOut aria-hidden />
+      <span className="max-sm:sr-only">Sign out</span>
     </Button>
   );
 }
