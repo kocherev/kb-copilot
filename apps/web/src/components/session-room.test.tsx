@@ -17,6 +17,8 @@ const live = vi.hoisted(() => ({
   handlers: {} as Record<string, (message: { payload: Uint8Array }) => void>,
   disconnect: vi.fn(),
   dimensions: undefined as { width: number; height: number } | undefined,
+  participants: [] as { identity: string }[],
+  sent: [] as { topic: string; body: unknown; reliable: boolean }[],
 }));
 
 vi.mock("@livekit/components-react", () => ({
@@ -54,10 +56,22 @@ vi.mock("@livekit/components-react", () => ({
   useConnectionState: () => live.state,
   useDataChannel: (
     topic: string,
-    handler: (message: { payload: Uint8Array }) => void,
+    handler?: (message: { payload: Uint8Array }) => void,
   ) => {
-    live.handlers[topic] = handler;
+    if (handler) {
+      live.handlers[topic] = handler;
+    }
+    return {
+      send: async (payload: Uint8Array, options: { reliable?: boolean }) => {
+        live.sent.push({
+          topic,
+          body: JSON.parse(new TextDecoder().decode(payload)),
+          reliable: options.reliable === true,
+        });
+      },
+    };
   },
+  useRemoteParticipants: () => live.participants,
   useRoomContext: () => ({ disconnect: live.disconnect }),
   useTracks: () =>
     live.dimensions ? [{ publication: { dimensions: live.dimensions } }] : [],
@@ -109,6 +123,8 @@ afterEach(() => {
   live.agentPresent = true;
   live.handlers = {};
   live.dimensions = undefined;
+  live.participants = [];
+  live.sent = [];
   live.disconnect.mockReset();
 });
 
@@ -125,6 +141,7 @@ function renderRoom(onRestart = () => {}) {
     <SessionRoom
       url="ws://localhost:7880"
       token="signed-token"
+      room="kb-room-1"
       apiUrl="http://localhost:8000"
       agentName="Mina"
       onRestart={onRestart}
@@ -310,4 +327,142 @@ test("a proposed ticket shows an approval card once and creates nothing by itsel
   expect(within(cards[0]!).getByRole("heading", { name: "Cannot reset" })).toBeDefined();
   expect(within(cards[0]!).getByRole("button", { name: "Approve ticket" })).toBeDefined();
   expect(calls).toEqual([]);
+});
+
+const step = {
+  kind: "proposal",
+  id: "p1",
+  task: "t1",
+  description: "Click Update card",
+  x: 0.5,
+  y: 0.5,
+  needs_approval: true,
+  warning: "",
+};
+
+test("a proposed step waits in the tray, points at its target, and is allowed once", () => {
+  live.dimensions = { width: 1680, height: 1050 };
+  renderRoom();
+
+  send("computer", step);
+
+  const tray = screen.getByRole("region", { name: "Action approval" });
+  expect(within(tray).getByRole("heading", { name: "Click Update card" })).toBeDefined();
+  expect(within(tray).getByRole("status").textContent).toBe(
+    "Mina wants to do this on your Mac. Nothing happens until you choose.",
+  );
+  expect(document.activeElement).toBe(tray);
+  expect(screen.getByTestId("agent-cursor").getAttribute("data-state")).toBe("about-to-click");
+  expect(screen.getByRole("status", { name: "Pointer" }).textContent).toBe(
+    "Mina is about to click Click Update card",
+  );
+  expect(live.sent).toEqual([]);
+
+  fireEvent.click(within(tray).getByRole("button", { name: "Allow once" }));
+
+  expect(live.sent).toEqual([
+    { topic: "computer-decision", body: { id: "p1", decision: "once" }, reliable: true },
+  ]);
+  expect(screen.queryByRole("region", { name: "Action approval" })).toBeNull();
+
+  send("hud", { kind: "clicking", x: 0.5, y: 0.5, label: "Click Update card" });
+  expect(screen.getByTestId("agent-cursor").getAttribute("data-state")).toBe("clicking");
+});
+
+test.each([
+  ["Allow for this task", "task"],
+  ["Stop", "stop"],
+])("%s sends %s", (button, decision) => {
+  renderRoom();
+  send("computer", step);
+
+  fireEvent.click(screen.getByRole("button", { name: button }));
+
+  expect(live.sent.map((sent) => sent.body)).toEqual([{ id: "p1", decision }]);
+});
+
+test("Escape in the tray stops the task and hides the pointer", () => {
+  live.dimensions = { width: 1680, height: 1050 };
+  renderRoom();
+  send("computer", step);
+
+  fireEvent.keyDown(screen.getByRole("region", { name: "Action approval" }), {
+    key: "Escape",
+  });
+
+  expect(live.sent.map((sent) => sent.body)).toEqual([{ id: "p1", decision: "stop" }]);
+  expect(screen.getByTestId("agent-cursor").className).toContain("invisible");
+});
+
+test("a step the user allowed for the task offers only Stop, with a safety warning", () => {
+  renderRoom();
+
+  send("computer", { ...step, needs_approval: false, warning: "This deletes data." });
+
+  const tray = screen.getByRole("region", { name: "Action approval" });
+  expect(within(tray).getByRole("status").textContent).toBe("Mina is doing this on your Mac.");
+  expect(within(tray).queryByRole("button", { name: "Allow once" })).toBeNull();
+  expect(within(tray).getByRole("button", { name: "Stop" })).toBeDefined();
+  expect(within(tray).getByRole("alert").textContent).toBe(
+    "Check before you allow it: This deletes data.",
+  );
+});
+
+test("the tray and the waiting pointer go when the task ends", () => {
+  live.dimensions = { width: 1680, height: 1050 };
+  renderRoom();
+  send("computer", step);
+
+  send("computer", { kind: "ended", task: "t1", reason: "timed_out" });
+  send("computer", { kind: "proposal", id: "", task: "t1" });
+
+  expect(screen.queryByRole("region", { name: "Action approval" })).toBeNull();
+  expect(screen.getByTestId("agent-cursor").className).toContain("invisible");
+});
+
+test("without the helper the page offers the command that connects the Mac", async () => {
+  const calls = stubApi(() => ({
+    status: 200,
+    body: { url: "wss://lk.example", token: "desktop-jwt" },
+  }));
+  const writeText = vi.fn(async () => {});
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  renderRoom();
+  const panel = screen.getByRole("region", { name: "Your Mac" });
+  expect(within(panel).getByRole("status").textContent).toBe(
+    "Your Mac is not connected. Mina can point, not click.",
+  );
+
+  fireEvent.click(within(panel).getByRole("button", { name: "Connect your Mac" }));
+
+  const command =
+    "uv run --package kb-desktop kb-desktop --url wss://lk.example --token desktop-jwt";
+  expect(await within(panel).findByText(command)).toBeDefined();
+  expect(calls.map((call) => [call.method, call.url, call.authorization])).toEqual([
+    ["POST", "http://localhost:8000/sessions/kb-room-1/desktop-token", "Bearer test-jwt"],
+  ]);
+  fireEvent.click(within(panel).getByRole("button", { name: "Copy command" }));
+  expect(await within(panel).findByRole("button", { name: "Copied" })).toBeDefined();
+  expect(writeText).toHaveBeenCalledWith(command);
+});
+
+test("a token the API refuses is explained", async () => {
+  stubApi(() => ({ status: 404, body: { detail: "session not found" } }));
+  renderRoom();
+
+  fireEvent.click(screen.getByRole("button", { name: "Connect your Mac" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("session not found");
+});
+
+test("with the helper in the room the page says the Mac is connected", () => {
+  live.participants = [{ identity: "agent-1" }, { identity: "desktop:user-a" }];
+
+  renderRoom();
+
+  const panel = screen.getByRole("region", { name: "Your Mac" });
+  expect(within(panel).getByRole("status").textContent).toBe(
+    "Your Mac is connected. Mina asks before every click or keystroke.",
+  );
+  expect(within(panel).queryByRole("button")).toBeNull();
 });

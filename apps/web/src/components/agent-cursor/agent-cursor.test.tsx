@@ -123,3 +123,40 @@ test("the tag flips to the left of the arrow near the right edge", () => {
   expect(tag.style.right).not.toBe("");
   expect(tag.style.left).toBe("");
 });
+
+test("a click waiting for approval rings and stays until the agent moves on", () => {
+  const view = render(show(null));
+
+  view.rerender(show({ kind: "about-to-click", x: 0.5, y: 0.5, label: "Save" }));
+  act(() => {
+    vi.advanceTimersByTime(IDLE_MS * 5);
+  });
+
+  expect(isHidden()).toBe(false);
+  expect(screen.getByTestId("agent-cursor").getAttribute("data-state")).toBe("about-to-click");
+  expect(screen.getByTestId("agent-cursor-ring")).toBeTruthy();
+  expect(announced()).toBe("Mina is about to click Save");
+
+  view.rerender(show(null));
+  expect(isHidden()).toBe(true);
+});
+
+test("a click ripples, says so, and fades out like a point", () => {
+  const view = render(show({ kind: "about-to-click", x: 0.5, y: 0.5, label: "Save" }));
+
+  view.rerender(show({ kind: "clicking", x: 0.5, y: 0.5, label: "Save" }));
+
+  expect(screen.getByTestId("agent-cursor").getAttribute("data-state")).toBe("clicking");
+  expect(screen.getByTestId("agent-cursor-ring")).toBeTruthy();
+  expect(announced()).toBe("Mina clicks Save");
+  act(() => {
+    vi.advanceTimersByTime(IDLE_MS);
+  });
+  expect(isHidden()).toBe(true);
+});
+
+test("a plain point has no ring", () => {
+  render(show(review));
+
+  expect(screen.queryByTestId("agent-cursor-ring")).toBeNull();
+});
