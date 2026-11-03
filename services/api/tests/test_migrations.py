@@ -12,6 +12,9 @@ API_TABLES = {
     "rate_limit_hits",
     "ingest_jobs",
     "documents",
+    "linear_connections",
+    "linear_state_uses",
+    "escalations",
 }
 ALEMBIC = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
 

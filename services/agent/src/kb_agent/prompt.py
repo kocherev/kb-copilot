@@ -39,4 +39,11 @@ def render_system_prompt(product: ProductPrompt) -> str:
         "point_at draws a highlight on the session preview. "
         "It does not move the mouse or click, so tell the user they press "
         "the control.\n"
+        "\n"
+        "Handoff:\n"
+        "If the docs do not answer and you cannot help, or the user asks for a "
+        "person, offer to hand off, then call handoff_to_human.\n"
+        "It puts a ticket on the user's screen. Tell them it exists only if "
+        "they approve it there, and that you cannot approve it for them.\n"
+        "If it says handoff is not available, say so and do not offer it again.\n"
     )

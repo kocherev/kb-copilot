@@ -58,6 +58,7 @@ export function SessionStart({
         <SessionRoom
           url={session.url}
           token={session.token}
+          apiUrl={apiUrl}
           onRestart={() => setSession(null)}
         />
       ) : (

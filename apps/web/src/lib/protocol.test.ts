@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { parseAgentError, parseCitations, parseHudPoint } from "@/lib/protocol";
+import {
+  parseAgentError,
+  parseCitations,
+  parseEscalation,
+  parseHudPoint,
+} from "@/lib/protocol";
 
 const passage = {
   id: "p1",
@@ -41,4 +46,14 @@ test("an agent error is its trimmed message", () => {
   expect(parseAgentError('{"message":" Could not start "}')).toBe("Could not start");
   expect(parseAgentError('{"message":""}')).toBeNull();
   expect(parseAgentError("nope")).toBeNull();
+});
+
+test("an escalation needs an id and a title, and keeps the trimmed text", () => {
+  expect(
+    parseEscalation('{"id":"e1","title":" Cannot reset ","body":" Details\\n"}'),
+  ).toEqual({ id: "e1", title: "Cannot reset", body: "Details" });
+  expect(parseEscalation('{"id":"","title":"x","body":"y"}')).toBeNull();
+  expect(parseEscalation('{"id":"e1","title":"  ","body":"y"}')).toBeNull();
+  expect(parseEscalation('{"id":"e1","title":"x"}')).toBeNull();
+  expect(parseEscalation("nope")).toBeNull();
 });

@@ -70,6 +70,10 @@ services:
       LIVEKIT_API_URL: ${LIVEKIT_API_URL:-${LIVEKIT_AGENT_URL:-${LIVEKIT_URL:-ws://localhost:7880}}}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+      LINEAR_CLIENT_ID: ${LINEAR_CLIENT_ID:-}
+      LINEAR_CLIENT_SECRET: ${LINEAR_CLIENT_SECRET:-}
+      LINEAR_REDIRECT_URI: ${LINEAR_REDIRECT_URI:-http://localhost:3000/api/integrations/linear/callback}
+      LINEAR_TOKEN_KEY: ${LINEAR_TOKEN_KEY:-}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

@@ -1414,7 +1414,9 @@ source = { editable = "services/api" }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "cryptography" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "kb-rag" },
     { name = "livekit-api" },
     { name = "psycopg", extra = ["binary"] },
@@ -1435,7 +1437,9 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "asyncpg", specifier = ">=0.30" },
+    { name = "cryptography", specifier = ">=44" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "kb-rag", editable = "packages/rag" },
     { name = "livekit-api", specifier = ">=1.2,<2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },

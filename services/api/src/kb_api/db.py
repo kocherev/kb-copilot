@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 from fastapi import Request
 from sqlalchemy import (
     JSON,
+    BigInteger,
     DateTime,
     ForeignKey,
     Integer,
@@ -81,6 +82,54 @@ class LiveSessionRow(Base):
     room: Mapped[str] = mapped_column(Text)
     user_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class LinearConnectionRow(Base):
+    """An org's Linear workspace. Tokens are AES-GCM ciphertext."""
+
+    __tablename__ = "linear_connections"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    org_id: Mapped[str] = mapped_column(Text, unique=True)
+    access_token: Mapped[bytes] = mapped_column(LargeBinary)
+    refresh_token: Mapped[bytes | None] = mapped_column(LargeBinary)
+    expires_at: Mapped[int | None] = mapped_column(BigInteger)
+    workspace_name: Mapped[str] = mapped_column(Text)
+    team_id: Mapped[str] = mapped_column(Text)
+    team_key: Mapped[str] = mapped_column(Text)
+    team_name: Mapped[str] = mapped_column(Text)
+    connected_by: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class LinearStateUseRow(Base):
+    """An OAuth state nonce that came back once. A second use is a replay."""
+
+    __tablename__ = "linear_state_uses"
+
+    nonce: Mapped[str] = mapped_column(Text, primary_key=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger)
+
+
+class EscalationRow(Base):
+    """A handoff the agent proposed. It becomes a Linear issue only on approval."""
+
+    __tablename__ = "escalations"
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    org_id: Mapped[str] = mapped_column(Text, index=True)
+    product_id: Mapped[UUID] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE")
+    )
+    room: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
+    issue_identifier: Mapped[str | None] = mapped_column(Text)
+    issue_url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
 
 
 class IngestJobRow(Base):

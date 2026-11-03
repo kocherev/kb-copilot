@@ -47,6 +47,7 @@ def _agent(client: AsyncQdrantClient, room: FakeRoom, product: str = "demo"):
         product_id=product,
         qdrant=client,
         room=room,
+        api_url="http://api.test",
         settings=HASH_SETTINGS,
     )
 
@@ -92,7 +93,11 @@ def test_search_kb_returns_passages_remembers_them_and_logs(
     async def run() -> None:
         agent = _agent(client, room)
 
-        assert {tool.id for tool in agent.tools} == {"point_at", "search_kb"}
+        assert {tool.id for tool in agent.tools} == {
+            "handoff_to_human",
+            "point_at",
+            "search_kb",
+        }
         assert agent.search_kb.info.flags & ToolFlag.IGNORE_ON_ENTER
         hit = await _call(agent.search_kb, REFUND_QUESTION)
         log = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
