@@ -3,7 +3,7 @@
 import { LayoutGrid, Settings, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
@@ -34,8 +34,25 @@ function Mark() {
   );
 }
 
+function NavLinks({ pathname }: { pathname: string | null }) {
+  return nav.map(({ href, label, Icon, matches }) => (
+    <Link
+      key={href}
+      href={href}
+      aria-current={pathname !== null && matches(pathname) ? "page" : undefined}
+      className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-muted-foreground transition-[color,background-color,box-shadow] duration-150 ease-out hover:bg-surface-hover hover:text-foreground aria-[current=page]:bg-surface aria-[current=page]:text-foreground aria-[current=page]:shadow-soft pointer-coarse:h-10 ${focusRing}`}
+    >
+      <Icon aria-hidden className="size-4" />
+      <span className="max-sm:sr-only">{label}</span>
+    </Link>
+  ));
+}
+
+function CurrentNavLinks() {
+  return <NavLinks pathname={usePathname()} />;
+}
+
 export function AppShell({ account, children }: { account: ReactNode; children: ReactNode }) {
-  const pathname = usePathname();
   return (
     <>
       <a
@@ -54,17 +71,11 @@ export function AppShell({ account, children }: { account: ReactNode; children: 
             <span className="max-sm:sr-only">KB Copilot</span>
           </Link>
           <nav aria-label="Main" className="flex min-w-0 items-center gap-1">
-            {nav.map(({ href, label, Icon, matches }) => (
-              <Link
-                key={href}
-                href={href}
-                aria-current={matches(pathname) ? "page" : undefined}
-                className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-muted-foreground transition-[color,background-color,box-shadow] duration-150 ease-out hover:bg-surface-hover hover:text-foreground aria-[current=page]:bg-surface aria-[current=page]:text-foreground aria-[current=page]:shadow-soft pointer-coarse:h-10 ${focusRing}`}
-              >
-                <Icon aria-hidden className="size-4" />
-                <span className="max-sm:sr-only">{label}</span>
-              </Link>
-            ))}
+            {/* The pathname of a page with an unknown [id] exists only at
+                request time, so the prerendered shell shows the links unmarked. */}
+            <Suspense fallback={<NavLinks pathname={null} />}>
+              <CurrentNavLinks />
+            </Suspense>
           </nav>
           <div className="ml-auto flex min-w-0 items-center gap-2">
             <ThemeToggle />
