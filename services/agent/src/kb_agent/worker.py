@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import os
-from collections.abc import Coroutine
+from collections.abc import Callable, Coroutine
 
 from livekit import rtc
 from livekit.agents import (
@@ -102,6 +102,35 @@ def publish_citations(
             spawn(cite(ev.item))
 
 
+def enable_tracing(
+    room: str, product_id: str
+) -> Callable[[], Coroutine[None, None, None]] | None:
+    """Export LiveKit's session traces over OTLP. Returns the flush to run at the end.
+
+    Off unless OTEL_EXPORTER_OTLP_ENDPOINT is set, and then nothing loads.
+    """
+    if not os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+        return None
+    from livekit.agents.telemetry import set_tracer_provider
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
+    provider = TracerProvider()
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    # The conversation stays in the replay, where it is redacted.
+    set_tracer_provider(
+        provider,
+        metadata={"kb.room": room, "kb.product_id": product_id},
+        allow_pii=False,
+    )
+
+    async def flush() -> None:
+        await asyncio.to_thread(provider.force_flush)
+
+    return flush
+
+
 @server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
@@ -115,6 +144,9 @@ async def entrypoint(ctx: JobContext) -> None:
         knowledge = LoggedKnowledge(product_id, api_client(api_url, token), turns)
         ctx.add_shutdown_callback(knowledge.aclose)
         ctx.add_shutdown_callback(turns.flush)
+        flush_traces = enable_tracing(ctx.room.name, product_id)
+        if flush_traces is not None:
+            ctx.add_shutdown_callback(flush_traces)
         product = await asyncio.to_thread(load_product, ctx.job.metadata, api_url)
         session = build_session(product.voice)
         agent = SupportAgent(

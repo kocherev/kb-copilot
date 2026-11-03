@@ -248,3 +248,31 @@ def test_realtime_image_tokens_count_towards_the_next_agent_turn() -> None:
         return log.image_tokens
 
     assert asyncio.run(run()) == 30
+
+
+def test_tracing_is_off_without_an_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+
+    assert worker.enable_tracing("kb-room", "demo") is None
+
+
+def test_tracing_hands_livekit_a_provider_that_withholds_the_conversation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:4318")
+    given: list[tuple[object, dict[str, object]]] = []
+    monkeypatch.setattr(
+        "livekit.agents.telemetry.set_tracer_provider",
+        lambda provider, **options: given.append((provider, options)),
+    )
+
+    flush = worker.enable_tracing("kb-room", "demo")
+
+    assert flush is not None
+    [(provider, options)] = given
+    assert type(provider).__name__ == "TracerProvider"
+    assert options == {
+        "metadata": {"kb.room": "kb-room", "kb.product_id": "demo"},
+        "allow_pii": False,
+    }
+    asyncio.run(flush())

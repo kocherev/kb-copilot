@@ -21,6 +21,7 @@ from kb_api.replay import router as replay_router
 from kb_api.retrieval import router as retrieval_router
 from kb_api.sessions import router as sessions_router
 from kb_api.settings import load_settings
+from kb_api.tracing import enable_tracing
 
 
 def load_models(settings: RetrievalSettings) -> None:
@@ -66,6 +67,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["authorization", "content-type"],
 )
+enable_tracing(app, load_settings().otel_exporter_otlp_endpoint)
 app.include_router(ingest_router)
 app.include_router(products_router)
 app.include_router(sessions_router)
