@@ -124,8 +124,10 @@ function StatusChip({ document }: { document: ProductDocument }) {
   const { label, Icon, className, spin } = STATUS[document.status];
   return (
     <span
-      // A template string, not cn: tailwind-merge reads text-meta as a colour and drops it.
-      className={`flex shrink-0 items-center gap-1 rounded-full py-0.5 pr-2 pl-1.5 text-meta font-medium transition-colors duration-200 ease-out ${className}`}
+      className={cn(
+        "flex shrink-0 items-center gap-1 rounded-full py-0.5 pr-2 pl-1.5 text-meta font-medium transition-colors duration-200 ease-out",
+        className,
+      )}
     >
       {/* Keyed by status so the new icon fades and scales in when the status changes. */}
       <Icon
