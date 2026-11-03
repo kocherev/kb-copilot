@@ -141,14 +141,9 @@
 ::view-transition-new(root) {
   animation: none;
 }
-::view-transition-new(.vt-fade):only-child,
 ::view-transition-new(.vt-rise):only-child {
   animation: var(--animate-enter);
 }
-::view-transition-new(.vt-fade):only-child {
-  --motion-y: 0px;
-}
-::view-transition-old(.vt-fade):only-child,
 ::view-transition-old(.vt-rise):only-child {
   animation: var(--animate-exit);
 }
