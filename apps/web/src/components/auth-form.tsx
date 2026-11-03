@@ -93,7 +93,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
   return (
     <main className="grid min-h-dvh w-full min-w-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
       <Hero />
-      <div className="flex min-w-0 flex-col justify-center px-4 py-10 sm:px-8 lg:py-16">
+      <div className="flex min-w-0 flex-col px-4 py-12 sm:justify-center sm:px-8 lg:py-16">
         <div className="mx-auto flex w-full max-w-sm min-w-0 flex-col gap-8">
           <div className="flex min-w-0 animate-enter flex-col gap-1.5 lg:hidden">
             <Brand />

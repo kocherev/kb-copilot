@@ -52,17 +52,15 @@ const fields: {
   key: keyof ProductWrite;
   label: string;
   hint?: string;
-  placeholder: string;
   multiline: boolean;
   maxLength: number;
   rows?: number;
 }[] = [
-  { key: "name", label: "Name", placeholder: "Northstar Desk", multiline: false, maxLength: 120 },
+  { key: "name", label: "Name", multiline: false, maxLength: 120 },
   {
     key: "description",
     label: "Description",
     hint: "One paragraph about what the product does.",
-    placeholder: "Northstar Desk is a help desk for small support teams.",
     multiline: true,
     maxLength: 2000,
     rows: 3,
@@ -70,8 +68,7 @@ const fields: {
   {
     key: "tone",
     label: "Tone",
-    hint: "How the agent should sound.",
-    placeholder: "calm and brief",
+    hint: "How the agent should sound, such as “calm and brief”.",
     multiline: false,
     maxLength: 200,
   },
@@ -79,7 +76,6 @@ const fields: {
     key: "refusal_rules",
     label: "Refusal rules",
     hint: "What the agent must not do.",
-    placeholder: "Don’t promise refunds or discounts.",
     multiline: true,
     maxLength: 4000,
     rows: 4,
@@ -88,7 +84,6 @@ const fields: {
     key: "agent_name",
     label: "Agent name",
     hint: "What the agent calls itself.",
-    placeholder: "Shawn",
     multiline: false,
     maxLength: 40,
   },
@@ -200,7 +195,6 @@ export function ProductForm({
                 name={field.key}
                 value={draft[field.key]}
                 rows={field.rows}
-                placeholder={field.placeholder}
                 maxLength={field.maxLength}
                 aria-describedby={hintId}
                 required
@@ -211,7 +205,6 @@ export function ProductForm({
                 id={id}
                 name={field.key}
                 value={draft[field.key]}
-                placeholder={field.placeholder}
                 maxLength={field.maxLength}
                 aria-describedby={hintId}
                 required
