@@ -12,7 +12,6 @@
     "generate:api": "openapi-typescript openapi.json -o src/lib/api/schema.d.ts"
   },
   "dependencies": {
-    "@base-ui-components/react": "1.0.0-rc.0",
     "@base-ui/react": "^1.9.0",
     "@livekit/components-react": "^2.9.24",
     "@livekit/components-styles": "^1.2.0",
