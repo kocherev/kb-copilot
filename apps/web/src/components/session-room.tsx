@@ -525,7 +525,7 @@ function SessionBody({
       </div>
       <aside
         aria-label="Session details"
-        className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-6rem)]"
+        className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-10rem)]"
       >
         {proposals.map((proposal) => (
           <HandoffCard key={proposal.id} apiUrl={apiUrl} agentName={agentName} proposal={proposal} />
