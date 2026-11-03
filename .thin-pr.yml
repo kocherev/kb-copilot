@@ -1,0 +1,10 @@
+# thin-pr runs the install and checks as the thin-pr-check user. setup-uv points UV_CACHE_DIR at a runner-owned
+# folder that user cannot write, so each command moves the uv cache into its own home.
+install: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm install --frozen-lockfile && uv sync --frozen --all-packages --group dev
+checks:
+  typecheck: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm lint && pnpm typecheck && uv run ruff check . && uv run ruff format --check . && uv run pyright
+  test: export UV_CACHE_DIR="$HOME/.cache/uv" && pnpm test && uv run pytest
+paths:
+  allow: ["**"]
+  # Workflows, real env files and the lockfiles change only by hand. .env.example stays editable.
+  deny: [".github/**", "**/.env", "**/.env.local", "**/.env.*.local", "pnpm-lock.yaml", "uv.lock"]
