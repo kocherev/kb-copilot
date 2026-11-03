@@ -4,6 +4,7 @@ export const AGENT_NAME = "kb-support";
 export const HUD_TOPIC = "hud";
 export const CITATIONS_TOPIC = "citations";
 export const AGENT_ERROR_TOPIC = "agent-error";
+export const ESCALATION_TOPIC = "escalation";
 
 export type HudPoint = { x: number; y: number; label: string };
 
@@ -20,6 +21,8 @@ export type Citations = {
   text: string;
   passages: CitedPassage[];
 };
+
+export type EscalationProposal = { id: string; title: string; body: string };
 
 function record(raw: string): Record<string, unknown> | null {
   try {
@@ -90,4 +93,18 @@ export function parseCitations(raw: string): Citations | null {
 export function parseAgentError(raw: string): string | null {
   const message = record(raw)?.message;
   return typeof message === "string" && message.trim() !== "" ? message.trim() : null;
+}
+
+export function parseEscalation(raw: string): EscalationProposal | null {
+  const body = record(raw);
+  if (
+    typeof body?.id !== "string" ||
+    typeof body.title !== "string" ||
+    typeof body.body !== "string" ||
+    body.id === "" ||
+    body.title.trim() === ""
+  ) {
+    return null;
+  }
+  return { id: body.id, title: body.title.trim(), body: body.body.trim() };
 }

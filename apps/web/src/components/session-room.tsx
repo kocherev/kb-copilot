@@ -15,17 +15,21 @@ import {
 import { Track } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
 
+import { HandoffCard } from "@/components/handoff-card";
 import { ScreenHud } from "@/components/screen-hud";
 import { TranscriptPanel } from "@/components/transcript-panel";
 import { Button } from "@/components/ui/button";
 import {
   AGENT_ERROR_TOPIC,
   CITATIONS_TOPIC,
+  ESCALATION_TOPIC,
   HUD_TOPIC,
   parseAgentError,
   parseCitations,
+  parseEscalation,
   parseHudPoint,
   type Citations,
+  type EscalationProposal,
   type HudPoint,
 } from "@/lib/protocol";
 import {
@@ -39,10 +43,12 @@ const decode = (payload: Uint8Array) => new TextDecoder().decode(payload);
 export function SessionRoom({
   url,
   token,
+  apiUrl,
   onRestart,
 }: {
   url: string;
   token: string;
+  apiUrl: string;
   onRestart: () => void;
 }) {
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -63,7 +69,7 @@ export function SessionRoom({
           {roomError}
         </p>
       ) : null}
-      <SessionBody onRestart={onRestart} />
+      <SessionBody apiUrl={apiUrl} onRestart={onRestart} />
     </LiveKitRoom>
   );
 }
@@ -119,12 +125,13 @@ function ScreenStage({ point }: { point: HudPoint | null }) {
   );
 }
 
-function SessionBody({ onRestart }: { onRestart: () => void }) {
+function SessionBody({ apiUrl, onRestart }: { apiUrl: string; onRestart: () => void }) {
   const room = useRoomContext();
   const state = useConnectionState();
   const [point, setPoint] = useState<HudPoint | null>(null);
   const [citations, setCitations] = useState<Citations[]>([]);
   const [agentError, setAgentError] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<EscalationProposal[]>([]);
   useDataChannel(HUD_TOPIC, (message) => {
     const next = parseHudPoint(decode(message.payload));
     if (next) {
@@ -142,6 +149,14 @@ function SessionBody({ onRestart }: { onRestart: () => void }) {
   });
   useDataChannel(AGENT_ERROR_TOPIC, (message) => {
     setAgentError(parseAgentError(decode(message.payload)));
+  });
+  useDataChannel(ESCALATION_TOPIC, (message) => {
+    const proposal = parseEscalation(decode(message.payload));
+    if (proposal) {
+      setProposals((current) =>
+        current.some((item) => item.id === proposal.id) ? current : [...current, proposal],
+      );
+    }
   });
   const lines = transcriptLines(useTranscriptions(), citations);
   const ended = state === "disconnected";
@@ -171,6 +186,9 @@ function SessionBody({ onRestart }: { onRestart: () => void }) {
         <TrackToggle source={Track.Source.ScreenShare} aria-label="Screen share" />
       </div>
       <ScreenStage point={point} />
+      {proposals.map((proposal) => (
+        <HandoffCard key={proposal.id} apiUrl={apiUrl} proposal={proposal} />
+      ))}
       <TranscriptPanel lines={lines} />
     </>
   );

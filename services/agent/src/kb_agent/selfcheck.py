@@ -66,6 +66,8 @@ class SharedScreen(VideoInput):
 class PrintRoom:
     """Stands in for the room: highlights are printed instead of drawn."""
 
+    name = "selfcheck"
+
     @property
     def local_participant(self) -> "PrintRoom":
         return self
@@ -89,6 +91,7 @@ async def check(image: Path, question: str, docs: Path) -> int:
         product_id=PRODUCT_ID,
         qdrant=client,
         room=PrintRoom(),
+        api_url=os.environ.get("API_URL", "http://localhost:8000"),
         settings=DEFAULT_SETTINGS,
     )
     usage: list[RealtimeModelMetrics] = []

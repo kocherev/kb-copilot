@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { SessionRoom } from "@/components/session-room";
+import { stubApi } from "@/test/api-stub";
 
 type Item = {
   text: string;
@@ -106,7 +107,14 @@ function send(topic: string, body: unknown) {
 }
 
 function renderRoom(onRestart = () => {}) {
-  render(<SessionRoom url="ws://localhost:7880" token="signed-token" onRestart={onRestart} />);
+  render(
+    <SessionRoom
+      url="ws://localhost:7880"
+      token="signed-token"
+      apiUrl="http://localhost:8000"
+      onRestart={onRestart}
+    />,
+  );
 }
 
 const agentLine = (id: string, text: string): Item => ({
@@ -224,4 +232,24 @@ test("a highlight lands inside the picture, not in the bars around it", () => {
   expect(frame.style.width).toBe("720px");
   expect(frame.style.height).toBe("450px");
   expect(within(frame).getByText("Review status")).toBeDefined();
+});
+
+test("a proposed ticket shows an approval card once and creates nothing by itself", () => {
+  const calls = stubApi(() => ({ status: 200, body: null }));
+  renderRoom();
+  const proposal = {
+    id: "e1",
+    title: "Cannot reset",
+    body: "Cannot reset\n\nReason for handoff: SSO",
+  };
+
+  send("escalation", proposal);
+  send("escalation", proposal);
+  send("escalation", { nonsense: true });
+
+  const cards = screen.getAllByRole("region", { name: "Proposed ticket" });
+  expect(cards).toHaveLength(1);
+  expect(within(cards[0]!).getByRole("heading", { name: "Cannot reset" })).toBeDefined();
+  expect(within(cards[0]!).getByRole("button", { name: "Approve ticket" })).toBeDefined();
+  expect(calls).toEqual([]);
 });
