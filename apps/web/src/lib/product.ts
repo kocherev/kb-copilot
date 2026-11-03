@@ -10,7 +10,20 @@ export const emptyDraft: ProductWrite = {
   description: "",
   tone: "",
   refusal_rules: "",
+  agent_name: "Shawn",
+  voice: "Sulafat",
 };
+
+// Gemini prebuilt voices, with the trait the speech generation docs give each.
+// The first is the default. A test fails when this list drifts from the API.
+export const voices: readonly { value: ProductWrite["voice"]; trait: string }[] = [
+  { value: "Sulafat", trait: "Warm" },
+  { value: "Achird", trait: "Friendly" },
+  { value: "Puck", trait: "Upbeat" },
+  { value: "Aoede", trait: "Breezy" },
+  { value: "Sadachbia", trait: "Lively" },
+  { value: "Vindemiatrix", trait: "Gentle" },
+];
 
 export function productLoad(
   status: number,

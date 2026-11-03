@@ -18,7 +18,8 @@ from qdrant_client import AsyncQdrantClient
 
 from kb_agent.config import require_settings
 from kb_agent.latency import log_json
-from kb_agent.product import instructions_for, product_id_from_metadata
+from kb_agent.product import load_product, product_id_from_metadata
+from kb_agent.prompt import render_system_prompt
 from kb_agent.protocol import (
     AGENT_ERROR_TOPIC,
     AGENT_NAME,
@@ -101,12 +102,10 @@ async def entrypoint(ctx: JobContext) -> None:
     try:
         product_id = product_id_from_metadata(ctx.job.metadata)
         api_url = os.environ.get("API_URL", "http://localhost:8000")
-        instructions = await asyncio.to_thread(
-            instructions_for, ctx.job.metadata, api_url
-        )
-        session = build_session()
+        product = await asyncio.to_thread(load_product, ctx.job.metadata, api_url)
+        session = build_session(product.voice)
         agent = SupportAgent(
-            instructions=instructions,
+            instructions=render_system_prompt(product),
             product_id=product_id,
             qdrant=qdrant,
             room=ctx.room,

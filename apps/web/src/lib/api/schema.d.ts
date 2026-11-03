@@ -517,6 +517,13 @@ export interface components {
             tone: string;
             /** Refusal Rules */
             refusal_rules: string;
+            /** Agent Name */
+            agent_name: string;
+            /**
+             * Voice
+             * @enum {string}
+             */
+            voice: "Sulafat" | "Achird" | "Puck" | "Aoede" | "Sadachbia" | "Vindemiatrix";
         };
         /** ProductWrite */
         ProductWrite: {
@@ -528,6 +535,17 @@ export interface components {
             tone: string;
             /** Refusal Rules */
             refusal_rules: string;
+            /**
+             * Agent Name
+             * @default Shawn
+             */
+            agent_name: string;
+            /**
+             * Voice
+             * @default Sulafat
+             * @enum {string}
+             */
+            voice: "Sulafat" | "Achird" | "Puck" | "Aoede" | "Sadachbia" | "Vindemiatrix";
         };
         /** Proposal */
         Proposal: {

@@ -16,7 +16,8 @@ import { Track } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
 
 import { HandoffCard } from "@/components/handoff-card";
-import { ScreenHud } from "@/components/screen-hud";
+import { AgentCursor } from "@/components/agent-cursor/agent-cursor";
+import { ScreenGlow } from "@/components/screen-glow";
 import { TranscriptPanel } from "@/components/transcript-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,11 +45,13 @@ export function SessionRoom({
   url,
   token,
   apiUrl,
+  agentName,
   onRestart,
 }: {
   url: string;
   token: string;
   apiUrl: string;
+  agentName: string;
   onRestart: () => void;
 }) {
   const [roomError, setRoomError] = useState<string | null>(null);
@@ -69,7 +72,7 @@ export function SessionRoom({
           {roomError}
         </p>
       ) : null}
-      <SessionBody apiUrl={apiUrl} onRestart={onRestart} />
+      <SessionBody apiUrl={apiUrl} agentName={agentName} onRestart={onRestart} />
     </LiveKitRoom>
   );
 }
@@ -93,39 +96,66 @@ function useElementSize() {
   return { ref, size };
 }
 
-function ScreenStage({ point }: { point: HudPoint | null }) {
+function presence(name: string, watching: boolean, agentState: string): string {
+  if (!watching) {
+    return "";
+  }
+  if (agentState === "thinking") {
+    return `${name} is thinking`;
+  }
+  return agentState === "speaking" ? `${name} is speaking` : `${name} is watching your screen`;
+}
+
+function ScreenStage({ point, agentName }: { point: HudPoint | null; agentName: string }) {
   const assistant = useVoiceAssistant();
+  const connection = useConnectionState();
   const tracks = useTracks([Track.Source.ScreenShare], { onlySubscribed: false });
   const shared = tracks.find((track) => track.publication);
   const { ref, size } = useElementSize();
+  const watching =
+    connection === "connected" && shared !== undefined && assistant.agent !== undefined;
   return (
     <section aria-label="Shared screen" className="flex min-w-0 flex-col gap-2">
-      <div
-        ref={ref}
-        className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-muted"
-      >
-        {shared ? (
-          <VideoTrack trackRef={shared} className="h-full w-full object-contain" />
-        ) : (
-          <p className="px-4 py-8 text-sm leading-6 text-muted-foreground">
-            Share your screen so the agent can see it.
-          </p>
-        )}
-        <ScreenHud
-          thinking={assistant.state === "thinking"}
-          point={point}
-          container={size}
-          video={shared?.publication?.dimensions ?? { width: 0, height: 0 }}
-        />
-      </div>
+      <ScreenGlow watching={watching} agentState={assistant.state}>
+        <div
+          ref={ref}
+          className="relative aspect-video w-full overflow-hidden rounded-md border border-border bg-muted"
+        >
+          {shared ? (
+            <VideoTrack trackRef={shared} className="h-full w-full object-contain" />
+          ) : (
+            <p className="px-4 py-8 text-sm leading-6 text-muted-foreground">
+              Share your screen so {agentName} can see it.
+            </p>
+          )}
+          <AgentCursor
+            name={agentName}
+            point={point}
+            thinking={assistant.state === "thinking"}
+            container={size}
+            video={shared?.publication?.dimensions ?? { width: 0, height: 0 }}
+          />
+        </div>
+      </ScreenGlow>
+      <p role="status" aria-label="Agent" className="min-h-6 text-sm leading-6 text-foreground">
+        {presence(agentName, watching, assistant.state)}
+      </p>
       <p className="text-pretty text-sm leading-6 text-muted-foreground">
-        The highlight is drawn on this preview. It does not move your mouse.
+        {agentName}&rsquo;s pointer is drawn on this preview. It does not move your mouse.
       </p>
     </section>
   );
 }
 
-function SessionBody({ apiUrl, onRestart }: { apiUrl: string; onRestart: () => void }) {
+function SessionBody({
+  apiUrl,
+  agentName,
+  onRestart,
+}: {
+  apiUrl: string;
+  agentName: string;
+  onRestart: () => void;
+}) {
   const room = useRoomContext();
   const state = useConnectionState();
   const [point, setPoint] = useState<HudPoint | null>(null);
@@ -185,7 +215,7 @@ function SessionBody({ apiUrl, onRestart }: { apiUrl: string; onRestart: () => v
         <TrackToggle source={Track.Source.Microphone} aria-label="Microphone" />
         <TrackToggle source={Track.Source.ScreenShare} aria-label="Screen share" />
       </div>
-      <ScreenStage point={point} />
+      <ScreenStage point={point} agentName={agentName} />
       {proposals.map((proposal) => (
         <HandoffCard key={proposal.id} apiUrl={apiUrl} proposal={proposal} />
       ))}

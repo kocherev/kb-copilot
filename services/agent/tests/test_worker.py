@@ -7,7 +7,8 @@ from threading import Thread
 import pytest
 from agent_fakes import FakeRoom
 from kb_agent import worker
-from kb_agent.product import instructions_for, product_id_from_metadata
+from kb_agent.product import load_product, product_from_body, product_id_from_metadata
+from kb_agent.prompt import render_system_prompt
 from kb_agent.protocol import AGENT_ERROR_TOPIC
 from qdrant_client import AsyncQdrantClient
 
@@ -18,6 +19,8 @@ PRODUCT = {
     "description": "Acme helps customers reset passwords.",
     "tone": "calm and brief",
     "refusal_rules": "Do not invent a refund policy.",
+    "agent_name": "Mina",
+    "voice": "Achird",
 }
 
 
@@ -61,10 +64,12 @@ def api_url() -> Iterator[str]:
 def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
     metadata = json.dumps({"product_id": PRODUCT_ID})
 
-    instructions = instructions_for(metadata, api_url)
+    product = load_product(metadata, api_url)
+    instructions = render_system_prompt(product)
 
     assert product_id_from_metadata(metadata) == PRODUCT_ID
-    assert "You are the support agent for Acme." in instructions
+    assert "You are Mina, the support agent for Acme." in instructions
+    assert product.voice == "Achird"
     assert "Tone: calm and brief" in instructions
     assert "Do not invent a refund policy." in instructions
     with pytest.raises(ValueError, match="product_id is required"):
@@ -72,7 +77,7 @@ def test_dispatch_metadata_selects_the_product_prompt(api_url: str) -> None:
     with pytest.raises(ValueError, match="JSON"):
         product_id_from_metadata("not-json")
     with pytest.raises(ValueError, match="404"):
-        instructions_for(
+        load_product(
             json.dumps({"product_id": "00000000-0000-0000-0000-000000000000"}),
             api_url,
         )
@@ -110,16 +115,31 @@ def test_a_model_that_cannot_start_tells_the_room_why(
     api_url: str, monkeypatch: pytest.MonkeyPatch, room: FakeRoom
 ) -> None:
     monkeypatch.setenv("API_URL", api_url)
-    monkeypatch.setattr(worker, "build_session", lambda: _BrokenSession())
+    voices: list[str] = []
+
+    def broken(voice: str) -> _BrokenSession:
+        voices.append(voice)
+        return _BrokenSession()
+
+    monkeypatch.setattr(worker, "build_session", broken)
     ctx = _Ctx(room)
 
     asyncio.run(worker.entrypoint(ctx))  # type: ignore[arg-type]
 
+    assert voices == ["Achird"]
     [(topic, body)] = room.sent
     assert topic == AGENT_ERROR_TOPIC
     assert "could not start" in str(body["message"])
     assert "RuntimeError" in str(body["message"])
     assert ctx.stopped == "agent error"
+
+
+def test_a_product_without_a_name_or_voice_for_the_agent_is_rejected() -> None:
+    for key in ("agent_name", "voice"):
+        body = {k: v for k, v in PRODUCT.items() if k != key}
+
+        with pytest.raises(ValueError, match=f"{key} is required"):
+            product_from_body(body)
 
 
 def test_a_missing_product_also_tells_the_room(

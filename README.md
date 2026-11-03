@@ -144,9 +144,9 @@ flowchart LR
   evals --> rag
 ```
 
-- `apps/web` is the Next.js app. Better Auth handles email and password sign-up in the same Postgres and signs the JWTs the API checks.
+- `apps/web` is the Next.js app. Better Auth handles email and password sign-up in the same Postgres and signs the JWTs the API checks. In a session, the shared-screen preview glows while the agent is in the room and watching. An agent cursor with the agent's name tag appears only while it points, then fades out.
 - `services/api` is FastAPI. It scopes products, documents, sessions, and API keys to the caller's organization. An upload waits in Postgres until a loop in the API process indexes it. The loop claims jobs with `SKIP LOCKED`.
-- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. It has two tools. `search_kb` queries Qdrant in-process, and `point_at` draws a highlight on the browser preview.
+- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. The agent has a name and a Gemini voice that each product sets (Shawn and Sulafat by default), and its prompt says what it can and cannot do. Its tools are `search_kb`, which queries Qdrant in-process, `point_at`, which sends a position to the browser preview, and `handoff_to_human`.
 - `packages/rag` parses, chunks, embeds, and searches. Dense vectors are FastEmbed `google/embeddinggemma-300m`, sparse vectors are `Qdrant/bm25`, and a search abstains when the best dense score is under the threshold in `RetrievalSettings`. No reranker runs by default.
 - `services/mcp` serves `search_kb` and `get_product` over stdio.
 - `apps/desktop` is a macOS helper that can click, type, press keys, and scroll when the agent calls it over LiveKit RPC. The agent has no tool that calls it yet.

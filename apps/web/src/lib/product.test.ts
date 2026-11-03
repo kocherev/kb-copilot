@@ -1,7 +1,8 @@
 import { expect, test } from "vitest";
 
+import spec from "../../openapi.json";
 import { errorDetail } from "@/lib/api/client";
-import { indexedLabel, productLoad } from "@/lib/product";
+import { indexedLabel, productLoad, voices } from "@/lib/product";
 
 const product = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -9,6 +10,8 @@ const product = {
   description: "Acme helps customers reset passwords.",
   tone: "calm and brief",
   refusal_rules: "Do not invent a refund policy.",
+  agent_name: "Shawn",
+  voice: "Sulafat" as const,
 };
 
 test("indexed label matches the chunk count", () => {
@@ -39,4 +42,13 @@ test("a validation error names the field", () => {
     ),
   ).toBe("refusal rules: String should have at least 1 character");
   expect(errorDetail({ detail: [] }, "fallback")).toBe("fallback");
+});
+
+test("the voice list is the one the API accepts, default first", () => {
+  const accepted = spec.components.schemas.ProductWrite.properties.voice.enum;
+
+  expect(voices.map((voice) => voice.value)).toEqual(accepted);
+  expect(spec.components.schemas.ProductWrite.properties.voice.default).toBe(
+    voices[0]?.value,
+  );
 });

@@ -5,33 +5,25 @@ from kb_agent import session as live
 from livekit.agents import AgentSession
 
 
-async def _build() -> AgentSession:
-    return live.build_session()
+async def _build(voice: str = "Sulafat") -> AgentSession:
+    return live.build_session(voice)
 
 
 def test_the_model_is_gemini_live_with_low_thinking_and_medium_frames(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    monkeypatch.setenv("KB_VOICE", "Kore")
 
-    built = asyncio.run(_build())
+    built = asyncio.run(_build("Achird"))
 
     model = built.llm
     assert model.model == "gemini-3.8-live-extended-thinking"  # type: ignore[union-attr]
     opts = model._opts  # type: ignore[union-attr]
-    assert opts.voice == "Kore"
+    assert opts.voice == "Achird"
     assert opts.thinking_config.thinking_level == "LOW"
     assert opts.media_resolution == "MEDIA_RESOLUTION_MEDIUM"
     sampler = built._video_sampler
     assert (sampler.speaking_fps, sampler.silent_fps) == (1.0, 0.3)  # type: ignore[union-attr]
-
-
-def test_the_default_voice_is_puck(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    monkeypatch.delenv("KB_VOICE", raising=False)
-
-    assert asyncio.run(_build()).llm._opts.voice == "Puck"  # type: ignore[union-attr]
 
 
 def test_the_session_subscribes_to_screen_video() -> None:

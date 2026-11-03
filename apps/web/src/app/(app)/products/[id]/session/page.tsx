@@ -46,6 +46,7 @@ async function SessionRoute({
       apiUrl={publicApiUrl()}
       productId={loaded.product.id}
       productName={loaded.product.name}
+      agentName={loaded.product.agent_name}
     />
   );
 }

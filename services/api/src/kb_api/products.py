@@ -1,6 +1,6 @@
 """Org-scoped product configuration."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -50,6 +50,24 @@ Tone = Annotated[
 RefusalRules = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)
 ]
+AgentName = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True, min_length=1, max_length=40, pattern=OneLine
+    ),
+]
+# Gemini prebuilt voices, each described in the speech generation docs.
+# The agent and the web form repeat this list. A test fails when they drift.
+Voice = Literal[
+    "Sulafat",  # warm
+    "Achird",  # friendly
+    "Puck",  # upbeat
+    "Aoede",  # breezy
+    "Sadachbia",  # lively
+    "Vindemiatrix",  # gentle
+]
+DEFAULT_AGENT_NAME = "Shawn"
+DEFAULT_VOICE: Voice = "Sulafat"
 
 
 class ProductWrite(BaseModel):
@@ -57,6 +75,8 @@ class ProductWrite(BaseModel):
     description: Description
     tone: Tone
     refusal_rules: RefusalRules
+    agent_name: AgentName = DEFAULT_AGENT_NAME
+    voice: Voice = DEFAULT_VOICE
 
 
 class Product(BaseModel):
@@ -67,6 +87,8 @@ class Product(BaseModel):
     description: str
     tone: str
     refusal_rules: str
+    agent_name: str
+    voice: Voice
 
 
 async def load_owned_product(

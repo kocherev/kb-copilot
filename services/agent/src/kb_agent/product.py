@@ -4,7 +4,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from kb_agent.prompt import ProductPrompt, render_system_prompt
+from kb_agent.prompt import ProductPrompt
 
 
 def product_id_from_metadata(metadata: str) -> str:
@@ -42,7 +42,7 @@ def product_from_body(body: object) -> ProductPrompt:
     if not isinstance(body, dict):
         raise ValueError("product config must be an object")
     fields: dict[str, str] = {}
-    for key in ("name", "description", "tone", "refusal_rules"):
+    for key in ("name", "description", "tone", "refusal_rules", "agent_name", "voice"):
         value = body.get(key)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{key} is required")
@@ -52,9 +52,10 @@ def product_from_body(body: object) -> ProductPrompt:
         description=fields["description"],
         tone=fields["tone"],
         refusal_rules=fields["refusal_rules"],
+        agent_name=fields["agent_name"].strip(),
+        voice=fields["voice"].strip(),
     )
 
 
-def instructions_for(metadata: str, api_url: str) -> str:
-    product_id = product_id_from_metadata(metadata)
-    return render_system_prompt(fetch_product(api_url, product_id))
+def load_product(metadata: str, api_url: str) -> ProductPrompt:
+    return fetch_product(api_url, product_id_from_metadata(metadata))

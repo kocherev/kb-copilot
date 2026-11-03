@@ -1,5 +1,4 @@
 import asyncio
-import os
 from collections.abc import Callable
 
 from google.genai import types
@@ -16,7 +15,6 @@ from livekit.plugins import google
 from kb_agent.latency import component_latency, log_json, turn_latency
 
 MODEL = "gemini-3.8-live-extended-thinking"
-DEFAULT_VOICE = "Puck"
 DEFAULT_MAX_SESSION_SECONDS = 600
 GOODBYE = (
     "The session time limit is reached. Say a short goodbye in one sentence "
@@ -25,10 +23,10 @@ GOODBYE = (
 GOODBYE_TIMEOUT_SECONDS = 20
 
 
-def build_session() -> AgentSession:
+def build_session(voice: str) -> AgentSession:
     model = google.realtime.RealtimeModel(
         model=MODEL,
-        voice=os.environ.get("KB_VOICE") or DEFAULT_VOICE,
+        voice=voice,
         thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         media_resolution=types.MediaResolution.MEDIA_RESOLUTION_MEDIUM,
     )
