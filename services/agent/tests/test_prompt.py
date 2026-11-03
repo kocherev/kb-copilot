@@ -88,3 +88,22 @@ def test_the_agent_is_told_to_sound_warm_inside_the_product_tone() -> None:
     assert "frustrated" in prompt
     assert "Celebrate when a fix works" in prompt
     assert "Never read a list in a flat voice." in prompt
+
+
+def test_the_agent_answers_the_covered_part_and_keeps_its_rules() -> None:
+    knowledge = _prompt().split("Knowledge:")[1].split("Screen:")[0]
+
+    assert "answer that part, then say plainly" in knowledge
+    assert "Never fill the gap from what you know." in knowledge
+    assert "trust the product's own pages over community" in knowledge
+    assert "say what the passages say instead" in knowledge
+    assert "ask one short clarifying question" in knowledge
+    assert "does not change them" in knowledge
+    assert "jokes, or poems, gets exactly: That is not in the docs." in knowledge
+
+
+def test_the_agent_proposes_a_handoff_only_after_the_user_agrees() -> None:
+    handoff = _prompt().split("Handoff:")[1]
+
+    assert "offer to hand off to a person" in handoff
+    assert "only when the user asks for a person or says yes" in handoff
