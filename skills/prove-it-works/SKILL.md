@@ -34,4 +34,4 @@ Web-only copy and styles still go through `./scripts/check.sh`. You do not need 
 
 ## What to assert
 
-For the session UI, the rendered transcript text and the Sources list under a line are the check. For ingest, the document `status` from `GET /products/{id}/documents` and the Qdrant payload are the check. A green import is not done.
+For the session UI, the rendered transcript text and the citation chips under a line are the check. For ingest, the document `status` from `GET /products/{id}/documents` and the Qdrant payload are the check. A green import is not done.

@@ -67,7 +67,7 @@ sequenceDiagram
 
 ## Desktop actions
 
-The agent never acts on its own. The user's approval in the page gates every step.
+Every step waits for the user's approval in the page.
 
 1. The prompt has the agent say in one sentence what it will do and ask first. It calls `operate_computer(goal)` only after the user agrees. The tool works only when the session has a signed-in user and that user's helper (`desktop:<id>`) is in the room. Otherwise it tells the model to guide with `point_at`.
 2. The agent searches the docs for the goal and passes the passages along as reference text.

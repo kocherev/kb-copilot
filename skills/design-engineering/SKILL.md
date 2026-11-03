@@ -33,7 +33,7 @@ Every decision below exists because the aggregate of invisible correctness creat
 
 ### Beauty is leverage
 
-People select tools based on the overall experience, not just functionality. Good defaults and good animations are real differentiators. Beauty is underutilized in software. Use it as leverage to stand out.
+People pick tools on the whole experience as well as the features. Good defaults and good animation set a product apart, and few products bother with them.
 
 ## Review Format (Required)
 
@@ -45,7 +45,7 @@ When reviewing UI code, you MUST use a markdown table with Before/After columns.
 | `transform: scale(0)` | `transform: scale(0.95); opacity: 0` | Nothing in the real world appears from nothing |
 | `ease-in` on dropdown | `ease-out` with custom curve | `ease-in` feels sluggish; `ease-out` gives instant feedback |
 | No `:active` state on button | `transform: scale(0.97)` on `:active` | Buttons must feel responsive to press |
-| `transform-origin: center` on popover | `transform-origin: var(--transform-origin)` | Popovers should scale from their trigger (not modals — modals stay centered) |
+| `transform-origin: center` on popover | `transform-origin: var(--transform-origin)` | Popovers should scale from their trigger (modals stay centered) |
 
 Wrong format (never do this):
 
@@ -65,7 +65,7 @@ Before writing any animation code, answer these questions in order:
 
 ### 1. Should this animate at all?
 
-**Ask:** How often will users see this animation?
+Ask how often users will see this animation.
 
 | Frequency                                                   | Decision                     |
 | ----------------------------------------------------------- | ---------------------------- |
@@ -84,11 +84,11 @@ Every animation must have a clear answer to "why does this animate?"
 
 Valid purposes:
 
-- **Spatial consistency**: toast enters and exits from the same direction, making swipe-to-dismiss feel intuitive
-- **State indication**: a morphing feedback button shows the state change
-- **Explanation**: a marketing animation that shows how a feature works
-- **Feedback**: a button scales down on press, confirming the interface heard the user
-- **Preventing jarring changes**: elements appearing or disappearing without transition feel broken
+- Spatial consistency: toast enters and exits from the same direction, making swipe-to-dismiss feel intuitive
+- State indication: a morphing feedback button shows the state change
+- Explanation: a marketing animation that shows how a feature works
+- Feedback: a button scales down on press, confirming the interface heard the user
+- Preventing jarring changes: elements appearing or disappearing without transition feel broken
 
 If the purpose is just "it looks cool" and the user will see it often, don't animate.
 
@@ -105,7 +105,7 @@ Is the element entering or exiting?
       Yes → linear
     Default → ease-out
 
-**Critical: use custom easing curves.** The built-in CSS easings are too weak. They lack the punch that makes animations feel intentional.
+Use custom easing curves. The built-in CSS easings are too weak. They lack the punch that makes animations feel intentional.
 
 ```css
 /* Strong ease-out for UI interactions */
@@ -118,9 +118,9 @@ Is the element entering or exiting?
 --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 ```
 
-**Never use ease-in for UI animations.** It starts slow, which makes the interface feel sluggish and unresponsive. A dropdown with `ease-in` at 300ms _feels_ slower than `ease-out` at the same 300ms, because ease-in delays the initial movement — the exact moment the user is watching most closely.
+**Never use ease-in for UI animations.** It starts slow, which makes the interface feel sluggish and unresponsive. A dropdown with `ease-in` at 300ms _feels_ slower than `ease-out` at the same 300ms, because ease-in delays the first movement, the moment the user is watching most closely.
 
-**Easing curve resources:** Don't create curves from scratch. Use [easing.dev](https://easing.dev/) or [easings.co](https://easings.co/) to find stronger custom variants of standard easings.
+Don't create curves from scratch. Use [easing.dev](https://easing.dev/) or [easings.co](https://easings.co/) to find stronger custom variants of standard easings.
 
 ### 4. How fast should it be?
 
@@ -132,21 +132,21 @@ Is the element entering or exiting?
 | Modals, drawers          | 200-500ms     |
 | Marketing/explanatory    | Can be longer |
 
-**Rule: UI animations should stay under 300ms.** A 180ms dropdown feels more responsive than a 400ms one. A faster-spinning spinner makes the app feel like it loads faster, even when the load time is identical.
+Keep UI animations under 300ms. A 180ms dropdown feels more responsive than a 400ms one. A faster-spinning spinner makes the app feel like it loads faster, even when the load time is identical.
 
 ### Perceived performance
 
-Speed in animation is not just about feeling snappy — it directly affects how users perceive your app's performance:
+Animation speed changes how fast users think your app is:
 
-- A **fast-spinning spinner** makes loading feel faster (same load time, different perception)
-- A **180ms select** animation feels more responsive than a **400ms** one
-- **Instant tooltips** after the first one is open (skip delay + skip animation) make the whole toolbar feel faster
+- A fast-spinning spinner makes loading feel faster (same load time, different perception)
+- A 180ms select animation feels more responsive than a 400ms one
+- Instant tooltips after the first one is open (skip delay + skip animation) make the whole toolbar feel faster
 
 The perception of speed matters as much as actual speed. Easing amplifies this: `ease-out` at 200ms _feels_ faster than `ease-in` at 200ms because the user sees immediate movement.
 
 ## Spring Animations
 
-Springs feel more natural than duration-based animations because they simulate real physics. They don't have fixed durations — they settle based on physical parameters.
+Springs feel more natural than duration-based animations because they simulate real physics. They have no fixed duration. They settle according to their physical parameters.
 
 ### When to use springs
 
@@ -172,17 +172,17 @@ const springRotation = useSpring(mouseX * 0.1, {
 });
 ```
 
-This works because the animation is **decorative** — it doesn't serve a function. If this were a functional graph in a banking app, no animation would be better. Know when decoration helps and when it hinders.
+This works because the animation is decorative and serves no function. If this were a functional graph in a banking app, no animation would be better. Know when decoration helps and when it hinders.
 
 ### Spring configuration
 
-**Apple's approach (recommended — easier to reason about):**
+Apple's approach, recommended because it is easier to reason about:
 
 ```js
 { type: "spring", duration: 0.5, bounce: 0.2 }
 ```
 
-**Traditional physics (more control):**
+Traditional physics, for more control:
 
 ```js
 { type: "spring", mass: 1, stiffness: 100, damping: 10 }
@@ -192,7 +192,7 @@ Keep bounce subtle (0.1-0.3) when used. Avoid bounce in most UI contexts. Use it
 
 ### Interruptibility advantage
 
-Springs maintain velocity when interrupted — CSS animations and keyframes restart from zero. This makes springs ideal for gestures users might change mid-motion. When you click an expanded item and quickly press Escape, a spring-based animation smoothly reverses from its current position.
+Springs keep their velocity when interrupted, while CSS animations and keyframes restart from zero. This makes springs ideal for gestures users might change mid-motion. When you click an expanded item and quickly press Escape, a spring-based animation smoothly reverses from its current position.
 
 ## Component Building Principles
 
@@ -233,7 +233,7 @@ Start from `scale(0.9)` or higher, combined with opacity. Even a barely-visible 
 
 ### Make popovers origin-aware
 
-Popovers should scale in from their trigger, not from center. The default `transform-origin: center` is wrong for almost every popover. **Exception: modals.** Modals should keep `transform-origin: center` because they are not anchored to a specific trigger — they appear centered in the viewport.
+Popovers should scale in from their trigger, not from center. The default `transform-origin: center` is wrong for almost every popover. Modals are the exception. They keep `transform-origin: center` because they are not anchored to a trigger and appear centered in the viewport.
 
 ```css
 /* Base UI */
@@ -291,7 +291,7 @@ CSS transitions can be interrupted and retargeted mid-animation. Keyframes resta
 
 When a crossfade between two states feels off despite trying different easings and durations, add subtle `filter: blur(2px)` during the transition.
 
-**Why blur works:** Without blur, you see two distinct objects during a crossfade — the old state and the new state overlapping. This looks unnatural. Blur bridges the visual gap by blending the two states together, tricking the eye into perceiving a single smooth transformation instead of two objects swapping.
+Blur works because without it a crossfade shows two distinct objects, the old state and the new state, overlapping. This looks unnatural. Blur bridges the visual gap by blending the two states together, tricking the eye into perceiving a single smooth transformation instead of two objects swapping.
 
 Combine blur with scale-on-press (`scale(0.97)`) for a polished button state transition:
 
@@ -392,7 +392,7 @@ Every element has an anchor point from which transforms execute. The default is 
 
 ## clip-path for Animation
 
-`clip-path` is not just for shapes. It is one of the most powerful animation tools in CSS.
+`clip-path` also animates well, and it can do things few other CSS properties can.
 
 ### The inset shape
 
@@ -572,13 +572,13 @@ These principles come from building Sonner (13M+ weekly npm downloads) and apply
 
 ### Cohesion matters
 
-Sonner's animation feels satisfying partly because the whole experience is cohesive. The easing and duration fit the vibe of the library. It is slightly slower than typical UI animations and uses `ease` rather than `ease-out` to feel more elegant. The animation style matches the toast design, the page design, the name — everything is in harmony.
+Sonner's animation feels satisfying partly because the whole experience is cohesive. The easing and duration fit the vibe of the library. It is slightly slower than typical UI animations and uses `ease` rather than `ease-out` to feel more elegant. The animation style matches the toast design, the page design and the name.
 
 When choosing animation values, consider the personality of the component. A playful component can be bouncier. A professional dashboard should be crisp and fast. Match the motion to the mood.
 
 ### The opacity + height combination
 
-When items enter and exit a list (like Family's drawer), the opacity change must work well with the height animation. This is often trial and error. There is no formula — you adjust until it feels right.
+When items enter and exit a list (like Family's drawer), the opacity change must work well with the height animation. This is often trial and error. There is no formula. Adjust until it feels right.
 
 ### Review your work the next day
 
@@ -632,7 +632,7 @@ When multiple elements enter together, stagger their appearance. Each element an
 }
 ```
 
-Keep stagger delays short (30-80ms between items). Long delays make the interface feel slow. Stagger is decorative — never block interaction while stagger animations are playing.
+Keep stagger delays short (30-80ms between items). Long delays make the interface feel slow. Stagger is decorative. Never block interaction while stagger animations are playing.
 
 ## Debugging Animations
 
@@ -664,7 +664,7 @@ When reviewing UI code, check for:
 | `transition: all`                          | Specify exact properties: `transition: transform 200ms ease-out` |
 | `scale(0)` entry animation                 | Start from `scale(0.95)` with `opacity: 0`                       |
 | `ease-in` on UI element                    | Switch to `ease-out` or custom curve                             |
-| `transform-origin: center` on popover      | Set to trigger location or use Base UI's `var(--transform-origin)` (modals are exempt — keep centered) |
+| `transform-origin: center` on popover      | Set to trigger location or use Base UI's `var(--transform-origin)` (modals are exempt and stay centered) |
 | Animation on keyboard action               | Remove animation entirely                                        |
 | Duration > 300ms on UI element             | Reduce to 150-250ms                                              |
 | Hover animation without media query        | Add `@media (hover: hover) and (pointer: fine)`                  |

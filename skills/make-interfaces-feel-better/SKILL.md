@@ -36,7 +36,7 @@ For buttons, cards, and containers whose border exists only to create depth, pre
 
 ### 4. Interruptible Animations
 
-Use CSS transitions for interactive state changes — they can be interrupted mid-animation. Reserve keyframes for staged sequences that run once.
+Use CSS transitions for interactive state changes, because they can be interrupted mid-animation. Reserve keyframes for staged sequences that run once.
 
 ### 5. Split and Stagger Enter Animations
 
@@ -48,7 +48,7 @@ Use a small fixed `translateY` instead of full height. Exits should be softer th
 
 ### 7. Contextual Icon Animations
 
-Animate icons with `opacity`, `scale`, and `blur` instead of toggling visibility. Use exactly these values: scale from `0.25` to `1`, opacity from `0` to `1`, blur from `4px` to `0px`. If the project has `motion` or `framer-motion` in `package.json`, match that package's import path (or the established nearby imports when both exist) and use `transition: { type: "spring", duration: 0.3, bounce: 0 }` — bounce must always be `0`. If no motion library is installed, keep both icons in the DOM (one absolute-positioned) and cross-fade with CSS transitions using `cubic-bezier(0.2, 0, 0, 1)` — this gives both enter and exit animations without any dependency.
+Animate icons with `opacity`, `scale`, and `blur` instead of toggling visibility. Use exactly these values: scale from `0.25` to `1`, opacity from `0` to `1`, blur from `4px` to `0px`. If the project has `motion` or `framer-motion` in `package.json`, match that package's import path (or the established nearby imports when both exist) and use `transition: { type: "spring", duration: 0.3, bounce: 0 }`. Bounce must always be `0`. If no motion library is installed, keep both icons in the DOM (one absolute-positioned) and cross-fade with CSS transitions using `cubic-bezier(0.2, 0, 0, 1)`. That gives both enter and exit animations with no dependency.
 
 ### 8. Font Smoothing
 
@@ -68,7 +68,7 @@ Add a subtle `1px` outline with low opacity to images for consistent depth. The 
 
 ### 12. Scale on Press
 
-A subtle `scale(0.96)` on click gives buttons tactile feedback. Always use `0.96`. Never use a value smaller than `0.95` — anything below feels exaggerated. Add a `static` prop to disable it when motion would be distracting.
+A subtle `scale(0.96)` on click gives buttons tactile feedback. Always use `0.96`. Never use a value smaller than `0.95`, because anything below feels exaggerated. Add a `static` prop to disable it when motion would be distracting.
 
 ### 13. Skip Animation on Page Load
 
@@ -80,7 +80,7 @@ Always specify exact properties: `transition-property: scale, opacity`. Tailwind
 
 ### 15. Use `will-change` Sparingly
 
-Only for `transform`, `opacity`, `filter` — properties the GPU can composite. Never use `will-change: all`. Only add when you notice first-frame stutter.
+Only for `transform`, `opacity`, `filter`, the properties the GPU can composite. Never use `will-change: all`. Only add when you notice first-frame stutter.
 
 ### 16. Minimum Hit Area
 
@@ -138,12 +138,12 @@ Include all five Quick Reference categories. Never imply an uninspected surface 
 
 ### Findings
 
-Group findings by principle. Use a markdown table with **Severity**, **Location**, **Before**, **After**, and **Why** columns. Include every change made or proposed, not a subset. Never use separate "Before:" / "After:" lines.
+Group findings by principle. Use a markdown table with Severity, Location, Before, After, and Why columns. Include every change made or proposed, not a subset. Never use separate "Before:" / "After:" lines.
 
-- **Severity**: `HIGH` makes an interaction inaccessible, misleading, unreadable, or repeatedly disruptive; `MEDIUM` creates a noticeable usability or consistency problem; `LOW` is isolated polish and appears only in `full` mode.
-- **Location**: cite `path/to/file:line`. If the artifact has no source files, cite the exact screen and component instead.
-- **Before / After**: show the current implementation and an actionable replacement.
-- **Why**: name the violated principle and explain its user impact.
+- Severity: `HIGH` makes an interaction inaccessible, misleading, unreadable, or repeatedly disruptive; `MEDIUM` creates a noticeable usability or consistency problem; `LOW` is isolated polish and appears only in `full` mode.
+- Location: cite `path/to/file:line`. If the artifact has no source files, cite the exact screen and component instead.
+- Before / After: show the current implementation and an actionable replacement.
+- Why: name the violated principle and explain its user impact.
 
 Consolidate a repeated systemic issue into one row and list every affected location. Omit principles with no findings and never pad the report to reach the cap.
 
@@ -169,7 +169,7 @@ Consolidate a repeated systemic issue into one row and list every affected locat
 
 ### Considered but Rejected
 
-Include 1–3 real candidates in `quick` mode and 2–5 in `full` mode:
+Include 1 to 3 real candidates in `quick` mode and 2 to 5 in `full` mode:
 
 | Location | Candidate | Rejected because |
 | --- | --- | --- |
@@ -181,7 +181,7 @@ Do not invent filler. If the scope contains fewer borderline candidates, include
 
 After the findings:
 
-1. **Verification**: list the exact commands or interactions run and their observed results. Walk every relevant state and inspect motion at 10% speed when animation is involved. If a check was not run, label it **Not verified** and state what remains.
-2. **Verdict**: `Block` if any `HIGH` finding remains, `Needs changes` if only `MEDIUM` or `LOW` findings remain, and `Approve` only when no actionable findings remain. List every unverified check beside the verdict.
+1. Verification: list the exact commands or interactions run and their observed results. Walk every relevant state and inspect motion at 10% speed when animation is involved. If a check was not run, label it Not verified and state what remains.
+2. Verdict: `Block` if any `HIGH` finding remains, `Needs changes` if only `MEDIUM` or `LOW` findings remain, and `Approve` only when no actionable findings remain. List every unverified check beside the verdict.
 
 When there are no findings, omit the findings table, state "No actionable interface-polish findings", report verification and rejected candidates, and end with `Approve`.

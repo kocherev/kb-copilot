@@ -29,17 +29,17 @@ Retrieval and the answer model refuse different things, and the gate scores each
 
 The printout marks each category with its owner. The abstain threshold is calibrated on one half of the rows (a seeded hash per category) and abstention is reported on the other half, so the gate does not grade the threshold on the rows that chose it. The cost is asymmetric: wrongly refusing a grounded question counts ten times a passed off-topic one.
 
-Thresholds are the measured baseline minus a small margin. They catch regressions; they do not claim perfection.
+Thresholds are the measured baseline minus a small margin. They catch regressions.
 
 ### Untrusted passages
 
-Three pages carry prompt-injection text. Injection safety is the share of rows whose first passage is not one of them. Retrieval keeps it at 1.000 on every category except injection (0.100) and false premise (0.800): when a question is about the topic a poisoned page discusses, that page ranks first. Retrieval cannot tell a forum post from policy, so the answer layer must treat every passage as untrusted data and never follow instructions inside it. The agent change that does this is separate; the live judges check the result.
+Three pages carry prompt-injection text. Injection safety is the share of rows whose first passage is not one of them. Retrieval keeps it at 1.000 on every category except injection (0.100) and false premise (0.800): when a question is about the topic a poisoned page discusses, that page ranks first. Retrieval cannot tell a forum post from policy, so the answer layer must treat every passage as untrusted data and never follow instructions inside it. The agent's prompt does this, and the live judges check the result.
 
 ### Live judges
 
 Answer quality needs a model to grade it. The harness has four binary judges, one per failure mode: faithful, correct, refusal, citation. A binary verdict per failure mode is easier to label, easier to agree on, and easier to act on than a 1-to-5 score that mixes several faults. Each verdict comes with a one-sentence reason.
 
-Verdicts are requested as JSON through a structured-output schema, at low effort. The brief asked for temperature 0. The current Messages API rejects sampling parameters on every model, so there is none; the schema and the binary question keep verdicts stable enough to calibrate.
+Verdicts are requested as JSON through a structured-output schema, at low effort. No temperature is set, because the current Messages API rejects sampling parameters on every model. The schema and the binary question keep verdicts stable enough to calibrate.
 
 The judge model is pinned to `claude-haiku-5-5` and set by `KB_JUDGE_MODEL`. Each run file records the model id and `PROMPT_VERSION`, so two runs are comparable only when both match.
 

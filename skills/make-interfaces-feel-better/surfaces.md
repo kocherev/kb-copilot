@@ -116,9 +116,9 @@ Some icons have uneven visual weight. The best fix is adjusting the SVG directly
 
 ## Shadows Instead of Borders
 
-For **buttons, cards, and containers** that use a border for depth or elevation, prefer replacing it with a subtle `box-shadow`. Shadows adapt to any background since they use transparency; solid borders don't. This also helps when using images or multiple colors as backgrounds — solid border colors don't work well on backgrounds other than the ones they were designed for.
+For buttons, cards, and containers that use a border for depth or elevation, prefer replacing it with a subtle `box-shadow`. Shadows adapt to any background since they use transparency; solid borders don't. This also helps when using images or multiple colors as backgrounds, since solid border colors don't work well on backgrounds other than the ones they were designed for.
 
-**Do not apply this to dividers** (`border-b`, `border-t`, side borders) or any border whose purpose is layout separation rather than element depth. Those should stay as borders.
+Do not apply this to dividers (`border-b`, `border-t`, side borders) or any border whose purpose is layout separation rather than element depth. Those should stay as borders.
 
 ### Shadow as Border (Light Mode)
 
@@ -139,7 +139,7 @@ The shadow is comprised of three layers. The first acts as a 1px border ring, th
 
 ### Shadow as Border (Dark Mode)
 
-In dark mode, simplify to a single white ring — layered depth shadows aren't visible on dark backgrounds:
+In dark mode, simplify to a single white ring, because layered depth shadows aren't visible on dark backgrounds:
 
 ```css
 /* Dark mode — adapt to whatever setup the project uses
@@ -181,8 +181,8 @@ Add a subtle `1px` outline with low opacity to images. This creates consistent d
 
 ### Color rules (non-negotiable)
 
-- **Light mode**: pure black, `oklch(0 0 0 / 0.1)`.
-- **Dark mode**: pure white, `oklch(1 0 0 / 0.1)`.
+- Light mode: pure black, `oklch(0 0 0 / 0.1)`.
+- Dark mode: pure white, `oklch(1 0 0 / 0.1)`.
 - Never use a near-black or near-white from the project palette (e.g. slate-900, zinc-900, `#0a0a0a`, `#111827`, `#f5f5f7`). Tinted outlines pick up the surrounding surface color and read as dirt on the image edge.
 - Never match the outline to the project's accent or ink color. The outline is a neutral separator, not a themed element.
 
@@ -214,9 +214,9 @@ img {
 />
 ```
 
-Use `outline-black/10` and `outline-white/10` specifically — not `outline-slate-*`, `outline-zinc-*`, `outline-neutral-*`, or any tinted scale.
+Use `outline-black/10` and `outline-white/10` specifically, not `outline-slate-*`, `outline-zinc-*`, `outline-neutral-*`, or any tinted scale.
 
-**Why outline instead of border?** `outline` doesn't affect layout (no added width/height), and `outline-offset: -1px` keeps it inset so images stay their intended size.
+Outline beats border here: `outline` doesn't affect layout (no added width/height), and `outline-offset: -1px` keeps it inset so images stay their intended size.
 
 ## Minimum Hit Area
 
@@ -253,4 +253,4 @@ Interactive elements should prefer a 44×44px hit area for touch or mobile conte
 
 ### Collision Rule
 
-If the extended hit area overlaps another interactive element, shrink the pseudo-element — but make it as large as possible without colliding. Two interactive elements should never have overlapping hit areas.
+If the extended hit area overlaps another interactive element, shrink the pseudo-element, but keep it as large as possible without colliding. Two interactive elements should never have overlapping hit areas.

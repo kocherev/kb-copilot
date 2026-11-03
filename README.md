@@ -125,7 +125,7 @@ If something is missing, Compose still starts the rest:
 
 ## Evals
 
-Two layers. The offline gate scores retrieval on every change, with no model call. The live harness has a model answer every question and four judges grade the answers.
+The offline gate scores retrieval on every change, with no model call. The live harness has a model answer every question, and four judges grade the answers.
 
 ### Offline retrieval gate
 
@@ -158,9 +158,9 @@ overall                                  152     0.869  0.708     0.280  0.863  
 | Measurement fixed (judge v2) | 0.928 | 0.822 | 0.836 | 0.553 |
 | Prompt fixed | 0.954 | 0.895 | 0.908 | 0.671 |
 
-The second row fixes the harness and the judges, not the agent: the judges now grade against the passages the model saw, filler words no longer break citation matching, and every agent tool has a stub. The third row changes only the agent's prompt. Answers with no citation went from 94 to 77 to 68. The story is in [docs/case-study.md](docs/case-study.md), and the per-category tables are in `docs/decisions/0002-evals.md`.
+The second row changes the harness and the judges and leaves the agent alone. The judges grade against the passages the model saw, filler words no longer break citation matching, and every agent tool has a stub. The third row changes only the agent's prompt. Answers with no citation went from 94 to 77 to 68. The story is in [docs/case-study.md](docs/case-study.md), and the per-category tables are in `docs/decisions/0002-evals.md`.
 
-Read these numbers with care. Each row is one run. The judges are not yet calibrated against human labels, so their error rates are unknown, and a difference of one or two rows within a category is noise. `make judge-calibrate` is ready for the labels when they exist.
+Each row is one run. The judges are not yet calibrated against human labels, so their error rates are unknown, and a difference of one or two rows within a category is noise. `make judge-calibrate` is ready for the labels when they exist.
 
 ### Commands that need a key
 
@@ -218,7 +218,7 @@ The safety model:
 - The prompt tells the agent never to enter a password, pay, or accept terms for you.
 - Every proposal, decision and action is written to the audit log. If the API does not record a step, the task stops before it acts.
 
-One known limit: the helper trusts the agent, so it cannot check on its own that you approved. The approval lives in the agent and the page. Setup, the `--dry-run` first run, macOS permissions and the RPC contract are in `apps/desktop/README.md`. The design is in `docs/decisions/0004-desktop-actions.md`.
+The helper trusts the agent, so it cannot check on its own that you approved. The approval lives in the agent and the page. Setup, the `--dry-run` first run, macOS permissions and the RPC contract are in `apps/desktop/README.md`. The design is in `docs/decisions/0004-desktop-actions.md`.
 
 ## MCP
 

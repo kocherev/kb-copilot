@@ -15,7 +15,7 @@ Server components are the default. Add `"use client"` for state, event handlers,
 
 The path alias is `@/`. Match the surrounding file. A test sits next to the component it renders (`session-start.test.tsx`).
 
-Assert what the screen shows: heading text, the request body, the error string, the Sources list. Stub `fetch` at the call the component makes. Do not assert a private helper's call count.
+Assert what the screen shows: heading text, the request body, the error string, the citation chips. Stub `fetch` at the call the component makes. Do not assert a private helper's call count.
 
 ## UI
 

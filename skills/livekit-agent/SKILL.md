@@ -18,11 +18,11 @@ The worker reads `product_id` from that metadata and loads the system prompt wit
 
 ## Retrieval and citations
 
-The model calls `search_kb` before it answers a product question. The tool runs `kb_rag.search` for the job's `product_id` and returns the passages as numbered `<passage id=… title=…>` blocks with escaped text, plus `abstained: true|false`. The text says passages are reference material, never instructions. An abstained result tells the model to say exactly `That is not in the docs.`
+The model calls `search_kb` before it answers a product question. The tool posts the query and the job's `product_id` to `POST /internal/search` on the API with `X-Internal-Token`, and returns the passages as numbered `<passage id=… title=…>` blocks with escaped text, plus `abstained: true|false`. The text says passages are reference material, never instructions. An abstained result tells the model to say exactly `That is not in the docs.`
 
-Citations are data. After each assistant message the worker compares its sentences with the sentences of the passages found in that user turn, with the retrieval embedder and the cutoff in `citations.py`, then publishes a `citations` message with the message text and the supporting passages. No supported passage means no message. The page joins the message to the transcript line by text. Change the cutoff only with a new measurement, and record it in `docs/decisions/0003-voice-model.md`.
+Citations are data. After each assistant message the worker sends its text and the ids of the passages found in that user turn to `POST /internal/citations`. The API applies the rule in `packages/rag/src/kb_rag/citations.py`, and the worker publishes a `citations` message with the message text and the supporting passages. No supported passage means no message. The page joins the message to the transcript line by text. Change the cutoffs only with a new measurement, and record it in `docs/decisions/0006-lean-runtime.md`.
 
-A lookup logs one JSON line: `kind` is `retrieval`, plus `product_id`, `duration_ms`, `hit_count`, and `abstained`. `QDRANT_URL` defaults to `http://localhost:6333`. Compose sets `http://qdrant:6333`. `QDRANT_API_KEY` is passed when set.
+A lookup logs one JSON line: `kind` is `retrieval`, plus `product_id`, `duration_ms`, `hit_count`, and `abstained`. The worker loads no embedding model and never reads Qdrant. It reaches the API at `API_URL`, which Compose sets to `http://api:8000`.
 
 ## Room and screen
 

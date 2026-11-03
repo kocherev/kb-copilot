@@ -8,7 +8,7 @@ Sources: [#40](https://github.com/kocherev/kb-copilot/pull/40), [0002](decisions
 
 ### What broke
 
-The first live run had Gemini `gemini-3.8-flash` answer all 152 eval questions with the agent's prompt and tools, and `claude-haiku-5-5` judge each answer four ways. The scores were low, and the citation score was the worst: 0.388, with 94 of 152 answers citing nothing. Reading the verdicts showed that many failures were about the measurement, not the answers.
+The first live run had Gemini `gemini-3.8-flash` answer all 152 eval questions with the agent's prompt and tools, and `claude-haiku-5-5` judge each answer four ways. The scores were low. Citation was the worst at 0.388, with 94 of 152 answers citing nothing. Reading the verdicts showed that many failures came from the measurement rather than the answers.
 
 ### Root causes
 
@@ -101,7 +101,7 @@ The CI smoke job brings up the Compose stack with LiveKit and walks the quicksta
 
 ### Root cause
 
-The LiveKit SDK's native runtime panicked while the Python interpreter shut down ("panic in a function that cannot unwind"). By then the room was already disconnected, so the test had passed and nothing was left to clean up.
+The LiveKit SDK's native runtime panicked while the Python interpreter shut down ("panic in a function that cannot unwind"). By then the test had passed and the room was disconnected, so nothing was left to clean up.
 
 ### Fix
 

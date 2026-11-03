@@ -8,11 +8,11 @@ An icon next to text should carry the same optical weight as the text.
 
 | Adjacent text | Icon stroke width (24px grid) |
 | --- | --- |
-| Regular (400), 14–16px | `1.5px` |
-| Medium/Semibold (500–600) | `2px` |
+| Regular (400), 14 to 16px | `1.5px` |
+| Medium/Semibold (500 to 600) | `2px` |
 | Bold (700), or emphasized standalone | `2.5px` |
 
-Use one stroke weight per icon set on a surface. Size inline icons relative to the text's cap height, typically `1em`–`1.25em`.
+Use one stroke weight per icon set on a surface. Size inline icons relative to the text's cap height, typically `1em` to `1.25em`.
 
 ## One SVG, Recolored per State
 
