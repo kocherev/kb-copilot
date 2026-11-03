@@ -15,10 +15,12 @@ export function SessionStart({
   apiUrl,
   productId,
   productName,
+  agentName,
 }: {
   apiUrl: string;
   productId: string;
   productName: string;
+  agentName: string;
 }) {
   const [session, setSession] = useState<SessionGrant | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export function SessionStart({
 
   return (
     <main
-      className={`mx-auto flex min-h-dvh w-full min-w-0 flex-col gap-8 px-6 py-16 ${session ? "max-w-3xl" : "max-w-lg"}`}
+      className={`mx-auto flex min-h-dvh w-full min-w-0 flex-col gap-8 overflow-x-clip px-6 py-16 ${session ? "max-w-3xl" : "max-w-lg"}`}
     >
       <Link className={linkClass} href={`/products/${productId}`}>
         Product
@@ -59,12 +61,13 @@ export function SessionStart({
           url={session.url}
           token={session.token}
           apiUrl={apiUrl}
+          agentName={agentName}
           onRestart={() => setSession(null)}
         />
       ) : (
         <>
           <p className="text-pretty text-sm leading-6 text-muted-foreground">
-            Join with your microphone and share your screen. The agent answers
+            Join with your microphone and share your screen. {agentName} answers
             by voice.
           </p>
           {error ? (

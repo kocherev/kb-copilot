@@ -8,13 +8,15 @@ vi.mock("@/components/session-room", () => ({
   SessionRoom: ({
     url,
     token,
+    agentName,
     onRestart,
   }: {
     url: string;
     token: string;
+    agentName: string;
     onRestart: () => void;
   }) => (
-    <div data-url={url} data-token={token}>
+    <div data-url={url} data-token={token} data-agent={agentName}>
       In the room
       <button type="button" onClick={onRestart}>
         New session
@@ -39,6 +41,7 @@ test("start session posts the product and joins the room", async () => {
       apiUrl="http://localhost:8000"
       productId={productId}
       productName={"A".repeat(80)}
+      agentName="Mina"
     />,
   );
 
@@ -63,12 +66,13 @@ test("start session posts the product and joins the room", async () => {
   ]);
   expect(room.getAttribute("data-url")).toBe("ws://localhost:7880");
   expect(room.getAttribute("data-token")).toBe("signed-token");
+  expect(room.getAttribute("data-agent")).toBe("Mina");
 });
 
 test("a new session after the room ends goes back to the start button", async () => {
   stubApi(() => ({ status: 201, body: grant }));
   render(
-    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" />,
+    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" agentName="Mina" />,
   );
   fireEvent.click(screen.getByRole("button", { name: "Start session" }));
   fireEvent.click(await screen.findByRole("button", { name: "New session" }));
@@ -80,7 +84,7 @@ test("a new session after the room ends goes back to the start button", async ()
 test("a dispatch failure shows the error", async () => {
   stubApi(() => ({ status: 502, body: { detail: "Could not dispatch the agent" } }));
   render(
-    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" />,
+    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="Acme" agentName="Mina" />,
   );
 
   fireEvent.click(screen.getByRole("button", { name: "Start session" }));
@@ -93,7 +97,7 @@ test("a dispatch failure shows the error", async () => {
 test("a refused session shows the error", async () => {
   stubApi(() => ({ status: 404, body: { detail: "product not found" } }));
   render(
-    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="A" />,
+    <SessionStart apiUrl="http://localhost:8000" productId={productId} productName="A" agentName="Mina" />,
   );
 
   expect(screen.getByRole("heading", { level: 1, name: "A" })).toBeDefined();
