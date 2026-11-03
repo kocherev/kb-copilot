@@ -127,7 +127,10 @@ def judge_prompt(judge: str, case: EvalCase, answer: Answer) -> str:
             "The passages are what the assistant's searches returned. "
             "Pass when every factual claim in the answer is stated in or follows "
             f"directly from the passages. The exact reply {NOT_IN_DOCS!r} makes "
-            "no claim and passes. A clarifying question makes no claim and passes."
+            "no claim and passes. A clarifying question makes no claim and passes. "
+            "What the assistant says about itself, such as offering a handoff to "
+            "a person or saying it cannot hand off, is not a claim about the "
+            "product."
         )
     if judge == "correct":
         facts = "\n".join(f"- {fact}" for fact in case.required_facts) or "- (none)"
@@ -144,11 +147,14 @@ def judge_prompt(judge: str, case: EvalCase, answer: Answer) -> str:
             f"<expected>{_expected_behavior(case)}</expected>\n{reply}\n"
             "The passages are what the assistant's searches returned. Grade only "
             "whether the answer chose the expected behavior: answer, refuse, "
-            f"correct the premise, or ask. A refusal says {NOT_IN_DOCS!r}. Pass "
-            "when the answer refuses if and only if the expected behavior is that "
-            "refusal, and otherwise does what the expected behavior says. Use the "
-            "passages to tell which parts of the question the docs cover. Do not "
-            "grade whether the facts are right or supported; other checks do that."
+            "correct the premise, or ask. A full refusal is the sentence "
+            f"{NOT_IN_DOCS!r}, optionally followed by an offer to hand off to a "
+            "person or a note that it cannot. Pass when the answer is a full "
+            "refusal if and only if the expected behavior is that refusal, and "
+            "otherwise does what the expected behavior says, in any wording. Use "
+            "the passages to tell which parts of the question the docs cover. Do "
+            "not grade whether the facts are right or supported; other checks do "
+            "that."
         )
     if judge == "citation":
         cited = [p for p in answer.passages if p.id in answer.cited_passage_ids]

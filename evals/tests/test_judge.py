@@ -76,6 +76,7 @@ def test_faithful_and_refusal_prompts_show_the_passages_the_model_saw() -> None:
 
         assert "Refunds take 5 days." in prompt
         assert "Invoices are PDF." in prompt
+        assert "hand off" in prompt
 
 
 def test_refusal_prompt_states_the_expected_behavior() -> None:
