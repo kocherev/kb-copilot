@@ -26,17 +26,13 @@ RUN uv sync --frozen --no-dev --package kb-agent --no-editable
 FROM python:3.12-slim-bookworm
 
 RUN groupadd --gid 10001 app \
-    && useradd --uid 10001 --gid app --create-home --home-dir /home/app app \
-    && install -d -o app -g app /home/app/.cache /home/app/.cache/fastembed
+    && useradd --uid 10001 --gid app --create-home --home-dir /home/app app
 
 WORKDIR /app
 
-# fastembed downloads models at runtime; keep its cache writable by the runtime user.
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    HF_HOME=/home/app/.cache/huggingface \
-    FASTEMBED_CACHE_PATH=/home/app/.cache/fastembed
+    PYTHONUNBUFFERED=1
 
 COPY --from=builder /app/.venv /app/.venv
 
