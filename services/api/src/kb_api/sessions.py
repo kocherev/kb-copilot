@@ -5,12 +5,12 @@ import logging
 import time
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Annotated, Protocol
+from typing import Annotated, Literal, Protocol
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from livekit import api
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -19,9 +19,11 @@ from kb_api.audit import audit
 from kb_api.auth import (
     AUTH_ERRORS,
     ErrorBody,
+    InternalCaller,
     Principal,
     UserPrincipal,
     get_principal,
+    require_internal,
     require_user,
 )
 from kb_api.db import LiveSessionRow, RateLimitRow, get_db, get_sessionmaker
@@ -59,6 +61,19 @@ class LiveSession(BaseModel):
     room: str
     user_id: str | None
     created_at: datetime
+
+
+Detail = Annotated[str, StringConstraints(max_length=1000)] | int | bool | None
+
+
+class DesktopEvent(BaseModel):
+    """One step of a computer task, as the agent reports it."""
+
+    room: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    event: Literal[
+        "proposed", "approved", "denied", "timed_out", "performed", "failed", "ended"
+    ]
+    details: Annotated[dict[str, Detail], Field(max_length=20)] = {}
 
 
 class AgentDispatch(BaseModel):
@@ -239,7 +254,11 @@ async def create_session(
             AgentDispatch(
                 agent_name=AGENT_NAME,
                 room=room,
-                metadata=json.dumps({"product_id": str(product.id)}),
+                # The agent listens to this participant and takes approvals
+                # only from it, never from the desktop helper.
+                metadata=json.dumps(
+                    {"product_id": str(product.id), "user": principal.actor}
+                ),
             )
         )
     except Exception as exc:
@@ -306,3 +325,29 @@ async def create_desktop_token(
         url=settings.livekit_url,
         token=desktop_token(settings, room, principal.user_id),
     )
+
+
+@router.post(
+    "/internal/desktop-actions",
+    status_code=204,
+    include_in_schema=False,
+    responses={404: {"model": ErrorBody, "description": "No such session"}},
+)
+async def record_desktop_event(
+    body: DesktopEvent,
+    _: Annotated[InternalCaller, Depends(require_internal)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    session = await db.scalar(
+        select(LiveSessionRow).where(LiveSessionRow.room == body.room)
+    )
+    if session is None:
+        raise HTTPException(status_code=404, detail="session not found")
+    audit(
+        db,
+        Principal(org_id=session.org_id, actor="agent", user_id=None),
+        f"desktop.{body.event}",
+        f"session:{session.id}",
+        body.details,
+    )
+    await db.commit()

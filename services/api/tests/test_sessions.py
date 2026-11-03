@@ -111,7 +111,10 @@ def test_session_token_carries_the_user_room_and_dispatch_metadata(
     [dispatch] = dispatcher.requests
     assert dispatch.agent_name == AGENT_NAME == "kb-support"
     assert dispatch.room == body["room"]
-    assert json.loads(dispatch.metadata) == {"product_id": product_id}
+    assert json.loads(dispatch.metadata) == {
+        "product_id": product_id,
+        "user": "user:user-a",
+    }
 
     listed = http.get("/sessions", headers=headers).json()
     assert [(item["room"], item["product_id"], item["user_id"]) for item in listed] == [
@@ -426,3 +429,81 @@ def test_desktop_token_without_livekit_config_is_unavailable(
 
     assert unavailable.status_code == 503
     assert "token" not in unavailable.json()
+
+
+def test_the_agent_records_each_desktop_step_in_the_session_audit_log(
+    http: TestClient,
+    dispatcher: RecordingDispatcher,
+    as_user,
+    rows,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "agent-secret")
+    load_settings.cache_clear()
+    room = start_session(http, as_user(user="user-a", org="org-a"))
+    agent = {"x-internal-token": "agent-secret"}
+    step = {
+        "room": room,
+        "event": "approved",
+        "details": {"proposal": "p1", "decision": "once", "action": "click 10,20"},
+    }
+
+    recorded = http.post("/internal/desktop-actions", json=step, headers=agent)
+
+    assert recorded.status_code == 204
+    [row] = [r for r in rows("audit_log") if r["action"] == "desktop.approved"]
+    assert row["org_id"] == "org-a"
+    assert row["actor"] == "agent"
+    assert str(row["target"]).startswith("session:")
+    assert json.loads(str(row["details"])) == step["details"]
+
+
+@pytest.mark.parametrize(
+    ("change", "status"),
+    [
+        ({"room": "kb-nothing"}, 404),
+        ({"event": "clicked-anyway"}, 422),
+        ({"details": {f"k{i}": i for i in range(21)}}, 422),
+        ({"details": {"text": "x" * 1001}}, 422),
+    ],
+)
+def test_a_desktop_step_for_no_session_or_out_of_shape_is_refused(
+    http: TestClient,
+    dispatcher: RecordingDispatcher,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+    change: dict[str, object],
+    status: int,
+) -> None:
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "agent-secret")
+    load_settings.cache_clear()
+    room = start_session(http, as_user())
+    step = {"room": room, "event": "proposed", **change}
+
+    response = http.post(
+        "/internal/desktop-actions",
+        json=step,
+        headers={"x-internal-token": "agent-secret"},
+    )
+
+    assert response.status_code == status
+
+
+def test_only_the_agent_records_desktop_steps(
+    http: TestClient,
+    dispatcher: RecordingDispatcher,
+    as_user,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("INTERNAL_API_TOKEN", "agent-secret")
+    load_settings.cache_clear()
+    headers = as_user()
+    step = {"room": start_session(http, headers), "event": "approved"}
+
+    as_the_user = http.post("/internal/desktop-actions", json=step, headers=headers)
+    wrong = http.post(
+        "/internal/desktop-actions", json=step, headers={"x-internal-token": "nope"}
+    )
+
+    assert as_the_user.status_code == 401
+    assert wrong.status_code == 401
