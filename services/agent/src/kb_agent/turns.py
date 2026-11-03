@@ -112,8 +112,8 @@ class LoggedKnowledge(Knowledge):
         super().__init__(product_id, client)
         self.log = log
 
-    async def search(self, query: str, limit: int = 5) -> SearchResult:
+    async def search(self, query: str) -> SearchResult:
         started = time.monotonic()
-        found = await super().search(query, limit)
+        found = await super().search(query)
         self.log.searched(query, found, time.monotonic() - started)
         return found

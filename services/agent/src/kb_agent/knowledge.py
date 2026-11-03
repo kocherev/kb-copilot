@@ -42,10 +42,10 @@ class Knowledge:
         self.product_id = product_id
         self.client = client
 
-    async def search(self, query: str, limit: int = 5) -> SearchResult:
+    async def search(self, query: str) -> SearchResult:
         reply = await self.client.post(
             "/internal/search",
-            json={"product_id": self.product_id, "query": query, "limit": limit},
+            json={"product_id": self.product_id, "query": query, "limit": 5},
         )
         reply.raise_for_status()
         return SearchResult.model_validate(reply.json())
