@@ -9,6 +9,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 from kb_api.db import LiveSessionRow, utcnow
+from kb_api.escalations import MAX_PROPOSALS_PER_SESSION
 from kb_api.linear import GRAPHQL_URL, REVOKE_URL, TOKEN_URL, get_linear_http
 from kb_api.linear_secrets import STATE_TTL_SECONDS
 from kb_api.sessions import get_clock
@@ -154,8 +155,7 @@ def stuck_creating(sync_engine: Engine, id: str, idle: timedelta) -> None:
         connection.execute(update, {"at": utcnow() - idle, "id": UUID(id)})
 
 
-@pytest.fixture
-def room(http: TestClient, sync_engine: Engine, as_user: Headers) -> str:
+def make_room(http: TestClient, sync_engine: Engine, as_user: Headers) -> str:
     """A live session of org-a's product, as POST /sessions would record it."""
     product = http.post("/products", json=PRODUCT, headers=as_user()).json()["id"]
     name = f"kb-{uuid4()}"
@@ -167,6 +167,12 @@ def room(http: TestClient, sync_engine: Engine, as_user: Headers) -> str:
         )
         db.commit()
     return name
+
+
+@pytest.fixture
+def room(http: TestClient, sync_engine: Engine, as_user: Headers) -> str:
+    """A live session of org-a's product, as POST /sessions would record it."""
+    return make_room(http, sync_engine, as_user)
 
 
 def test_without_linear_settings_every_route_says_what_to_set(
@@ -422,6 +428,36 @@ def test_a_proposal_is_redacted_scoped_and_audited(
     assert linear.issues == []
     audit = [r for r in rows("audit_log") if r["action"] == "escalation.propose"]
     assert [(r["org_id"], r["actor"]) for r in audit] == [("org-a", "agent")]
+
+
+def test_a_session_carries_at_most_three_proposals(
+    http: TestClient,
+    linear: FakeLinear,
+    room: str,
+    as_user: Headers,
+    rows,
+    sync_engine: Engine,
+) -> None:
+    connect(http, as_user())
+
+    first, *rest = [propose(http, room) for _ in range(MAX_PROPOSALS_PER_SESSION)]
+    fourth = propose(http, room)
+
+    assert [r.status_code for r in [first, *rest]] == [201, 201, 201]
+    assert fourth.status_code == 429
+    assert fourth.json() == {"detail": "too many handoffs proposed in this session"}
+    assert len(rows("escalations")) == 3
+    audit = [r for r in rows("audit_log") if r["action"] == "escalation.propose"]
+    assert len(audit) == 3
+    dismissed = http.post(
+        f"/escalations/{first.json()['id']}/dismiss", headers=as_user()
+    )
+    assert dismissed.json()["status"] == "dismissed"
+    assert propose(http, room).status_code == 429
+    assert len(rows("escalations")) == 3
+    other = make_room(http, sync_engine, as_user)
+    assert propose(http, other).status_code == 201
+    assert len(rows("escalations")) == 4
 
 
 def test_a_long_summary_makes_a_short_title(

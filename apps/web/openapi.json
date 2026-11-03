@@ -1571,6 +1571,16 @@
               }
             }
           },
+          "429": {
+            "description": "The session already has the maximum number of handoff proposals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Linear is not configured",
             "content": {
