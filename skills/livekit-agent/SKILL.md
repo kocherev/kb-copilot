@@ -53,7 +53,7 @@ A 404, 409, 503, or an unreachable API means no card. The tool tells the model t
 
 ## Voice
 
-`session.build_session` creates one `google.realtime.RealtimeModel`: model `gemini-3.8-live-extended-thinking`, voice from `KB_VOICE` (default `Puck`), thinking level `low`, medium media resolution. It needs `GOOGLE_API_KEY`. LiveKit Inference is not used, because it does not pass video to realtime models. See `docs/decisions/0003-voice-model.md`.
+`session.build_session` creates one `google.realtime.RealtimeModel`: model `gemini-3.8-live-extended-thinking`, voice stored on the product (default `Sulafat`), thinking level `low`, medium media resolution. It needs `GOOGLE_API_KEY`. LiveKit Inference is not used, because it does not pass video to realtime models. See `docs/decisions/0003-voice-model.md`.
 
 `config.require_settings` stops the worker at start when `GOOGLE_API_KEY` or a LiveKit setting is empty or `replace-me`. In a job, a failure to load the product, to start the session, or a model session that closes on an error is published as `agent-error`. `AGENT_MAX_SESSION_SECONDS` (default 600) makes the agent say goodbye and close.
 
