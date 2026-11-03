@@ -153,6 +153,8 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--limit", type=int)
     args = parser.parse_args()
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be at least 1")
     if not os.environ.get("GOOGLE_API_KEY"):
         raise SystemExit("GOOGLE_API_KEY is required")
     asyncio.run(_run(args.out, args.limit))
