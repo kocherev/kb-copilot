@@ -92,6 +92,7 @@ def test_search_kb_returns_passages_remembers_them_and_logs(
 
         assert {tool.id for tool in agent.tools} == {
             "handoff_to_human",
+            "operate_computer",
             "point_at",
             "search_kb",
         }

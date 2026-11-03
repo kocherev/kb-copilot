@@ -18,7 +18,11 @@ from livekit.agents.voice.events import CloseReason
 from kb_agent.config import require_settings
 from kb_agent.knowledge import Knowledge, api_client
 from kb_agent.latency import log_json
-from kb_agent.product import load_product, product_id_from_metadata
+from kb_agent.product import (
+    load_product,
+    product_id_from_metadata,
+    user_from_metadata,
+)
 from kb_agent.prompt import render_system_prompt
 from kb_agent.protocol import (
     AGENT_ERROR_TOPIC,
@@ -101,6 +105,7 @@ async def entrypoint(ctx: JobContext) -> None:
     limit: asyncio.Task[None] | None = None
     try:
         product_id = product_id_from_metadata(ctx.job.metadata)
+        user = user_from_metadata(ctx.job.metadata)
         knowledge = Knowledge(
             product_id, api_client(api_url, os.environ.get("INTERNAL_API_TOKEN", ""))
         )
@@ -112,6 +117,8 @@ async def entrypoint(ctx: JobContext) -> None:
             knowledge=knowledge,
             room=ctx.room,
             api_url=api_url,
+            user=user,
+            agent_name=product.agent_name,
         )
         attach_logs(session)
         publish_citations(session, agent, ctx.room)
@@ -125,7 +132,7 @@ async def entrypoint(ctx: JobContext) -> None:
 
         session.on("close", lambda ev: spawn(closed(ev)))
         log_json({"event": "session", "product_id": product_id})
-        await session.start(agent=agent, room=ctx.room, room_options=room_options())
+        await session.start(agent=agent, room=ctx.room, room_options=room_options(user))
         limit = asyncio.create_task(
             enforce_time_limit(
                 session,

@@ -10,10 +10,11 @@ import contextlib
 import json
 import os
 from typing import Literal
+from uuid import uuid4
 
 import pytest
 from kb_desktop import main as helper
-from kb_desktop.actions import Action, Click, Display
+from kb_desktop.actions import Action, Click, Cursor, Display
 from livekit import api, rtc
 
 pytestmark = pytest.mark.skipif(
@@ -72,18 +73,49 @@ async def call(room: rtc.Room, method: str, payload: str = "") -> str:
 def test_the_agent_reaches_the_helper_and_nobody_else_does() -> None:
     mac = pytest.importorskip("kb_desktop.mac")
     seen: list[tuple[Action, Display]] = []
+    cursors: list[Cursor] = []
+    # Bigger than one RPC reply can hold, so it has to travel as a stream.
+    screen = os.urandom(200_000)
 
     async def scenario() -> None:
         # The grants that POST /sessions/{room}/desktop-token issues.
         helper_token = token(HELPER, "standard", can_publish=False, can_subscribe=False)
         running = asyncio.create_task(
             helper.run(
-                URL, helper_token, mac.main_display, lambda *call: seen.append(call)
+                URL,
+                helper_token,
+                mac.main_display,
+                lambda *call: seen.append(call),
+                lambda display: screen,
+                lambda command, display: cursors.append(command),
             )
         )
         agent = await join("agent-1", "agent")
         user = await join("user:user-a", "standard")
+        streams: dict[str, asyncio.Future[bytes]] = {}
+
+        def on_stream(reader: rtc.ByteStreamReader, sender: str) -> None:
+            async def read() -> None:
+                streams[reader.info.stream_id].set_result(
+                    b"".join([chunk async for chunk in reader])
+                )
+
+            asyncio.ensure_future(read())
+
+        agent.register_byte_stream_handler(helper.SCREENSHOT_TOPIC, on_stream)
         try:
+            stream_id = str(uuid4())
+            streams[stream_id] = asyncio.get_running_loop().create_future()
+            shot = await call(
+                agent, "desktop.screenshot", json.dumps({"stream_id": stream_id})
+            )
+            assert json.loads(shot) == {"bytes": len(screen)}
+            assert await asyncio.wait_for(streams[stream_id], 10) == screen
+
+            cursor = {"state": "about-to-click", "x": 5, "y": 6, "name": "Shawn"}
+            await call(agent, "desktop.cursor", json.dumps(cursor))
+            assert cursors == [Cursor.model_validate(cursor)]
+
             display = json.loads(await call(agent, "desktop.info"))
             assert display == {
                 "width": mac.main_display().width,

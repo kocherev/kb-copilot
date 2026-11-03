@@ -7,8 +7,7 @@ import type { HudPoint } from "@/lib/protocol";
 
 export const IDLE_MS = 4000;
 
-// The computer-actions unit adds "about-to-click" and "clicking" here.
-export type AgentCursorState = "pointing" | "thinking";
+export type AgentCursorState = "pointing" | "thinking" | "about-to-click" | "clicking";
 
 const SIZE = 22;
 // The arrow path starts at (5, 2) in a 24 unit box. Shift it so the tip sits
@@ -63,8 +62,37 @@ function ThinkingDots() {
   );
 }
 
+function cursorState(point: HudPoint | null, thinking: boolean): AgentCursorState {
+  if (point?.kind === "about-to-click" || point?.kind === "clicking") {
+    return point.kind;
+  }
+  return thinking ? "thinking" : "pointing";
+}
+
+function announcement(state: AgentCursorState, name: string, label: string): string {
+  if (state === "about-to-click") {
+    return `${name} is about to click ${label}`;
+  }
+  return state === "clicking" ? `${name} clicks ${label}` : `${name} points at ${label}`;
+}
+
+// A pulsing ring while a click waits for the user, one ripple when it happens.
+function Ring({ state }: { state: AgentCursorState }) {
+  if (state !== "about-to-click" && state !== "clicking") {
+    return null;
+  }
+  return (
+    <span
+      data-testid="agent-cursor-ring"
+      aria-hidden
+      className={`absolute -top-3 -left-3 size-6 rounded-full border-2 border-[var(--hui-color-background-accent-emphasis)] ${state === "about-to-click" ? "motion-safe:animate-ping" : "motion-safe:[animation:ping_600ms_cubic-bezier(0,0,0.2,1)_1_forwards]"}`}
+    />
+  );
+}
+
 // Hidden until the agent points. It glides to each new target inside the
-// picture, names itself and the control, and fades out after IDLE_MS.
+// picture, names itself and the control, and fades out after IDLE_MS. A click
+// that waits for the user's approval stays until the agent moves on.
 export function AgentCursor({
   name,
   point,
@@ -85,23 +113,24 @@ export function AgentCursor({
     setSeen(point);
     setIdle(point === null);
   }
+  const state = cursorState(point, thinking);
+  const waiting = state === "about-to-click";
   useEffect(() => {
-    if (idle) {
+    if (idle || waiting) {
       return;
     }
     const timer = setTimeout(() => setIdle(true), IDLE_MS);
     return () => clearTimeout(timer);
-  }, [idle, seen]);
+  }, [idle, seen, waiting]);
 
   const frame = letterbox(container, video);
   const at = point ?? { x: 0.5, y: 0.5, label: "" };
-  const state: AgentCursorState = thinking ? "thinking" : "pointing";
   const flipX = at.x > FLIP.x;
   const flipY = at.y > FLIP.y;
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       <span role="status" aria-label="Pointer" className="sr-only">
-        {idle || point === null ? "" : `${name} points at ${point.label}`}
+        {idle || point === null ? "" : announcement(state, name, point.label)}
       </span>
       <div
         data-testid="agent-cursor"
@@ -112,6 +141,7 @@ export function AgentCursor({
           transform: `translate3d(${frame.left + at.x * frame.width}px, ${frame.top + at.y * frame.height}px, 0)`,
         }}
       >
+        <Ring key={`${state}-${at.x}-${at.y}`} state={state} />
         <Arrow />
         <p
           data-testid="agent-cursor-tag"

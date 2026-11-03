@@ -124,6 +124,7 @@ flowchart LR
   qd[(Qdrant)]
   room["LiveKit room"]
   gemini["Gemini Live API"]
+  computeruse["Gemini Computer Use<br/>gemini-3.8-flash"]
 
   web -->|"products, uploads, session start"| api
   web -->|"users and sessions"| pg
@@ -136,19 +137,20 @@ flowchart LR
   agent -->|"joins as kb-support"| room
   agent -->|"product config, search, citations"| api
   agent --> gemini
+  agent -->|"plan the next step"| computeruse
   mcp --> rag
   mcp -->|"get_product"| api
   desktop -->|"joins with a desktop token"| room
-  agent -.->|"RPC, not wired yet"| desktop
+  agent -->|"RPC: screenshot, cursor, approved action"| desktop
   evals --> rag
 ```
 
-- `apps/web` is the Next.js app. Better Auth handles email and password sign-up in the same Postgres and signs the JWTs the API checks. In a session, the shared-screen preview glows while the agent is in the room and watching. An agent cursor with the agent's name tag appears only while it points, then fades out.
+- `apps/web` is the Next.js app. Better Auth handles email and password sign-up in the same Postgres and signs the JWTs the API checks. In a session, the shared-screen preview glows while the agent is in the room and watching. An agent cursor with the agent's name tag appears only while it points, then fades out. When the agent wants to act on the user's Mac, an approval tray shows the step and the cursor rings at its target until the user decides.
 - `services/api` is FastAPI. It scopes products, documents, sessions, and API keys to the caller's organization. An upload waits in Postgres until a loop in the API process indexes it. The loop claims jobs with `SKIP LOCKED`.
-- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. The agent has a name and a Gemini voice that each product sets (Shawn and Sulafat by default), and its prompt says what it can and cannot do. Its tools are `search_kb`, which calls `POST /internal/search` on the API, `point_at`, which sends a position to the browser preview, and `handoff_to_human`. After each answer the agent calls `POST /internal/citations`. Both internal routes need `X-Internal-Token`. The agent loads no embedding model and does not talk to Qdrant.
+- `services/agent` is the `kb-support` LiveKit worker. One Gemini Live model, `gemini-3.8-live-extended-thinking`, runs through the LiveKit Google plugin. The screen share reaches it as video frames. The agent has a name and a Gemini voice that each product sets (Shawn and Sulafat by default), and its prompt says what it can and cannot do. Its tools are `search_kb`, which calls `POST /internal/search` on the API, `point_at`, which sends a position to the browser preview, `handoff_to_human`, and `operate_computer`, which works through the desktop helper one approved step at a time. After each answer the agent calls `POST /internal/citations`. Both internal routes need `X-Internal-Token`. The agent loads no embedding model and does not talk to Qdrant.
 - `packages/rag` parses, chunks, embeds, and searches. Dense vectors are FastEmbed `google/embeddinggemma-300m`, sparse vectors are `Qdrant/bm25`, and a search abstains when the best dense score is under the threshold in `RetrievalSettings`. No reranker runs by default. Only the API process loads the models, with `KB_EMBED_THREADS` (2 in Compose) ONNX threads, and it embeds one passage at a time while indexing. A citation embeds only the answer and compares it with the vector stored for each passage. `docs/decisions/0006-lean-runtime.md` has the numbers.
 - `services/mcp` serves `search_kb` and `get_product` over stdio.
-- `apps/desktop` is a macOS helper that can click, type, press keys, and scroll when the agent calls it over LiveKit RPC. The agent has no tool that calls it yet.
+- `apps/desktop` is a macOS helper. Over LiveKit RPC it sends the agent screenshots, draws the agent's cursor on the real screen, and clicks, types, presses keys, and scrolls for the steps the user allows.
 - `evals` scores retrieval on the sample pages and holds the live answer and judge harness.
 
 ## Evals
@@ -189,7 +191,35 @@ The other commands need a key. They need `uv sync --all-packages --group dev` fi
 
 ## Desktop helper
 
-`apps/desktop` is a macOS program that joins a session room and performs mouse and keyboard actions over LiveKit RPC. It answers only the agent participant, and `--dry-run` logs actions without performing them. The agent does not call it yet. Setup, permissions, and the RPC contract are in `apps/desktop/README.md`.
+The agent can do a task on your Mac, such as opening a settings page, but only one step at a time and only after you allow each step in the session page. `apps/desktop` is the program on your Mac that does it.
+
+How a task runs:
+
+1. You ask the agent for help. It says what it would do and asks if that is okay.
+2. After you say yes, it calls `operate_computer`. The helper sends a screenshot of the main display, and `gemini-3.8-flash` Computer Use plans one step from it and from the product docs.
+3. The session page shows the step in an approval tray: Allow once, Allow for this task, or Stop. The agent cursor rings at the target on the preview and on your real screen. Nothing happens until you choose. After a minute without an answer the task stops.
+4. On your approval the helper performs the step, the cursor shows a click, and a new screenshot goes back to the model. This repeats until the task is done, you stop it, or ten steps pass.
+
+Every proposal, decision, and action is written to the audit log. A step that Gemini flags for confirmation always waits for you, even after Allow for this task. The agent takes decisions only from the participant who started the session.
+
+### First run
+
+You need macOS 14 or later, Python 3.12, uv, a running stack (see the Quickstart), and a product with a few documents.
+
+1. Start a session in the web app and share your entire screen. The agent can only act on the main display.
+2. Under the preview, the "Your Mac" panel says the Mac is not connected. Press Connect your Mac, then Copy command.
+3. In a terminal at the repository root, paste and run the command. Add `--dry-run` the first time: the helper then shows the screen and the cursor and logs each action without performing it.
+
+   ```bash
+   uv run --package kb-desktop kb-desktop --url <url> --token <token> --dry-run
+   ```
+
+4. The first run asks for Screen Recording and exits. Open System Settings > Privacy & Security > Screen & System Audio Recording, switch on that terminal app, quit and reopen the terminal, and get a fresh command (the token works for ten minutes).
+5. Run the command again. It prints `joined <room> as desktop:<your user id>`, and the panel says the Mac is connected.
+6. Say to the agent: "Can you open the Billing page for me?" It describes the step and asks. Say yes. The tray shows the step and the cursor rings at the target. Press Allow once. In dry-run the helper logs `dry run: Click(...) at point (x, y)` and nothing moves.
+7. To let it act for real, stop the helper with Ctrl-C, switch the same terminal on under System Settings > Privacy & Security > Accessibility, get a fresh command, and run it without `--dry-run`.
+
+Setup details, the RPC contract, and limits are in `apps/desktop/README.md`. The design is in `docs/decisions/0004-desktop-actions.md`.
 
 ## Development
 

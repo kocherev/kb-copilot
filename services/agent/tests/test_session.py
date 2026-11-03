@@ -27,10 +27,16 @@ def test_the_model_is_gemini_live_with_low_thinking_and_medium_frames(
 
 
 def test_the_session_subscribes_to_screen_video() -> None:
-    options = live.room_options()
+    options = live.room_options(None)
 
     assert options.get_video_input_options() is not None
     assert options.get_audio_input_options() is not None
+
+
+def test_the_session_listens_only_to_the_user_who_started_it() -> None:
+    """A desktop helper that joins before the user is never taken for them."""
+    assert live.room_options("user:abc").participant_identity == "user:abc"
+    assert not isinstance(live.room_options(None).participant_identity, str)
 
 
 def test_the_session_limit_defaults_and_rejects_nonsense() -> None:

@@ -1,11 +1,16 @@
 # pyright: reportMissingImports=false, reportAttributeAccessIssue=false
 # pyobjc is installed on macOS only and loads its names at run time.
-"""Post mouse and keyboard events with Quartz. The only macOS module."""
+"""Capture the screen and post mouse and keyboard events. macOS only, like
+overlay.py."""
 
 import ctypes
+import os
+import threading
 import time
 
 import Quartz
+import ScreenCaptureKit as SCK
+from Foundation import NSMutableData
 
 from kb_desktop.actions import (
     KEYCODES,
@@ -16,6 +21,7 @@ from kb_desktop.actions import (
     Key,
     Scroll,
     TypeText,
+    fit,
 )
 
 FLAGS = {
@@ -26,6 +32,7 @@ FLAGS = {
 }
 KEY_DELAY = 0.005
 HOVER_DELAY = 0.05
+CAPTURE_TIMEOUT = 10
 
 
 def accessibility_trusted() -> bool:
@@ -34,6 +41,70 @@ def accessibility_trusted() -> bool:
     )
     lib.AXIsProcessTrusted.restype = ctypes.c_bool
     return lib.AXIsProcessTrusted()
+
+
+def screen_recording_allowed() -> bool:
+    """Asks nothing. CGRequestScreenCaptureAccess is the call that prompts."""
+    return Quartz.CGPreflightScreenCaptureAccess()
+
+
+def ask_for_screen_recording() -> None:
+    """Adds this terminal to the Screen Recording list, switched off."""
+    Quartz.CGRequestScreenCaptureAccess()
+
+
+def png(image: object) -> bytes:
+    data = NSMutableData.data()
+    target = Quartz.CGImageDestinationCreateWithData(data, "public.png", 1, None)
+    Quartz.CGImageDestinationAddImage(target, image, None)
+    if not Quartz.CGImageDestinationFinalize(target):
+        raise RuntimeError("could not encode the screenshot")
+    return bytes(data)
+
+
+def capture(display: Display) -> bytes:
+    """The main display as a PNG, scaled down by fit, without this app's windows.
+
+    Blocks until ScreenCaptureKit answers, so call it from a worker thread.
+    """
+    width, height = fit(display.width, display.height)
+    done = threading.Event()
+    result: dict[str, object] = {}
+
+    def finish(image: object, error: object) -> None:
+        result.update(image=image, error=error)
+        done.set()
+
+    def with_content(content: object, error: object) -> None:
+        if content is None:
+            finish(None, error)
+            return
+        main = Quartz.CGMainDisplayID()
+        screen = next(d for d in content.displays() if d.displayID() == main)
+        # The agent cursor overlay is our own window. The model should not see it.
+        own = [
+            w
+            for w in content.windows()
+            if w.owningApplication() is not None
+            and w.owningApplication().processID() == os.getpid()
+        ]
+        only = SCK.SCContentFilter.alloc().initWithDisplay_excludingWindows_(
+            screen, own
+        )
+        config = SCK.SCStreamConfiguration.alloc().init()
+        config.setWidth_(width)
+        config.setHeight_(height)
+        config.setShowsCursor_(True)
+        SCK.SCScreenshotManager.captureImageWithFilter_configuration_completionHandler_(
+            only, config, finish
+        )
+
+    SCK.SCShareableContent.getShareableContentWithCompletionHandler_(with_content)
+    if not done.wait(CAPTURE_TIMEOUT):
+        raise RuntimeError("the screen capture did not answer")
+    if result["image"] is None:
+        raise RuntimeError(f"the screen capture failed: {result['error']}")
+    return png(result["image"])
 
 
 def main_display() -> Display:
