@@ -168,10 +168,10 @@ function ProductCard({
         </p>
       </div>
       <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 border-t border-border pt-3.5 text-meta text-muted-foreground tabular-nums">
-        <div className="flex items-center gap-1.5">
+        <div>
           <dt className="sr-only">Documents</dt>
-          <FileText aria-hidden className="size-3.5" />
-          <dd>
+          <dd className="flex items-center gap-1.5">
+            <FileText aria-hidden className="size-3.5" />
             {documentCount === 0
               ? "No documents yet"
               : documentCount === 1
@@ -179,10 +179,10 @@ function ProductCard({
                 : `${documentCount} documents`}
           </dd>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div>
           <dt className="sr-only">Last session</dt>
-          <Clock aria-hidden className="size-3.5" />
-          <dd>
+          <dd className="flex items-center gap-1.5">
+            <Clock aria-hidden className="size-3.5" />
             {lastSession === null ? (
               "No sessions yet"
             ) : (
