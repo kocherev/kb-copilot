@@ -2,7 +2,7 @@ import { CircleAlert, SearchX } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 
-import { SessionView } from "@/components/session-view";
+import { SessionStart } from "@/components/session-start";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Loading, Skeleton } from "@/components/ui/skeleton";
@@ -66,7 +66,7 @@ async function SessionRoute({
     );
   }
   return (
-    <SessionView
+    <SessionStart
       apiUrl={publicApiUrl()}
       productId={loaded.product.id}
       productName={loaded.product.name}
