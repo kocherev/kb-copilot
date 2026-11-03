@@ -4,6 +4,7 @@ import type { components, paths } from "@/lib/api/schema";
 
 export type ApiClient = Client<paths>;
 export type Product = components["schemas"]["Product"];
+export type ProductSummary = components["schemas"]["ProductSummary"];
 export type ProductWrite = components["schemas"]["ProductWrite"];
 export type SessionGrant = components["schemas"]["SessionGrant"];
 export type SessionSummary = components["schemas"]["SessionSummary"];

@@ -1,16 +1,20 @@
 import asyncio
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from kb_api.db import LiveSessionRow
 from kb_api.jobs import get_qdrant, requeue_interrupted
 from kb_rag import KB_COLLECTION
 from kb_rag.sources import MAX_BYTES
 from kb_rag.testing import HASH_SETTINGS
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy import Engine, text
+from sqlalchemy.orm import Session
 
 PRODUCT = {
     "name": "Acme",
@@ -174,6 +178,33 @@ def test_deleting_a_document_removes_its_row_and_chunks(
     assert {chunk["source"] for chunk in stored(qdrant, product)} == {"upload://b.md"}
     again = http.delete(f"{path}/{documents['a.md']['id']}", headers=headers)
     assert again.status_code == 404
+
+
+def test_the_product_list_counts_documents_and_dates_the_last_session(
+    http: TestClient,
+    as_user,
+    product: str,
+    qdrant: AsyncQdrantClient,
+    sync_engine: Engine,
+) -> None:
+    headers = as_user()
+    ingest(http, headers, product, ("a.md", NOTES), ("b.md", NOTES))
+    with Session(sync_engine) as db:
+        for day in (2, 1):
+            db.add(
+                LiveSessionRow(
+                    org_id="org-a",
+                    product_id=UUID(product),
+                    room=f"kb-{day}",
+                    created_at=datetime(2026, 11, day, 10, tzinfo=UTC),
+                )
+            )
+        db.commit()
+
+    [listed] = http.get("/products", headers=headers).json()
+
+    assert listed["document_count"] == 2
+    assert listed["last_session_at"].startswith("2026-11-02T10:00:00")
 
 
 def test_deleting_a_product_removes_its_chunks(

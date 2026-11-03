@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { connection } from "next/server";
 import { cache } from "react";
 
-import { apiClient, publicApiUrl, type ApiClient, type Product } from "@/lib/api/client";
+import { apiClient, publicApiUrl, type ApiClient, type ProductSummary } from "@/lib/api/client";
 import { auth } from "@/lib/auth";
 import { productLoad, type ProductLoad } from "@/lib/product";
 import { replayLoad, type ReplayLoad } from "@/lib/replay";
@@ -50,7 +50,7 @@ export async function loadReplay(id: string): Promise<ReplayLoad> {
   }
 }
 
-export async function loadProducts(): Promise<Product[] | null> {
+export async function loadProducts(): Promise<ProductSummary[] | null> {
   try {
     const api = await serverApi();
     const { data } = await api.GET("/products");
