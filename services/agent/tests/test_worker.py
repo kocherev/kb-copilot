@@ -144,3 +144,7 @@ def test_an_error_waits_for_someone_to_join_before_it_is_sent() -> None:
     asyncio.run(run())
 
     assert room.sent[0][0] == AGENT_ERROR_TOPIC
+
+
+def test_the_worker_keeps_one_warm_job_process_not_one_per_cpu() -> None:
+    assert worker.server._num_idle_processes == 1  # pyright: ignore[reportPrivateUsage]

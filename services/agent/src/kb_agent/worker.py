@@ -36,7 +36,10 @@ from kb_agent.session import (
 from kb_agent.support import SupportAgent
 
 LISTENER_WAIT_SECONDS = 30
-server = AgentServer()
+# LiveKit keeps one warm job process per CPU by default, 8 in the Docker VM.
+# Each one holds the livekit and Gemini libraries, about 1.1 GiB together while
+# no session runs. One warm process starts the next session at once.
+server = AgentServer(num_idle_processes=1)
 # The loop keeps only weak references to tasks, so hold them until they finish.
 _running: set[asyncio.Task[None]] = set()
 
