@@ -1,11 +1,13 @@
 "use client";
 
-import Link from "next/link";
-import { useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
+import { InlineError } from "@/components/ui/inline-error";
+import { InlineStatus } from "@/components/ui/inline-status";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   browserApi,
@@ -15,8 +17,36 @@ import {
 } from "@/lib/api/client";
 import { emptyDraft, voices } from "@/lib/product";
 
-const linkClass =
-  "underline underline-offset-4 [overflow-wrap:anywhere] focus-visible:[outline:var(--hui-focus-ring)] focus-visible:outline-offset-[var(--hui-focus-ring-offset-accent)]";
+// A button label that swaps to a spinner and a pending label without the
+// button changing width: both labels share one grid cell and the wider one
+// sizes it.
+export function PendingLabel({
+  pending,
+  label,
+  pendingLabel,
+}: {
+  pending: boolean;
+  label: ReactNode;
+  pendingLabel: string;
+}) {
+  return (
+    <span className="grid place-items-center">
+      <span
+        aria-hidden={pending}
+        className={`col-start-1 row-start-1 inline-flex items-center gap-2 ${pending ? "invisible" : ""}`}
+      >
+        {label}
+      </span>
+      <span
+        aria-hidden={!pending}
+        className={`col-start-1 row-start-1 inline-flex items-center gap-2 ${pending ? "" : "invisible"}`}
+      >
+        <Spinner />
+        {pendingLabel}
+      </span>
+    </span>
+  );
+}
 
 const fields: {
   key: keyof ProductWrite;
@@ -30,12 +60,18 @@ const fields: {
   {
     key: "description",
     label: "Description",
-    hint: "One paragraph.",
+    hint: "One paragraph about what the product does.",
     multiline: true,
     maxLength: 2000,
     rows: 3,
   },
-  { key: "tone", label: "Tone", multiline: false, maxLength: 200 },
+  {
+    key: "tone",
+    label: "Tone",
+    hint: "How the agent should sound, such as “calm and brief”.",
+    multiline: false,
+    maxLength: 200,
+  },
   {
     key: "refusal_rules",
     label: "Refusal rules",
@@ -77,7 +113,6 @@ export function ProductForm({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, setPending] = useState(false);
-  const [created, setCreated] = useState<Product | null>(null);
   const resetAfterHide = useRef(false);
 
   useLayoutEffect(() => {
@@ -89,7 +124,6 @@ export function ProductForm({
       setDraft(emptyDraft);
       setError(null);
       setSaved(false);
-      setCreated(null);
     };
   }, []);
 
@@ -100,6 +134,9 @@ export function ProductForm({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) {
+      return;
+    }
     setPending(true);
     setError(null);
     setSaved(false);
@@ -117,16 +154,15 @@ export function ProductForm({
           })
         : await api.POST("/products", { body });
       if (product === undefined) {
-        setError(errorDetail(error, "Could not save the product."));
+        setError(errorDetail(error, "Couldn’t save the product. Check your connection and try again."));
         return;
       }
       setDraft(writable(product));
-      setCreated(product);
       setSaved(true);
       resetAfterHide.current = productId === undefined;
       onSaved?.(product);
     } catch {
-      setError("Could not save the product.");
+      setError("Couldn’t save the product. Check your connection and try again.");
     } finally {
       setPending(false);
     }
@@ -149,7 +185,7 @@ export function ProductForm({
               {field.label}
             </label>
             {field.hint ? (
-              <p id={hintId} className="text-pretty text-sm leading-6 text-muted-foreground">
+              <p id={hintId} className="-mt-1 text-meta text-pretty text-muted-foreground">
                 {field.hint}
               </p>
             ) : null}
@@ -202,24 +238,17 @@ export function ProductForm({
           ))}
         </Select>
       </div>
-      {error ? (
-        <p role="alert" className="text-pretty text-sm leading-6 text-destructive">
-          {error}
-        </p>
-      ) : null}
-      {saved ? (
-        <p role="status" className="text-sm text-foreground">
-          Saved
-        </p>
-      ) : null}
-      {!productId && created ? (
-        <Link className={linkClass} href={`/products/${created.id}`}>
-          Open {created.name}
-        </Link>
-      ) : null}
-      <Button type="submit" disabled={pending}>
-        {submitLabel}
-      </Button>
+      {error ? <InlineError>{error}</InlineError> : null}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <Button type="submit" aria-disabled={pending}>
+          <PendingLabel
+            pending={pending}
+            label={submitLabel}
+            pendingLabel={productId ? "Saving…" : "Creating product…"}
+          />
+        </Button>
+        <InlineStatus tone="success">{saved ? "Saved" : null}</InlineStatus>
+      </div>
     </form>
   );
 }
