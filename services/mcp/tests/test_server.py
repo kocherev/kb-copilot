@@ -8,12 +8,12 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import pytest
-from kb_mcp.server import build_server
-from kb_rag.pipeline import index_sources
-from kb_rag.sources import Source, iter_documents, read_source
+from kb_mcp.server import build_server, qdrant_from_env
+from kb_rag import Source, index_sources, read_directory
+from kb_rag.testing import HASH_SETTINGS
 from mcp import Client, StdioServerParameters
 from mcp.server import MCPServer
-from qdrant_client import QdrantClient
+from qdrant_client import AsyncQdrantClient
 
 DEMO = Path(__file__).resolve().parents[3] / "demo" / "docs"
 REFUND_QUESTION = "How long do refunds take?"
@@ -35,25 +35,25 @@ def _run(server: MCPServer, call):
     return asyncio.run(run())
 
 
-def _indexed() -> QdrantClient:
-    client = QdrantClient(":memory:")
-    index_sources(
-        client,
-        "demo",
-        [read_source(path) for path in iter_documents(DEMO)],
-    )
-    index_sources(
-        client,
-        "other",
-        [
-            Source(
-                source_url="file:///docs/zephyr.md",
-                text="Zephyr ships on Friday.",
-                markdown=False,
-            )
-        ],
-    )
-    return client
+def _indexed() -> AsyncQdrantClient:
+    async def build() -> AsyncQdrantClient:
+        client = AsyncQdrantClient(":memory:")
+        await index_sources(
+            client, "demo", read_directory(DEMO), settings=HASH_SETTINGS
+        )
+        await index_sources(
+            client,
+            "other",
+            [
+                Source(
+                    source="zephyr.md", text="Zephyr ships on Friday.", markdown=False
+                )
+            ],
+            settings=HASH_SETTINGS,
+        )
+        return client
+
+    return asyncio.run(build())
 
 
 def _text(result: object) -> str:
@@ -99,7 +99,7 @@ def api_url() -> Iterator[str]:
 @pytest.fixture
 def server(api_url: str) -> MCPServer:
     qdrant = _indexed()
-    return build_server(lambda: qdrant, api_url)
+    return build_server(lambda: qdrant, api_url, HASH_SETTINGS)
 
 
 def test_client_lists_search_kb_and_get_product(server: MCPServer) -> None:
@@ -128,19 +128,36 @@ def test_search_kb_returns_a_demo_billing_passage(server: MCPServer) -> None:
     assert result.is_error is False
     body = result.structured_content
     assert body is not None
-    assert any("billing.md" in source for source in body["sources"])
-    assert any("5 business days" in chunk["text"] for chunk in body["chunks"])
-    assert "5 business days" in _text(result)
+    assert body["abstained"] is False
+    assert "billing/refunds.md" in body["sources"]
+    assert all(chunk["text"] and 0 < chunk["score"] <= 1 for chunk in body["chunks"])
     assert "zephyr.md" not in _text(result)
-    assert all(chunk["text"] for chunk in body["chunks"])
+    assert all(
+        not chunk["source"].startswith(("/", "file:")) for chunk in body["chunks"]
+    )
 
 
-def test_search_kb_wrong_or_empty_product_returns_no_other_chunks(
+def test_search_kb_abstains_on_a_question_the_docs_do_not_cover(
+    server: MCPServer,
+) -> None:
+    result = _run(
+        server,
+        lambda client: client.call_tool(
+            "search_kb",
+            {"query": OTHER_QUESTION, "product_id": "demo"},
+        ),
+    )
+
+    assert result.is_error is False
+    assert result.structured_content == {"chunks": [], "sources": [], "abstained": True}
+
+
+def test_search_kb_wrong_or_empty_product_is_a_tool_error(
     server: MCPServer,
 ) -> None:
     async def calls(client: Client):
         found = []
-        for product_id in ("", " ", "missing"):
+        for product_id in ("", " ", "a/b", "missing"):
             found.append(
                 await client.call_tool(
                     "search_kb",
@@ -152,12 +169,12 @@ def test_search_kb_wrong_or_empty_product_returns_no_other_chunks(
     results = _run(server, calls)
 
     for result in results:
-        assert result.is_error is False
-        assert result.structured_content == {"chunks": [], "sources": []}
+        assert result.is_error is True
+        assert result.structured_content is None
         text = _text(result)
         assert "Zephyr" not in text
-        assert "zephyr.md" not in text
         assert "5 business days" not in text
+    assert "no indexed documents" in _text(results[-1])
 
 
 def test_get_product_returns_the_stored_config(server: MCPServer) -> None:
@@ -194,7 +211,11 @@ def test_stdio_client_lists_the_same_tools() -> None:
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "kb_mcp"],
-        env={"QDRANT_URL": "http://127.0.0.1:1", "API_URL": "http://127.0.0.1:1"},
+        env={
+            "QDRANT_URL": "http://127.0.0.1:1",
+            "QDRANT_API_KEY": "test-key",
+            "API_URL": "http://127.0.0.1:1",
+        },
     )
 
     async def listed() -> set[str]:
@@ -203,3 +224,15 @@ def test_stdio_client_lists_the_same_tools() -> None:
             return {tool.name for tool in result.tools}
 
     assert asyncio.run(listed()) == {"search_kb", "get_product"}
+
+
+def test_qdrant_client_reads_the_url_and_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("QDRANT_URL", "https://qdrant.example:6333")
+    monkeypatch.setenv("QDRANT_API_KEY", "test-key")
+
+    options = qdrant_from_env().init_options
+
+    assert options["url"] == "https://qdrant.example:6333"
+    assert options["api_key"] == "test-key"

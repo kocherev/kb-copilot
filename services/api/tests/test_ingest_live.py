@@ -1,11 +1,12 @@
+import asyncio
 import os
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from kb_api.main import app
-from kb_rag.pipeline import KB_COLLECTION
-from qdrant_client import QdrantClient
+from kb_rag import KB_COLLECTION
+from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -47,22 +48,25 @@ def test_live_demo_folder_reaches_qdrant_and_postgres(
     assert fetched.json()["status"] == "indexed"
     assert fetched.json()["chunk_count"] == body["chunk_count"]
 
-    qdrant = QdrantClient(url=os.environ["QDRANT_URL"])
-    points, _offset = qdrant.scroll(
-        collection_name=KB_COLLECTION,
-        scroll_filter=Filter(
-            must=[FieldCondition(key="product_id", match=MatchValue(value="livedemo"))]
-        ),
-        with_payload=True,
-        with_vectors=True,
-        limit=50,
+    qdrant = AsyncQdrantClient(url=os.environ["QDRANT_URL"])
+    points, _offset = asyncio.run(
+        qdrant.scroll(
+            collection_name=KB_COLLECTION,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="product_id", match=MatchValue(value="livedemo"))
+                ]
+            ),
+            with_payload=True,
+            with_vectors=True,
+            limit=500,
+        )
     )
     assert len(points) == body["chunk_count"]
     assert points
     for point in points:
         assert point.payload is not None
         assert point.payload["product_id"] == "livedemo"
-        assert str(point.payload["source_url"]).startswith("file:")
+        assert not str(point.payload["source"]).startswith(("/", "file:"))
         assert isinstance(point.vector, dict)
-        assert "dense" in point.vector
-        assert "bm25" in point.vector
+        assert set(point.vector) == {"dense", "sparse"}

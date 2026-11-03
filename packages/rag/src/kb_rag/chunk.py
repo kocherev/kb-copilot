@@ -1,47 +1,59 @@
 import re
+from dataclasses import dataclass
 
-from llama_index.core import Document
-from llama_index.core.node_parser import MarkdownNodeParser
-
+_HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*#*$")
 _SENTENCE = re.compile(r"(?<=[.!?])\s+")
+MAX_WORDS = 120
 
 
-def markdown_sections(text: str) -> list[str]:
-    nodes = MarkdownNodeParser().get_nodes_from_documents([Document(text=text)])
-    sections = [
-        node.get_content().strip() for node in nodes if node.get_content().strip()
-    ]
-    if sections:
-        return sections
-    stripped = text.strip()
-    return [stripped] if stripped else []
+@dataclass(frozen=True)
+class Chunk:
+    title: str
+    anchor: str
+    text: str
 
 
-def sentence_windows(text: str, radius: int = 1) -> list[str]:
-    sentences = [part.strip() for part in _SENTENCE.split(text.strip()) if part.strip()]
-    if not sentences:
-        return []
-    windows: list[str] = []
-    seen: set[str] = set()
-    for index in range(len(sentences)):
-        start = max(0, index - radius)
-        end = min(len(sentences), index + radius + 1)
-        window = " ".join(sentences[start:end])
-        if window not in seen:
-            seen.add(window)
-            windows.append(window)
-    return windows
+def slug(heading: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", heading.lower()).strip("-")
 
 
-def chunk_text(text: str, *, markdown: bool) -> list[str]:
-    sections = markdown_sections(text) if markdown else [text.strip()]
-    chunks: list[str] = []
-    seen: set[str] = set()
-    for section in sections:
-        if not section.strip():
-            continue
-        for window in sentence_windows(section):
-            if window not in seen:
-                seen.add(window)
-                chunks.append(window)
+def chunk_text(text: str, *, markdown: bool, title: str) -> list[Chunk]:
+    sections = _markdown_sections(text, title) if markdown else [(title, "", text)]
+    chunks: list[Chunk] = []
+    for heading, anchor, body in sections:
+        for window in _windows(body):
+            chunks.append(Chunk(title=heading, anchor=anchor, text=window))
     return chunks
+
+
+def _markdown_sections(text: str, title: str) -> list[tuple[str, str, str]]:
+    sections: list[tuple[str, str, str]] = []
+    heading, anchor, body = title, "", []
+    for line in text.splitlines():
+        found = _HEADING.match(line.strip())
+        if found is None:
+            body.append(line)
+            continue
+        sections.append((heading, anchor, "\n".join(body)))
+        heading = found.group(1)
+        anchor = slug(heading)
+        body = []
+    sections.append((heading, anchor, "\n".join(body)))
+    return sections
+
+
+def _windows(body: str) -> list[str]:
+    sentences = [part for part in _SENTENCE.split(" ".join(body.split())) if part]
+    windows: list[str] = []
+    current: list[str] = []
+    words = 0
+    for sentence in sentences:
+        size = len(sentence.split())
+        if current and words + size > MAX_WORDS:
+            windows.append(" ".join(current))
+            current, words = [], 0
+        current.append(sentence)
+        words += size
+    if current:
+        windows.append(" ".join(current))
+    return windows

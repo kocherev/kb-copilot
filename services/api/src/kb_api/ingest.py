@@ -4,16 +4,15 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from kb_rag.index import collection_name
-from kb_rag.pipeline import index_sources
-from kb_rag.sources import (
+from kb_rag import (
+    DEFAULT_SETTINGS,
+    RetrievalSettings,
     Source,
-    check_upload,
-    iter_documents,
-    read_source,
-    source_from_bytes,
+    index_sources,
+    validate_product_id,
 )
-from qdrant_client import QdrantClient
+from kb_rag.sources import check_upload, iter_documents, read_source, source_from_bytes
+from qdrant_client import AsyncQdrantClient
 from starlette.datastructures import UploadFile
 
 from kb_api.jobs import IngestJob, JobStore, PostgresJobStore
@@ -28,12 +27,16 @@ def get_job_store() -> JobStore:
     return store
 
 
-def get_qdrant() -> QdrantClient:
+def get_qdrant() -> AsyncQdrantClient:
     settings = load_settings()
-    return QdrantClient(
+    return AsyncQdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key or None,
     )
+
+
+def get_retrieval_settings() -> RetrievalSettings:
+    return DEFAULT_SETTINGS
 
 
 def resolve_directory(data_root: str, directory: str) -> Path:
@@ -51,11 +54,12 @@ def resolve_directory(data_root: str, directory: str) -> Path:
     return candidate
 
 
-def run_ingest(
+async def run_ingest(
     store: JobStore,
-    qdrant: QdrantClient,
+    qdrant: AsyncQdrantClient,
     product_id: str,
     load_sources: Callable[[], list[Source]],
+    settings: RetrievalSettings = DEFAULT_SETTINGS,
 ) -> IngestJob:
     job = IngestJob(
         id=uuid4(),
@@ -73,7 +77,9 @@ def run_ingest(
         sources = load_sources()
         if not sources:
             raise ValueError("no supported documents")
-        job.chunk_count = index_sources(qdrant, product_id, sources)
+        job.chunk_count = await index_sources(
+            qdrant, product_id, sources, settings=settings
+        )
     except Exception as exc:
         job.status = "failed"
         job.error = str(exc)
@@ -104,7 +110,7 @@ async def loader_from_request(request: Request) -> Callable[[], list[Source]]:
             raise ValueError("directory has no supported documents")
 
         def load_directory() -> list[Source]:
-            return [read_source(path) for path in paths]
+            return [read_source(path, folder) for path in paths]
 
         return load_directory
 
@@ -134,17 +140,18 @@ async def create_documents(
     product_id: str,
     request: Request,
     store: JobStore = Depends(get_job_store),
-    qdrant: QdrantClient = Depends(get_qdrant),
+    qdrant: AsyncQdrantClient = Depends(get_qdrant),
+    settings: RetrievalSettings = Depends(get_retrieval_settings),
 ) -> IngestJob:
     try:
-        collection_name(product_id)
+        validate_product_id(product_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         load_sources = await loader_from_request(request)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return run_ingest(store, qdrant, product_id.strip(), load_sources)
+    return await run_ingest(store, qdrant, product_id.strip(), load_sources, settings)
 
 
 @router.get("/ingest-jobs/{job_id}")

@@ -4,7 +4,6 @@ version = "0.0.0"
 description = "MCP server for knowledge base search and product config."
 requires-python = ">=3.12"
 dependencies = [
-  "kb-agent",
   "kb-rag",
   "mcp>=2.3,<3",
 ]
@@ -13,7 +12,6 @@ dependencies = [
 kb-mcp = "kb_mcp.server:main"
 
 [tool.uv.sources]
-kb-agent = { workspace = true }
 kb-rag = { workspace = true }
 
 [build-system]

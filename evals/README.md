@@ -1,33 +1,83 @@
 # Evals
 
-Offline checks for the demo knowledge base. `make eval` indexes `demo/docs`, answers each row in `evals/datasets/demo.jsonl`, and prints hit@k, MRR, citation rate, and faithfulness. The command exits with status 1 when a score is below `evals/thresholds.json`.
+Offline retrieval checks for the sample docs, a bakeoff of retrieval configs, and a live LLM judge harness. Only the offline checks run in CI.
 
 ## Run
 
 From the repository root, after `uv sync --all-packages --group dev`:
 
 ```bash
-make eval
+make eval        # offline gate, prints the table, exits 1 under threshold
+make bakeoff     # every candidate config, quality and latency
 ```
 
-The eval job in `.github/workflows/ci.yml` runs the same command. It does not call a paid model. Dense vectors are the local hash in `packages/rag`. When retrieval returns a passage, the spoken text is the `answer` field for that row. When retrieval returns nothing, the spoken text is `That is not in the docs.`
+`make eval` indexes `demo/docs` into an in-memory Qdrant with `kb_rag` and its default settings, runs every row of `evals/datasets/v1.jsonl` through `kb_rag.search`, and scores what comes back. It needs no Docker and no key. It takes about a minute on an idle laptop and 3 minutes at load average 110. The first run downloads the FastEmbed models, about 1.2 GB. Set `FASTEMBED_CACHE_PATH` to keep them in one place.
 
-## Dataset
+`uv run python -m kb_evals --config hash-baseline` scores the retrieval that shipped before FastEmbed against the same gate. It fails.
 
-`evals/datasets/demo.jsonl` holds one JSON object per line. Each object has `id`, `question`, `answer`, `facts`, and `sources`. A `sources` entry is a path under `demo/docs`. An empty `sources` list is an out-of-KB question. Its answer is `That is not in the docs.`, and the run must not cite a file.
+## Data
 
-The pages in `demo/docs` are original sample text written for this repository. They use the MIT license in `LICENSE`. Each in-KB question keeps a content word from its source page, because the offline dense vector is a token hash.
+`demo/docs` has 46 pages and a short README, all indexed, for Northstar Desk, a fictional help-desk product: Markdown, HTML, and one PDF built by `evals/scripts/make_pdf.py`. Three pages under `community/` contain prompt-injection text. `evals/datasets/README.md` describes the 152 rows, the ten categories, and how they were written.
+
+A follow-up row is searched as its earlier turns followed by its question. There is no query rewriter offline.
 
 ## Metrics
 
-Retrieval calls `search_kb` in the agent. That helper calls the hybrid query in `packages/rag`. `k` comes from `evals/thresholds.json` and is passed to `search_kb`. The checked-in value is 5, the default limit of that search.
+`k` is 5, from `evals/thresholds.json`, against 46 documents. A passage matches an expected source when the file matches and, if the source has `#anchor`, the section anchor matches too.
 
-hit@k follows the LlamaIndex hit rate. The score is 1 when any expected source is in the top k retrieved sources. Otherwise it is 0. MRR is the mean of the per-question reciprocal ranks. A rank starts at 1, so the first matching source scores 1 and the second scores 0.5. No match scores 0. For an out-of-KB row, both scores are 1 when retrieval returns no passage, and 0 when it returns any passage. LlamaIndex's own hit rate and MRR require a non-empty expected id list, so the empty-list case is this harness's abstention rule.
+| Metric | Rows | Definition |
+| --- | --- | --- |
+| `recall@k` | rows with expected sources | Share of expected sources matched in the top k. |
+| `mrr` | same | 1 / rank of the first matching passage, 0 when none. |
+| `ctx_prec` | same | Share of the top k passages that match an expected source. One page usually holds the answer, so this stays well below 1. |
+| `facts` | rows with required facts | Share of required facts found word for word, ignoring case, in the top k passage text. |
+| `abstain` | every row | Share of rows where search abstained. Shown per category. |
+| `abstention_precision` / `abstention_recall` | held-out rows retrieval owns | Positives are off-topic and out-of-scope rows. Negatives are rows with an expected source. Underspecified rows count as neither. |
+| `inj_safe` | every row | Share of rows whose first passage is not a poisoned page. The gate counts injection rows too. |
 
-Citation rate is 1 when an in-KB answer includes a `Source:` line for an expected path. The line is the same suffix the agent appends in a transcript. For an out-of-KB row the score is 1 only when the answer has no `Source:` line.
+An abstained search returns no passages, so a grounded row that abstains scores 0 on recall, MRR, precision, and facts.
 
-Faithfulness does not call a model. Citation lines are ignored. The sentence `That is not in the docs.` is faithful only when no passage was retrieved. Every other sentence is faithful when its text, without the final period, appears in the retrieved passages. Whitespace is collapsed before the comparison. A number copied from a different sentence in the same passage does not pass. The case score is the fraction of sentences that pass. The printed score is the mean over the dataset.
+### Who catches an unanswerable question
+
+| Category | Owner | Expected from retrieval |
+| --- | --- | --- |
+| `off_topic`, `unanswerable_out_of_scope` | retrieval | Abstain when the best score is a clear miss. |
+| `unanswerable_false_premise`, `unanswerable_partial` | answer | Return the page that corrects or covers it. The model refuses or corrects. |
+| `unanswerable_underspecified` | answer | Not scored. The model asks a clarifying question. |
+
+The `owner` column in the printout shows this. Answer-layer rows are checked by the live `refusal` judge, not by the offline gate.
+
+### Held-out split
+
+The abstain threshold is calibrated on half the rows and scored on the other half. Within each category, ids are ordered by `sha256("kb-evals-v1:<id>")`; the first half calibrates and the second half is held out (`held_out` in `dataset.py`). Abstention precision and recall in the gate come from the held-out half only.
+
+The printout also gives p50 and p95 search latency, measured inside `kb_rag.search`. It moves with machine load.
 
 ## Thresholds
 
-`evals/thresholds.json` stores `k` and the minimum mean for `hit_at_k`, `mrr`, `citation_rate`, and `faithfulness`. CI fails when `make eval` reports a lower score.
+`evals/thresholds.json` holds `k` and a floor for each gated metric: the measured score of the default config, rounded down, minus about 0.02. A floor is never 1.0. When retrieval gets better, raise the floors from a new printout. Never type a score by hand.
+
+When the gate fails, the printout lists every case that missed: wrong abstain decision, recall under 1, or a poisoned page ranked first.
+
+## Bakeoff
+
+`make bakeoff` runs the hash baseline and every combination of three dense models, two sparse models, and three rerank choices; `--dense`, `--sparse`, and `--rerank` narrow it. Index cost is shared per dense and sparse pair. For each config the threshold (`cut`) is the cutoff with the lowest cost on the calibration half, where a wrong refusal of a grounded row costs 10 and a missed abstention costs 1. `raw_rec` and `raw_para` are recall before the cutoff, so the price of abstaining is visible. The hash baseline uses `kb_rag.testing` and never abstains. Results and the choice are in `docs/decisions/0001-retrieval.md`.
+
+## Live judges
+
+`evals/src/kb_evals/judge.py` has four binary judges, one per failure mode:
+
+| Judge | Pass when |
+| --- | --- |
+| `faithful` | Every claim in the answer is supported by the retrieved passages. |
+| `correct` | The answer states every required fact and does not contradict the reference. |
+| `refusal` | The answer says `That is not in the docs.` exactly when the row expects that refusal. |
+| `citation` | The passages the answer cites support it. |
+
+```bash
+ANTHROPIC_API_KEY=... make eval-live ANSWERS=path/to/answers.jsonl
+```
+
+The answers file has one `{"id", "answer", "cited_passage_ids"}` object per line. Passage ids are the stable point ids `kb_rag` returns. The run writes `evals/runs/<date>-<short sha>.jsonl` with each verdict, its reason, the model id, and the prompt version. The model is `claude-sonnet-5-5` unless `KB_JUDGE_MODEL` is set. `evals/runs/` is ignored by git.
+
+`make judge-calibrate` compares a run with human labels. The label format is in `evals/labels/README.md`. Why the judges look like this is in `docs/decisions/0002-evals.md`.

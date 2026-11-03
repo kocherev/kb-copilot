@@ -84,6 +84,8 @@ jobs:
 
   evals:
     runs-on: ubuntu-latest
+    env:
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.cache/fastembed
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.3
@@ -92,6 +94,12 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --frozen --all-packages --group dev
+      # The key hashes the file that names the default models, so a model
+      # change downloads once and later runs reuse the weights.
+      - uses: actions/cache@v4
+        with:
+          path: .cache/fastembed
+          key: fastembed-${{ hashFiles('packages/rag/src/kb_rag/models.py') }}
       - run: make eval
 
   compose:
@@ -103,6 +111,9 @@ jobs:
 
   smoke:
     runs-on: ubuntu-latest
+    env:
+      FASTEMBED_CACHE_PATH: ${{ github.workspace }}/.cache/fastembed
+      FASTEMBED_CACHE_DIR: ./.cache/fastembed
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v10.3.3
@@ -111,6 +122,16 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --frozen --all-packages --group dev
+      - uses: actions/cache@v4
+        with:
+          path: .cache/fastembed
+          key: fastembed-${{ hashFiles('packages/rag/src/kb_rag/models.py') }}
+      # Download the default models on the runner so the API container reads
+      # them from the bind mount instead of fetching 1.2 GB during the smoke.
+      - name: Warm the model cache
+        run: |
+          uv run python -c "from kb_rag.models import DEFAULT_SETTINGS as s; s.dense.query('warm'); s.sparse.query('warm')"
+          chmod -R a+rwX .cache/fastembed
       - name: Use the dev LiveKit key pair and throwaway auth secrets
         run: |
           cp .env.example .env

@@ -49,6 +49,9 @@ services:
       context: .
       dockerfile: services/api/Dockerfile
     restart: unless-stopped
+    volumes:
+      # Models download once and survive restarts. CI points this at its cache.
+      - ${FASTEMBED_CACHE_DIR:-fastembed}:/home/app/.cache/fastembed
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kb}:${POSTGRES_PASSWORD:-replace-me}@postgres:5432/${POSTGRES_DB:-kb}
       # The API verifies Better Auth JWTs against the web app's key set.
@@ -127,6 +130,9 @@ services:
     build:
       context: .
       dockerfile: services/agent/Dockerfile
+    volumes:
+      # Models download once and survive restarts. CI points this at its cache.
+      - ${FASTEMBED_CACHE_DIR:-fastembed}:/home/app/.cache/fastembed
     environment:
       # Browser-facing LIVEKIT_URL stays on the API. The agent uses the URL it can reach.
       LIVEKIT_URL: ${LIVEKIT_AGENT_URL:-${LIVEKIT_URL:-ws://localhost:7880}}
@@ -160,3 +166,4 @@ services:
 volumes:
   postgres-data:
   qdrant-data:
+  fastembed:
