@@ -32,6 +32,8 @@ The browser publishes the microphone and the screen, not the camera. `sessionPub
 
 `point_at(x, y, label)` publishes a `hud` message. The page draws it inside the video's rendered picture. It does not move the pointer.
 
+The agent does not act on the user's computer. `apps/desktop` and `POST /sessions/{room}/desktop-token` exist, and no tool on `SupportAgent` calls the helper. A tool that does needs the per-action approval described in `docs/decisions/0004-desktop-actions.md`.
+
 ## Data channel
 
 The names live in `protocol.py` and `protocol.ts`. Payloads are Pydantic models in Python and type guards in TypeScript.

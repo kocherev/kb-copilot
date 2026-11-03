@@ -13,9 +13,9 @@ description: >
 
 `SUPPORTED_SUFFIXES` are `.md`, `.markdown`, `.txt`, `.html`, `.htm`, and `.pdf`. A file over `MAX_BYTES` (2_000_000) is rejected. Hidden path segments are skipped.
 
-`read_source(path, root)` stores the path relative to `root`. An upload stores `upload://<name>`. `index_sources` rejects an absolute path or a `file:` URI. HTML h1 to h3 become markdown headings.
+`read_source(path, root)` stores the path relative to `root`. `read_directory` is for the evals and the selfcheck. The API has no directory ingest. It takes multipart uploads, and `check_upload` accepts a single plain file name with a supported suffix under `MAX_BYTES`. `source_from_bytes` stores it as `upload://<name>`. `index_sources` rejects a source that is an absolute path, contains `..` or a backslash, or has a scheme other than `upload://`. HTML h1 to h3 become markdown headings.
 
-The API refuses a `directory` that resolves outside `KB_DATA_ROOT`. That check stays in `services/api`.
+The API queues each upload in Postgres and indexes it in a background loop (`services/api/src/kb_api/jobs.py`). A document is `queued`, `indexing`, then `indexed` or `failed`. A retrieval change that alters what is stored needs the documents uploaded again.
 
 ## Chunks
 
@@ -41,3 +41,5 @@ make bakeoff   # when a model or the threshold changes
 ```
 
 Update `evals/thresholds.json` and the README table from the printout. Do not invent a score.
+
+The first run downloads about 1.2 GB of FastEmbed models. In Compose the `api` and `agent` containers share them in the `fastembed` volume.
