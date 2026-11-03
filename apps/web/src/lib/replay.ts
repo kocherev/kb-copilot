@@ -1,5 +1,8 @@
 import { errorDetail, type Replay, type SessionSummary, type Turn } from "@/lib/api/client";
 
+type DesktopAction = Replay["actions"][number];
+type Handoff = Replay["handoffs"][number];
+
 export type ReplayLoad =
   | { status: "ready"; replay: Replay }
   | { status: "missing" }
@@ -85,13 +88,52 @@ export function countLabel(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-export function summaryLine(session: SessionSummary): string {
+// What a session list row says about a session. Counts of nothing are left out,
+// except turns, which tell an empty session apart.
+export function sessionFacts(session: SessionSummary): string[] {
   return [
     ...(session.ended_at ? [formatDuration(session.created_at, session.ended_at)] : []),
     countLabel(session.turn_count, "turn"),
-    countLabel(session.action_count, "action"),
-    countLabel(session.handoff_count, "handoff"),
-  ].join(", ");
+    ...(session.action_count ? [countLabel(session.action_count, "desktop action")] : []),
+    ...(session.handoff_count ? [countLabel(session.handoff_count, "handoff")] : []),
+  ];
+}
+
+export function median(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+  const sorted = values.toSorted((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[middle]!
+    : Math.round((sorted[middle - 1]! + sorted[middle]!) / 2);
+}
+
+export type TimelineItem =
+  | { kind: "turn"; at: string; turn: Turn; number: number }
+  | { kind: "task"; at: string; steps: DesktopAction[] }
+  | { kind: "handoff"; at: string; handoff: Handoff };
+
+// Turns, desktop tasks and handoffs in the order they happened. The steps of one
+// task stay together, placed where the task started.
+export function timeline(replay: Replay): TimelineItem[] {
+  const tasks = Map.groupBy(replay.actions, (action) => action.task ?? "");
+  const items: TimelineItem[] = [
+    ...replay.turns.map((turn, index) => ({
+      kind: "turn" as const,
+      at: turn.started_at,
+      turn,
+      number: index + 1,
+    })),
+    ...Array.from(tasks.values(), (steps) => ({ kind: "task" as const, at: steps[0]!.at, steps })),
+    ...replay.handoffs.map((handoff) => ({
+      kind: "handoff" as const,
+      at: handoff.created_at,
+      handoff,
+    })),
+  ];
+  return items.toSorted((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
 const EVENT_LABELS: Record<string, string> = {

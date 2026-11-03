@@ -17,12 +17,19 @@ function show(value = replay) {
   );
 }
 
-test("the header gives the start, length and counts", () => {
+function stat(label: string): string | null | undefined {
+  return screen.getByText(label).nextElementSibling?.textContent;
+}
+
+test("the header gives the start, and the stats sum up the session", () => {
   show();
 
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Nov 3, 2026, 10:00 AM UTC");
-  expect(screen.getByText("2:05, 2 turns, 1 action, 1 handoff")).toBeDefined();
   expect(screen.getByText("Room kb-room")).toBeDefined();
+  expect(stat("Length")).toBe("2:052 turns");
+  expect(stat("Median reply")).toBe("1.1 sover 1 answer");
+  expect(stat("Searches")).toBe("1");
+  expect(stat("Desktop")).toBe("1step done, 1 handoff");
   expect(screen.getByRole("link", { name: "Acme" }).getAttribute("href")).toBe(
     `/products/${replay.product_id}`,
   );
@@ -31,27 +38,29 @@ test("the header gives the start, length and counts", () => {
 test("the transcript shows who said what and when", () => {
   show();
 
-  const [first, second] = within(screen.getByRole("list", { name: "Turns" })).getAllByRole(
-    "listitem",
-  );
+  const timeline = screen.getByRole("list", { name: "Timeline" });
+  const [first, second, task, handoff] = Array.from(timeline.children);
   expect(first?.textContent).toContain("You+0:05");
   expect(first?.textContent).toContain("How do I reset my password?");
-  expect(second?.textContent).toContain("Shawn+0:09");
+  expect(second?.textContent).toContain("Shawn+0:09Replied in 1.1 s");
   expect(second?.textContent).toContain("Open Settings, then Security.");
+  expect(task?.textContent).toContain("Desktop task+1:00");
+  expect(handoff?.textContent).toContain("Handed to a person+1:30");
 });
 
 test("an answer lists what it searched, with scores, and what it cited", () => {
   show();
 
   const searches = screen.getByRole("list", { name: "Searches" });
-  expect(searches.textContent).toContain("Searched for “reset password”");
-  expect(searches.textContent).toContain("(180 ms)");
-  expect(searches.textContent).toContain("Reset a password");
-  expect(searches.textContent).toContain("0.91");
-  expect(searches.textContent).toContain("Roles");
-  expect(searches.textContent).toContain("0.42");
+  expect(searches.textContent).toContain("Searched “reset password”");
+  expect(searches.textContent).toContain("180 ms");
+  const passages = within(searches).getAllByRole("listitem").slice(1);
+  expect(passages.map((passage) => passage.textContent)).toEqual([
+    "1Reset a passwordCitedreset.md0.91",
+    "2Rolesreset.md0.42",
+  ]);
   const cited = screen.getByRole("list", { name: "Cited" });
-  expect(cited.textContent).toBe("Cited Reset a password (reset.md)");
+  expect(cited.textContent).toBe("Reset a passwordreset.md");
 });
 
 test("a search that found nothing says so", () => {
@@ -67,9 +76,19 @@ test("a search that found nothing says so", () => {
     turns: [question!, { ...answer!, searches: [abstained], citations: [] }],
   });
 
-  expect(screen.getByText(/Searched for “moon base”/).textContent).toContain("no match, 90 ms");
+  const search = screen.getByRole("list", { name: "Searches" });
+  expect(search.textContent).toContain("“moon base”No match90 ms");
+  expect(screen.getByText("No passage scored high enough to answer from.")).toBeDefined();
   expect(screen.getByText("No passage came back.")).toBeDefined();
   expect(screen.queryByRole("list", { name: "Cited" })).toBeNull();
+});
+
+test("each latency row links to its turn in the timeline", () => {
+  show();
+
+  const rows = within(screen.getByRole("list", { name: "Latency by turn" })).getAllByRole("link");
+  expect(rows.map((row) => row.getAttribute("href"))).toEqual(["#turn-t1", "#turn-t2"]);
+  expect(document.getElementById("turn-t2")?.textContent).toContain("Open Settings");
 });
 
 test("the waterfall shows each stage of each turn with its time", () => {
@@ -95,8 +114,8 @@ test("the desktop steps and handoffs of the session are listed", () => {
     "+1:00ProposedClick Save",
     "+1:05DoneClick Save",
   ]);
-  expect(screen.getByRole("list", { name: "Handoffs" }).textContent).toBe(
-    "Cannot reset password (created, ENG-7)",
+  expect(screen.getByText("Cannot reset password").parentElement?.textContent).toBe(
+    "Cannot reset passwordcreatedENG-7",
   );
 });
 
@@ -112,9 +131,11 @@ test("a session nobody spoke in says there is nothing to replay", () => {
     handoffs: [],
   });
 
-  expect(screen.getByText("Nothing was said in this session, so there is nothing to replay.")).toBeDefined();
-  expect(screen.getByText("0 turns, 0 actions, 0 handoffs")).toBeDefined();
-  expect(screen.queryByRole("heading", { name: "Transcript" })).toBeNull();
+  expect(screen.getByText("Nothing to replay")).toBeDefined();
+  expect(screen.getByRole("link", { name: "Start a session" }).getAttribute("href")).toBe(
+    `/products/${replay.product_id}/session`,
+  );
+  expect(screen.queryByRole("heading", { name: "Timeline" })).toBeNull();
   expect(screen.queryByRole("heading", { name: "Latency" })).toBeNull();
 });
 
