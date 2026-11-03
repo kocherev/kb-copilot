@@ -85,7 +85,7 @@ function Ring({ state }: { state: AgentCursorState }) {
     <span
       data-testid="agent-cursor-ring"
       aria-hidden
-      className={`absolute -top-3 -left-3 size-6 rounded-full border-2 border-[var(--hui-color-background-accent-emphasis)] ${state === "about-to-click" ? "motion-safe:animate-ping" : "motion-safe:[animation:ping_600ms_cubic-bezier(0,0,0.2,1)_1_forwards]"}`}
+      className={`absolute -top-3 -left-3 size-6 rounded-full border-2 border-[var(--hui-color-background-accent-emphasis)] ${state === "about-to-click" ? "motion-safe:animate-ping" : "motion-safe:[animation:ping_600ms_var(--motion-ease-out)_1_forwards]"}`}
     />
   );
 }

@@ -16,23 +16,26 @@ const passage = {
 };
 
 test("transcript shows an empty state, one character, and a long string", () => {
-  const { rerender } = render(<TranscriptPanel lines={[]} />);
+  const { rerender } = render(<TranscriptPanel lines={[]} agentName="Mina" />);
 
-  expect(screen.getByText("Waiting for speech.")).toBeDefined();
+  expect(screen.getByText("Nothing said yet")).toBeDefined();
+  expect(screen.getByText(/Ask Mina a question out loud/)).toBeDefined();
   expect(screen.getByRole("log")).toBeDefined();
 
   rerender(
     <TranscriptPanel
+      agentName="Mina"
       lines={[{ id: "one", speaker: "You", text: "A", citations: [] }]}
     />,
   );
   expect(screen.getByText("A")).toBeDefined();
-  expect(screen.queryByText("Waiting for speech.")).toBeNull();
+  expect(screen.queryByText("Nothing said yet")).toBeNull();
   expect(screen.queryByRole("list", { name: "Sources" })).toBeNull();
 
   const long = "B".repeat(400);
   rerender(
     <TranscriptPanel
+      agentName="Mina"
       lines={[{ id: "long", speaker: "Agent", text: long, citations: [] }]}
     />,
   );
@@ -42,6 +45,7 @@ test("transcript shows an empty state, one character, and a long string", () => 
 test("a cited answer shows the section title and an expandable snippet", () => {
   render(
     <TranscriptPanel
+      agentName="Mina"
       lines={[
         {
           id: "cited",
@@ -54,9 +58,11 @@ test("a cited answer shows the section title and an expandable snippet", () => {
   );
 
   expect(screen.getByText("Refunds take 5 business days.")).toBeDefined();
+  expect(screen.getByText("Mina")).toBeDefined();
+  expect(screen.queryByText("Agent")).toBeNull();
   expect(screen.getByRole("list", { name: "Sources" })).toBeDefined();
   expect(screen.getByText(/Refund timing/)).toBeDefined();
-  expect(screen.getByText(`(${"c".repeat(180)}.md)`)).toBeDefined();
+  expect(screen.getByText(`${"c".repeat(180)}.md`)).toBeDefined();
   const snippet = screen.getByText("Refunds reach the card in five business days.");
   expect(snippet.closest("details")?.hasAttribute("open")).toBe(false);
 });

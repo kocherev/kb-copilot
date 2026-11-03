@@ -19,6 +19,8 @@ const live = vi.hoisted(() => ({
   dimensions: undefined as { width: number; height: number } | undefined,
   participants: [] as { identity: string }[],
   sent: [] as { topic: string; body: unknown; reliable: boolean }[],
+  enabled: { microphone: true, screen_share: true } as Record<string, boolean>,
+  toggled: [] as { source: string; force: boolean | undefined }[],
 }));
 
 vi.mock("@livekit/components-react", () => ({
@@ -80,9 +82,13 @@ vi.mock("@livekit/components-react", () => ({
     state: live.assistant,
     agent: live.agentPresent ? {} : undefined,
   }),
-  TrackToggle: ({ "aria-label": label }: { "aria-label"?: string }) => (
-    <button type="button">{label}</button>
-  ),
+  useTrackToggle: ({ source }: { source: string }) => ({
+    enabled: live.enabled[source] ?? false,
+    pending: false,
+    toggle: async (force?: boolean) => {
+      live.toggled.push({ source, force });
+    },
+  }),
 }));
 
 vi.mock("livekit-client", () => ({
@@ -125,6 +131,8 @@ afterEach(() => {
   live.dimensions = undefined;
   live.participants = [];
   live.sent = [];
+  live.enabled = { microphone: true, screen_share: true };
+  live.toggled = [];
   live.disconnect.mockReset();
 });
 
@@ -259,14 +267,14 @@ test("the page says what the agent is doing while it watches", () => {
   expect(status()).toBe("Mina is speaking");
 });
 
-test("the glow runs only while connected, sharing, and the agent is in the room", () => {
+test("the glow runs only while connected, sharing, and the agent is in the room, and the page says why", () => {
   const glow = () => screen.getByTestId("room").querySelector("[data-glow]");
   const cases = [
-    { state: "connected", shared: true, agent: true, glow: "animated" },
-    { state: "connecting", shared: true, agent: true, glow: "off" },
-    { state: "disconnected", shared: true, agent: true, glow: "off" },
-    { state: "connected", shared: false, agent: true, glow: "off" },
-    { state: "connected", shared: true, agent: false, glow: "off" },
+    { state: "connected", shared: true, agent: true, glow: "animated", says: "Mina is watching your screen" },
+    { state: "connecting", shared: true, agent: true, glow: "off", says: "" },
+    { state: "disconnected", shared: true, agent: true, glow: "off", says: "" },
+    { state: "connected", shared: false, agent: true, glow: "off", says: "Mina is listening" },
+    { state: "connected", shared: true, agent: false, glow: "off", says: "Waiting for Mina to join" },
   ];
   for (const found of cases) {
     live.state = found.state;
@@ -276,9 +284,9 @@ test("the glow runs only while connected, sharing, and the agent is in the room"
 
     expect(glow()?.getAttribute("data-glow"), JSON.stringify(found)).toBe(found.glow);
     expect(
-      screen.getByRole("status", { name: "Agent" }).textContent === "",
+      screen.getByRole("status", { name: "Agent" }).textContent,
       JSON.stringify(found),
-    ).toBe(found.glow === "off");
+    ).toBe(found.says);
     cleanup();
   }
 });
@@ -465,4 +473,39 @@ test("with the helper in the room the page says the Mac is connected", () => {
     "Your Mac is connected. Mina asks before every click or keystroke.",
   );
   expect(within(panel).queryByRole("button")).toBeNull();
+});
+
+test("the control bar toggles show and switch the microphone and the screen", () => {
+  live.enabled = { microphone: false, screen_share: true };
+  renderRoom();
+
+  const controls = screen.getByRole("group", { name: "Session controls" });
+  const mic = within(controls).getByRole("button", { name: "Microphone" });
+  const share = within(controls).getByRole("button", { name: "Screen share" });
+  expect(mic.getAttribute("aria-pressed")).toBe("false");
+  expect(share.getAttribute("aria-pressed")).toBe("true");
+
+  fireEvent.click(mic);
+  fireEvent.click(share);
+
+  expect(live.toggled).toEqual([
+    { source: "microphone", force: undefined },
+    { source: "screen_share", force: undefined },
+  ]);
+});
+
+test("a connected room without a shared screen offers to share it", () => {
+  renderRoom();
+
+  fireEvent.click(screen.getByRole("button", { name: "Share your screen" }));
+
+  expect(live.toggled).toEqual([{ source: "screen_share", force: true }]);
+});
+
+test("while the room connects the stage says so and the controls stay", () => {
+  live.state = "connecting";
+  renderRoom();
+
+  expect(screen.getByText("Joining the room…")).toBeDefined();
+  expect(screen.getByRole("button", { name: "End session" })).toBeDefined();
 });
