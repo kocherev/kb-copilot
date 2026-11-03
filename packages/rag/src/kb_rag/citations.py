@@ -16,12 +16,12 @@ from kb_rag.pipeline import DENSE, KB_COLLECTION, cosine, validate_product_id
 # Cosine between one answer sentence and a whole stored passage, which holds
 # up to 120 words, so the scores run lower than sentence against sentence.
 # A passage is cited when a sentence is very close to it, or when a sentence is
-# fairly close and every content word of it appears in the passage.
-# Measured on the demo eval: the gold answers against the top five passages of
-# each question, 116 questions. The cutoffs cite 0.89 passages per answer, 91%
-# of them from a page the dataset expects, and cover 47% of the expected
-# sections. A missing citation costs less than a wrong one, so they favor
-# precision.
+# fairly close and nearly every content word of it appears in the passage.
+# Measured with the default embedder on the gold answers of the 116 demo eval
+# questions that name a source, against each question's top five passages:
+# 0.86 passages cited per answer, 94% of them from a page the dataset expects,
+# and 47% of the expected sections cited. A missing citation is cheaper than
+# a wrong one, so the cutoffs favor precision.
 CLOSE = 0.85
 RELATED = 0.55
 COVERED = 0.9
