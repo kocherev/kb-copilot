@@ -44,6 +44,7 @@ def upgrade() -> None:
         sa.Column("chunk_count", sa.Integer(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
+        sa.Column("content", sa.LargeBinary(), nullable=True),
         sa.Column("job_id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),

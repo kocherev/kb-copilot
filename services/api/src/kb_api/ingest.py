@@ -1,18 +1,10 @@
-"""Upload, list and delete a product's documents. Indexing runs in the background."""
+"""Upload, list and delete a product's documents. The queue indexes them."""
 
 from collections.abc import AsyncGenerator, AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import (
-    APIRouter,
-    BackgroundTasks,
-    Depends,
-    HTTPException,
-    Request,
-    Response,
-)
-from kb_rag import RetrievalSettings
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from kb_rag.sources import MAX_BYTES, check_upload
 from pydantic import BaseModel, ConfigDict
 from qdrant_client import AsyncQdrantClient
@@ -22,17 +14,8 @@ from starlette.datastructures import UploadFile
 from starlette.formparsers import MultiPartException, MultiPartParser
 
 from kb_api.auth import AUTH_ERRORS, ErrorBody, Principal, get_principal
-from kb_api.db import DocumentRow, IngestJobRow, ProductRow, get_db, get_sessionmaker
-from kb_api.jobs import (
-    JobStatus,
-    Sessions,
-    Upload,
-    get_qdrant,
-    get_retrieval_settings,
-    queue_documents,
-    remove_chunks,
-    run_job,
-)
+from kb_api.db import DocumentRow, IngestJobRow, ProductRow, get_db
+from kb_api.jobs import JobStatus, Upload, get_qdrant, queue_documents, remove_chunks
 from kb_api.products import NOT_FOUND, owned_product
 
 MAX_FILES = 20
@@ -143,16 +126,10 @@ async def create_documents(
     request: Request,
     product: Annotated[ProductRow, Depends(owned_product)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    sessions: Annotated[Sessions, Depends(get_sessionmaker)],
-    qdrant: Annotated[AsyncQdrantClient, Depends(get_qdrant)],
-    settings: Annotated[RetrievalSettings, Depends(get_retrieval_settings)],
-    background: BackgroundTasks,
 ) -> IngestJob:
     uploads = await read_uploads(request)
     job = await queue_documents(db, product.id, uploads)
-    background.add_task(
-        run_job, sessions, qdrant, settings, job.id, product.id, uploads
-    )
+    request.app.state.wake.set()
     return IngestJob.model_validate(job)
 
 

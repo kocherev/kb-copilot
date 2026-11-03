@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,13 @@ def test_live_demo_docs_reach_qdrant_and_postgres(
                 files=[("files", (path.name, path.read_bytes())) for path in paths],
             )
             assert created.status_code == 202
-            job = client.get(f"/ingest-jobs/{created.json()['id']}").json()
+            deadline = time.monotonic() + 300
+            while True:
+                job = client.get(f"/ingest-jobs/{created.json()['id']}").json()
+                if job["status"] not in {"queued", "indexing"}:
+                    break
+                assert time.monotonic() < deadline, "the job did not finish"
+                time.sleep(0.5)
             documents = client.get(f"/products/{product_id}/documents").json()
             assert job["status"] == "indexed"
             assert [d["status"] for d in documents] == ["indexed"] * len(paths)

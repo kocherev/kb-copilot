@@ -1,9 +1,11 @@
 import asyncio
+import time
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from kb_api.jobs import get_qdrant, get_retrieval_settings
+from kb_api.jobs import get_qdrant, requeue_interrupted
 from kb_rag import KB_COLLECTION
 from kb_rag.sources import MAX_BYTES
 from kb_rag.testing import HASH_SETTINGS
@@ -30,7 +32,8 @@ def qdrant(http: TestClient) -> AsyncQdrantClient:
 
     client = AsyncQdrantClient(":memory:")
     app.dependency_overrides[get_qdrant] = lambda: client
-    app.dependency_overrides[get_retrieval_settings] = lambda: HASH_SETTINGS
+    app.state.qdrant = client
+    app.state.retrieval = HASH_SETTINGS
     return client
 
 
@@ -38,6 +41,29 @@ def qdrant(http: TestClient) -> AsyncQdrantClient:
 def product(http: TestClient, as_user: Callable[..., dict[str, str]]) -> str:
     created = http.post("/products", json=PRODUCT, headers=as_user())
     return created.json()["id"]
+
+
+def settle(http: TestClient, headers: dict[str, str], job: str) -> None:
+    """Wait for the background loop to finish the job."""
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        status = http.get(f"/ingest-jobs/{job}", headers=headers).json()["status"]
+        if status not in {"queued", "indexing"}:
+            return
+        time.sleep(0.02)
+    raise AssertionError("the job did not finish")
+
+
+def ingest(
+    http: TestClient, headers: dict[str, str], product: str, *files: tuple[str, bytes]
+) -> dict[str, Any]:
+    """Upload, wait for the background loop, and return the 202 body."""
+    created = http.post(
+        f"/products/{product}/documents", headers=headers, files=upload(*files)
+    )
+    assert created.status_code == 202
+    settle(http, headers, created.json()["id"])
+    return created.json()
 
 
 def stored(client: AsyncQdrantClient, product_id: str) -> list[dict[str, object]]:
@@ -77,6 +103,7 @@ def test_upload_returns_a_job_and_indexes_in_the_background(
     job = created.json()
     assert job["status"] == "queued"
     assert job["product_id"] == product
+    settle(http, headers, job["id"])
     done = http.get(f"/ingest-jobs/{job['id']}", headers=headers).json()
     assert done["status"] == "indexed"
     assert done["error"] is None
@@ -95,11 +122,7 @@ def test_upload_returns_a_job_and_indexes_in_the_background(
 def test_another_org_gets_404_on_every_document_route(
     http: TestClient, as_user, product: str, qdrant: AsyncQdrantClient
 ) -> None:
-    job = http.post(
-        f"/products/{product}/documents",
-        headers=as_user(),
-        files=upload(("notes.md", NOTES)),
-    ).json()
+    job = ingest(http, as_user(), product, ("notes.md", NOTES))
     document = http.get(f"/products/{product}/documents", headers=as_user()).json()[0]
     other = as_user(user="user-b", org="org-b")
 
@@ -125,17 +148,13 @@ def test_uploading_the_same_name_replaces_the_document(
 ) -> None:
     headers = as_user()
     path = f"/products/{product}/documents"
-    first = http.post(
-        path, headers=headers, files=upload(("a.md", b"Old refund text."))
-    )
-    second = http.post(
-        path, headers=headers, files=upload(("a.md", b"New refund text."))
-    )
+    first = ingest(http, headers, product, ("a.md", b"Old refund text."))
+    second = ingest(http, headers, product, ("a.md", b"New refund text."))
 
     documents = http.get(path, headers=headers).json()
 
     assert len(documents) == 1
-    assert documents[0]["job_id"] == second.json()["id"] != first.json()["id"]
+    assert documents[0]["job_id"] == second["id"] != first["id"]
     assert [chunk["text"] for chunk in stored(qdrant, product)] == ["New refund text."]
 
 
@@ -144,11 +163,7 @@ def test_deleting_a_document_removes_its_row_and_chunks(
 ) -> None:
     headers = as_user()
     path = f"/products/{product}/documents"
-    http.post(
-        path,
-        headers=headers,
-        files=upload(("a.md", b"About refunds."), ("b.md", NOTES)),
-    )
+    ingest(http, headers, product, ("a.md", b"About refunds."), ("b.md", NOTES))
     documents = {d["title"]: d for d in http.get(path, headers=headers).json()}
 
     deleted = http.delete(f"{path}/{documents['a.md']['id']}", headers=headers)
@@ -165,9 +180,7 @@ def test_deleting_a_product_removes_its_chunks(
     http: TestClient, as_user, product: str, qdrant: AsyncQdrantClient
 ) -> None:
     headers = as_user()
-    http.post(
-        f"/products/{product}/documents", headers=headers, files=upload(("a.md", NOTES))
-    )
+    ingest(http, headers, product, ("a.md", NOTES))
     assert stored(qdrant, product)
 
     deleted = http.delete(f"/products/{product}", headers=headers)
@@ -187,9 +200,7 @@ def test_deleting_a_product_removes_its_documents_and_jobs(
     if sync_engine.dialect.name != "postgresql":
         pytest.skip("SQLite only cascades with a PRAGMA; Postgres is what ships")
     headers = as_user()
-    http.post(
-        f"/products/{product}/documents", headers=headers, files=upload(("a.md", NOTES))
-    )
+    ingest(http, headers, product, ("a.md", NOTES))
 
     http.delete(f"/products/{product}", headers=headers)
 
@@ -202,11 +213,13 @@ def test_an_unreadable_file_fails_with_a_stable_message(
 ) -> None:
     headers = as_user()
 
-    job = http.post(
-        f"/products/{product}/documents",
-        headers=headers,
-        files=upload(("broken.pdf", b"%PDF-1.1\nnot a real pdf"), ("ok.md", NOTES)),
-    ).json()
+    job = ingest(
+        http,
+        headers,
+        product,
+        ("broken.pdf", b"%PDF-1.1\nnot a real pdf"),
+        ("ok.md", NOTES),
+    )
 
     done = http.get(f"/ingest-jobs/{job['id']}", headers=headers).json()
     assert (done["status"], done["error"]) == ("failed", "1 of 2 documents failed")
@@ -228,13 +241,11 @@ def test_a_search_store_failure_does_not_leak_its_message(
         async def collection_exists(self, name: str) -> bool:
             raise RuntimeError("secret connection string")
 
-    app.dependency_overrides[get_qdrant] = lambda: Broken()
-    app.dependency_overrides[get_retrieval_settings] = lambda: HASH_SETTINGS
+    app.state.qdrant = Broken()
+    app.state.retrieval = HASH_SETTINGS
     headers = as_user()
 
-    http.post(
-        f"/products/{product}/documents", headers=headers, files=upload(("a.md", NOTES))
-    )
+    ingest(http, headers, product, ("a.md", NOTES))
 
     listed = http.get(f"/products/{product}/documents", headers=headers)
     assert listed.json()[0]["error"] == "indexing failed"
@@ -246,6 +257,14 @@ def test_a_search_store_failure_does_not_leak_its_message(
     [
         ([], "files are required"),
         (upload(("notes.exe", b"hi")), "unsupported file type: .exe"),
+        (
+            upload(("/etc/notes.md", NOTES)),
+            "file name must be a single relative name",
+        ),
+        (
+            upload(("../notes.md", NOTES)),
+            "file name must be a single relative name",
+        ),
         (upload(("a.md", NOTES), ("a.md", NOTES)), "file names must be unique"),
         (
             upload(("big.txt", b"x" * (MAX_BYTES + 1))),
@@ -309,9 +328,7 @@ def test_a_document_that_is_still_indexing_cannot_be_deleted(
     sync_engine: Engine,
 ) -> None:
     headers = as_user()
-    http.post(
-        f"/products/{product}/documents", headers=headers, files=upload(("a.md", NOTES))
-    )
+    ingest(http, headers, product, ("a.md", NOTES))
     with sync_engine.begin() as connection:
         connection.execute(text("UPDATE documents SET status = 'indexing'"))
     document = http.get(f"/products/{product}/documents", headers=headers).json()[0]
@@ -326,37 +343,36 @@ def test_a_document_that_is_still_indexing_cannot_be_deleted(
     assert len(http.get(f"/products/{product}/documents", headers=headers).json()) == 1
 
 
-def test_a_restart_fails_jobs_that_were_still_running(
-    api_env: None, as_user, sync_engine: Engine
+def test_a_restart_requeues_a_job_that_was_indexing_and_it_finishes(
+    http: TestClient,
+    as_user,
+    product: str,
+    qdrant: AsyncQdrantClient,
+    sync_engine: Engine,
+    rows,
 ) -> None:
     from kb_api.main import app
 
     headers = as_user()
-    with TestClient(app) as before:
-        app.dependency_overrides[get_qdrant] = lambda: AsyncQdrantClient(":memory:")
-        app.dependency_overrides[get_retrieval_settings] = lambda: HASH_SETTINGS
-        product = before.post("/products", json=PRODUCT, headers=headers).json()["id"]
-        job = before.post(
-            f"/products/{product}/documents",
-            headers=headers,
-            files=upload(("a.md", NOTES)),
-        ).json()
-    app.dependency_overrides.clear()
+    job = ingest(http, headers, product, ("a.md", NOTES))
+    assert rows("documents")[0]["content"] is None
+    asyncio.run(qdrant.delete_collection(KB_COLLECTION))
     with sync_engine.begin() as connection:
         connection.execute(text("UPDATE ingest_jobs SET status = 'indexing'"))
-        connection.execute(text("UPDATE documents SET status = 'queued'"))
+        connection.execute(
+            text("UPDATE documents SET status = 'indexing', content = :bytes"),
+            {"bytes": NOTES},
+        )
 
-    with TestClient(app) as after:
-        restarted_job = after.get(f"/ingest-jobs/{job['id']}", headers=headers).json()
-        documents = after.get(f"/products/{product}/documents", headers=headers).json()
+    http.portal.call(requeue_interrupted, app.state.sessions)  # pyright: ignore[reportOptionalMemberAccess]
+    http.portal.call(app.state.wake.set)  # pyright: ignore[reportOptionalMemberAccess]
+    settle(http, headers, job["id"])
 
-    assert (restarted_job["status"], restarted_job["error"]) == (
-        "failed",
-        "interrupted by restart",
-    )
-    assert [(d["status"], d["error"]) for d in documents] == [
-        ("failed", "interrupted by restart")
-    ]
+    done = http.get(f"/ingest-jobs/{job['id']}", headers=headers).json()
+    assert (done["status"], done["error"]) == ("indexed", None)
+    assert done["chunk_count"] >= 1
+    assert len(stored(qdrant, product)) == done["chunk_count"]
+    assert rows("documents")[0]["content"] is None
 
 
 def test_openapi_describes_the_multipart_upload(http: TestClient) -> None:
@@ -373,7 +389,7 @@ def test_a_failed_document_can_be_deleted_before_anything_was_indexed(
 ) -> None:
     headers = as_user()
     path = f"/products/{product}/documents"
-    http.post(path, headers=headers, files=upload(("broken.pdf", b"%PDF-1.1\nnope")))
+    ingest(http, headers, product, ("broken.pdf", b"%PDF-1.1\nnope"))
     document = http.get(path, headers=headers).json()[0]
 
     deleted = http.delete(f"{path}/{document['id']}", headers=headers)

@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -99,6 +100,8 @@ class IngestJobRow(Base):
 
 
 class DocumentRow(Base):
+    """A file in a product's index. Its bytes wait here until the job indexes it."""
+
     __tablename__ = "documents"
     __table_args__ = (UniqueConstraint("product_id", "source"),)
 
@@ -111,6 +114,7 @@ class DocumentRow(Base):
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(Text)
     error: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[bytes | None] = mapped_column(LargeBinary)
     job_id: Mapped[UUID] = mapped_column(
         ForeignKey("ingest_jobs.id", ondelete="CASCADE")
     )
