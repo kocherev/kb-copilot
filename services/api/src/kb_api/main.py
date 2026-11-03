@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from kb_rag import DEFAULT_SETTINGS
+from kb_rag import DEFAULT_SETTINGS, RetrievalSettings
 from pydantic import BaseModel
 from qdrant_client import AsyncQdrantClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -17,8 +17,14 @@ from kb_api.ingest import router as ingest_router
 from kb_api.integrations import router as integrations_router
 from kb_api.jobs import index_forever, requeue_interrupted
 from kb_api.products import router as products_router
+from kb_api.retrieval import router as retrieval_router
 from kb_api.sessions import router as sessions_router
 from kb_api.settings import load_settings
+
+
+def load_models(settings: RetrievalSettings) -> None:
+    settings.dense.query("warm")
+    settings.sparse.query("warm")
 
 
 @asynccontextmanager
@@ -36,8 +42,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.wake = asyncio.Event()
     await requeue_interrupted(app.state.sessions)
     worker = asyncio.create_task(index_forever(app))
+    # The first search of a live session should not wait for the models to load.
+    warm = (
+        asyncio.create_task(asyncio.to_thread(load_models, DEFAULT_SETTINGS))
+        if settings.warm_models
+        else None
+    )
     yield
     worker.cancel()
+    if warm:
+        warm.cancel()
     with suppress(asyncio.CancelledError):
         await worker
     await qdrant.close()
@@ -57,6 +71,7 @@ app.include_router(sessions_router)
 app.include_router(api_keys_router)
 app.include_router(integrations_router)
 app.include_router(escalations_router)
+app.include_router(retrieval_router)
 
 
 class Health(BaseModel):
