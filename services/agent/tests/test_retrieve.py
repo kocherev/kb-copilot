@@ -10,6 +10,7 @@ from kb_agent.retrieve import tool_text
 from kb_agent.support import SupportAgent
 from kb_rag import NOT_IN_DOCS, Source, index_sources, read_directory
 from kb_rag.testing import HASH_SETTINGS
+from livekit.agents.llm import FunctionTool
 from livekit.agents.llm.tool_context import ToolFlag
 from qdrant_client import AsyncQdrantClient
 
@@ -48,6 +49,24 @@ def _agent(client: AsyncQdrantClient, room: FakeRoom, product: str = "demo"):
         room=room,
         api_url="http://api.test",
     )
+
+
+def test_the_greeting_keeps_every_tool(
+    client: AsyncQdrantClient, room: FakeRoom
+) -> None:
+    # Gemini Live cannot change tools for one reply. A tool hidden during
+    # on_enter restarts the live session twice: the first restart drops the
+    # greeting, the second can fail its resume with 1008 and end the call.
+    agent = _agent(client, room)
+
+    hidden = [
+        tool.id
+        for tool in agent.tools
+        if isinstance(tool, FunctionTool) and tool.info.flags & ToolFlag.IGNORE_ON_ENTER
+    ]
+
+    assert len(agent.tools) == 4
+    assert hidden == []
 
 
 def test_a_hit_is_numbered_untrusted_data_and_a_miss_says_to_refuse(
@@ -96,7 +115,6 @@ def test_search_kb_returns_passages_remembers_them_and_logs(
             "point_at",
             "search_kb",
         }
-        assert agent.search_kb.info.flags & ToolFlag.IGNORE_ON_ENTER
         hit = await _call(agent.search_kb, REFUND_QUESTION)
         log = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
 
