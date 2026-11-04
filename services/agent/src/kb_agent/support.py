@@ -74,7 +74,7 @@ class SupportAgent(Agent):
             instructions="Greet the user in one sentence and offer to help."
         )
 
-    @function_tool(flags=ToolFlag.IGNORE_ON_ENTER)
+    @function_tool()
     async def search_kb(self, query: str) -> str:
         """Search this product's knowledge base.
 
@@ -88,7 +88,7 @@ class SupportAgent(Agent):
         log_json(retrieval_record(self.knowledge.product_id, found))
         return tool_text(found.abstained, found.passages)
 
-    @function_tool(flags=ToolFlag.IGNORE_ON_ENTER)
+    @function_tool()
     async def point_at(self, x: float, y: float, label: str) -> str:
         """Highlight a control on the shared screen.
 
@@ -113,7 +113,7 @@ class SupportAgent(Agent):
             "The user still clicks. You did not move the mouse."
         )
 
-    @function_tool(flags=ToolFlag.IGNORE_ON_ENTER)
+    @function_tool()
     async def handoff_to_human(self, summary: str, reason: str) -> str:
         """Propose a support ticket for a person to pick up.
 
@@ -146,9 +146,7 @@ class SupportAgent(Agent):
             "approve it there. Ask them to check the card."
         )
 
-    @function_tool(
-        flags=ToolFlag.IGNORE_ON_ENTER | ToolFlag.CANCELLABLE, on_duplicate="reject"
-    )
+    @function_tool(flags=ToolFlag.CANCELLABLE, on_duplicate="reject")
     async def operate_computer(self, ctx: RunContext, goal: str) -> str:
         """Do a task on the user's Mac for them, one approved step at a time.
 
