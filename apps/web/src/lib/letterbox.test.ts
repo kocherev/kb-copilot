@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 
-import { letterbox } from "@/lib/letterbox";
+import { cropAround, letterbox } from "@/lib/letterbox";
 
 const stage = { width: 800, height: 450 };
 
@@ -46,4 +46,33 @@ test("an unknown frame size uses the whole stage", () => {
     width: 800,
     height: 450,
   });
+});
+
+const screenSize = { width: 1600, height: 1000 };
+const view = { width: 128, height: 80 };
+
+test("the crop centres on the point at a quarter of the frame width", () => {
+  expect(cropAround({ x: 0.5, y: 0.5 }, screenSize, view, 4)).toEqual({
+    left: 600,
+    top: 375,
+    width: 400,
+    height: 250,
+    cursor: { x: 0.5, y: 0.5 },
+  });
+});
+
+test("near a corner the crop stays inside the frame and the cursor moves instead", () => {
+  const crop = cropAround({ x: 1, y: 0 }, screenSize, view, 4);
+
+  expect(crop.left).toBe(1200);
+  expect(crop.top).toBe(0);
+  expect(crop.cursor).toEqual({ x: 1, y: 0 });
+});
+
+test("a tall frame keeps the crop's shape within its height", () => {
+  const crop = cropAround({ x: 0.5, y: 0.5 }, { width: 1000, height: 400 }, view, 1);
+
+  expect(crop.height).toBe(400);
+  expect(crop.width).toBe(640);
+  expect(crop.cursor).toEqual({ x: 0.5, y: 0.5 });
 });

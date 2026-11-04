@@ -20,7 +20,7 @@ const TAG_MAX_WIDTH = 192;
 const TAG_MIN_WIDTH = 96;
 
 // Adapted from the Figma Cursor snippet in Cursor Lab. See NOTICE.md.
-function Arrow() {
+export function Arrow() {
   return (
     <svg
       width={SIZE}
