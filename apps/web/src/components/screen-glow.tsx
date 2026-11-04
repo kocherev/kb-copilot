@@ -5,11 +5,11 @@ import type { ReactNode } from "react";
 
 import { usePageTheme, useReducedMotion } from "@/lib/page-environment";
 
-// Calm and blue while the agent listens, livelier while it works or talks.
+// Slow and faint while the agent listens, brighter and faster while it works or talks.
 const levels = {
-  listening: { colorVariant: "ocean", strength: 0.6, duration: 3.2 },
-  thinking: { colorVariant: "colorful", strength: 0.85, duration: 1.6 },
-  speaking: { colorVariant: "colorful", strength: 1, duration: 2.2 },
+  listening: { colorVariant: "mono", strength: 0.6, duration: 3.2 },
+  thinking: { colorVariant: "mono", strength: 0.85, duration: 1.6 },
+  speaking: { colorVariant: "mono", strength: 1, duration: 2.2 },
 } as const;
 
 // Border Beam's light preset is too pale to read on a white page.

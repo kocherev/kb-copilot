@@ -56,7 +56,7 @@ export function HandoffCard({
             href={result.issue_url}
             target="_blank"
             rel="noreferrer"
-            className="text-link underline underline-offset-4"
+            className="text-link underline decoration-foreground/30 underline-offset-4 hover:decoration-current"
           >
             Open in Linear
           </a>

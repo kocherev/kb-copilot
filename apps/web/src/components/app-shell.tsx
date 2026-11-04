@@ -25,14 +25,6 @@ const nav: { href: string; label: string; Icon: LucideIcon; matches: (path: stri
   },
 ];
 
-function Mark() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className="size-6 text-primary">
-      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.75" opacity="0.45" />
-      <circle cx="12" cy="12" r="4" fill="currentColor" />
-    </svg>
-  );
-}
 
 function NavLinks({ pathname }: { pathname: string | null }) {
   return nav.map(({ href, label, Icon, matches }) => (
@@ -63,13 +55,6 @@ export function AppShell({ account, children }: { account: ReactNode; children: 
       </a>
       <header className="sticky top-0 z-(--z-sticky) border-b border-border bg-background/85 backdrop-blur-md">
         <div className="mx-auto flex h-14 w-full max-w-[1080px] min-w-0 items-center gap-1 px-4 sm:gap-2 sm:px-8">
-          <Link
-            href="/"
-            className={`mr-1 flex shrink-0 items-center gap-2 rounded-control py-1 pr-1 text-sm font-semibold text-foreground sm:mr-3 ${focusRing}`}
-          >
-            <Mark />
-            <span className="max-sm:sr-only">KB Copilot</span>
-          </Link>
           <nav aria-label="Main" className="flex min-w-0 items-center gap-1">
             {/* The pathname of a page with an unknown [id] exists only at
                 request time, so the prerendered shell shows the links unmarked. */}

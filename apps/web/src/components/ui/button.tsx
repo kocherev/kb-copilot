@@ -13,7 +13,7 @@ const buttonVariants = cva(
         default:
           "bg-[var(--hui-color-background-accent-emphasis)] text-[var(--hui-color-foreground-accent-emphasis)] shadow-[var(--hui-shadow-key,var(--hui-shadow-feather))] not-disabled:hover:bg-[var(--hui-color-background-accent-emphasis-hover)] not-disabled:active:bg-[var(--hui-color-background-accent-emphasis-hover)] disabled:bg-[var(--hui-color-background-neutral-secondary)]",
         outline:
-          "border-[0.5px] border-[var(--hui-color-border-base-tertiary)] bg-[var(--hui-color-background-base-primary)] text-[var(--hui-color-foreground-base-primary)] shadow-[var(--hui-shadow-feather)] not-disabled:hover:border-[var(--hui-color-border-base-focus)] not-disabled:hover:bg-[var(--hui-color-background-base-primary-hover)] not-disabled:active:bg-[var(--hui-color-background-base-primary-hover)] disabled:border-[var(--hui-color-border-base-primary)] disabled:bg-transparent",
+          "border-[0.5px] border-[var(--hui-color-border-base-tertiary)] bg-[var(--hui-color-background-base-primary)] text-[var(--hui-color-foreground-base-primary)] shadow-[var(--hui-shadow-feather)] not-disabled:hover:bg-[var(--hui-color-background-base-primary-hover)] not-disabled:active:bg-[var(--hui-color-background-base-primary-hover)] disabled:border-[var(--hui-color-border-base-primary)] disabled:bg-transparent",
         secondary:
           "bg-[var(--hui-color-background-neutral-secondary)] text-[var(--hui-color-foreground-base-primary)] shadow-[var(--hui-shadow-key,var(--hui-shadow-feather))] not-disabled:hover:bg-[var(--hui-color-background-neutral-secondary-hover)] not-disabled:active:bg-[var(--hui-color-background-neutral-secondary-hover)]",
         // The danger fill is darkened 10% so white 13px label text reaches 4.5:1 (it is 3.9:1 on the raw token).
@@ -36,20 +36,10 @@ const buttonVariants = cva(
         "icon-sm": "size-6 p-0",
         "icon-lg": "size-9 p-0",
       },
-      appearance: {
-        flat: null,
-        glossy:
-          "bg-[linear-gradient(180deg,rgba(255,255,255,.46)_0%,rgba(255,255,255,.12)_38%,transparent_39%),linear-gradient(180deg,rgba(255,255,255,.12)_0%,transparent_54%,rgba(0,0,0,.18)_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,.5),inset_0_0_5px_rgba(255,255,255,.18),inset_0_-18px_15px_-14px_rgba(0,0,0,.35),0_0_0_.75px_rgba(0,0,0,.24),0_3px_8px_rgba(0,0,0,.24)]! [text-shadow:0_1px_2px_rgba(0,0,0,.35)] transition-[filter,box-shadow] duration-200 hover:brightness-[1.06]",
-        glow:
-          "bg-[linear-gradient(180deg,rgba(0,0,0,.18)_0%,rgba(255,255,255,.08)_100%)] shadow-[inset_0_-1.5px_2px_rgba(255,255,255,.45),inset_0_0_12px_rgba(255,255,255,.22),inset_0_0_8px_rgba(255,255,255,.18),0_2px_6px_rgba(0,0,0,.28)]! [text-shadow:0_1px_2px_rgba(0,0,0,.4)] transition-[filter,box-shadow] duration-200 hover:brightness-[1.12]",
-        bevel:
-          "bg-[linear-gradient(180deg,rgba(255,255,255,.2)_0%,transparent_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,.4),0_1px_0_rgba(0,0,0,.28),0_2px_0_rgba(0,0,0,.28),0_3px_0_rgba(0,0,0,.38),0_4px_0_rgba(0,0,0,.38),0_6px_8px_rgba(0,0,0,.3)]! [text-shadow:0_1px_0_rgba(0,0,0,.4)] transition-[transform,box-shadow] duration-120 hover:-translate-y-px [&:is(:active,[data-pressed])]:translate-y-1 [&:is(:active,[data-pressed])]:shadow-[inset_0_1px_0_rgba(255,255,255,.35),0_1px_0_rgba(0,0,0,.38),0_2px_4px_rgba(0,0,0,.28)]!",
-      },
     },
     defaultVariants: {
       variant: "default",
       size: "default",
-      appearance: "flat",
     },
   }
 )
@@ -57,42 +47,28 @@ const buttonVariants = cva(
 interface ButtonProps extends useRender.ComponentProps<"button"> {
   variant?: VariantProps<typeof buttonVariants>["variant"]
   size?: VariantProps<typeof buttonVariants>["size"]
-  appearance?: VariantProps<typeof buttonVariants>["appearance"]
-  asChild?: boolean
 }
 
 function Button({
   className,
   variant,
   size,
-  appearance,
   render,
-  asChild = false,
-  children,
   ...props
 }: ButtonProps) {
-  const renderValue = asChild
-    ? (React.Children.only(children) as React.ReactElement<
-        Record<string, unknown>
-      >)
-    : render
-
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
-    renderValue ? undefined : "button"
+    render ? undefined : "button"
 
   const defaultProps = {
     "data-slot": "button",
-    className: cn(buttonVariants({ variant, size, appearance, className })),
+    className: cn(buttonVariants({ variant, size, className })),
     type: typeValue,
   }
 
   return useRender({
     defaultTagName: "button",
-    render: renderValue,
-    props: mergeProps<"button">(
-      defaultProps,
-      asChild ? props : { ...props, children }
-    ),
+    render,
+    props: mergeProps<"button">(defaultProps, props),
   })
 }
 

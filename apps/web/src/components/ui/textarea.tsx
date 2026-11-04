@@ -2,20 +2,15 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-// Source: https://ds.asanshay.com/r/textarea.json
-function Textarea({
-  className,
-  showHandle = true,
-  ...props
-}: React.ComponentProps<"textarea"> & { showHandle?: boolean }) {
+import { fieldClass } from "./input";
+
+function Textarea({ className, ...props }: React.ComponentProps<"textarea">) {
   return (
     <textarea
       data-slot="textarea"
       className={cn(
-        "border-input placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-primary/30 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-control border bg-transparent p-3 text-base shadow-md shadow-shade outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-        showHandle ? "resize-y" : "resize-none",
-        "hover:border-border/0 hover:bg-foreground/5 hover:shadow-none",
-        "motion-safe:transition-[color,box-shadow,background-color,border-color] motion-safe:duration-150 motion-safe:ease-out motion-safe:hover:duration-75",
+        fieldClass,
+        "flex field-sizing-content min-h-20 resize-y px-3 py-2.5",
         className,
       )}
       {...props}
