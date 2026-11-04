@@ -38,6 +38,7 @@ from kb_agent.protocol import (
     publish,
 )
 from kb_agent.session import (
+    ScreenSampler,
     attach_logs,
     build_session,
     enforce_time_limit,
@@ -216,7 +217,8 @@ async def entrypoint(ctx: JobContext) -> None:
         if flush_traces is not None:
             ctx.add_shutdown_callback(flush_traces)
         product = await asyncio.to_thread(fetch_product, api_url, product_id)
-        session = build_session(product.voice)
+        sampler = ScreenSampler()
+        session = build_session(product.voice, sampler)
         agent = SupportAgent(
             instructions=render_system_prompt(product),
             knowledge=knowledge,
@@ -224,6 +226,7 @@ async def entrypoint(ctx: JobContext) -> None:
             api_url=api_url,
             user=user,
             agent_name=product.agent_name,
+            screen_sent=sampler.sent,
         )
         attach_logs(session, turns)
         publish_citations(session, agent, ctx.room, turns)

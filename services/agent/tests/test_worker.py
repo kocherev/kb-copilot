@@ -137,7 +137,7 @@ def sharing(
     monkeypatch.setenv("API_URL", api_url)
     room = ScreenRoom("user:abc")
     session = _Session(room)
-    monkeypatch.setattr(worker, "build_session", lambda voice: session)
+    monkeypatch.setattr(worker, "build_session", lambda voice, sampler: session)
     ctx = _Ctx(room)
     ctx.job.metadata = json.dumps({"product_id": PRODUCT_ID, "user": "user:abc"})
     return room, ctx, session
@@ -273,7 +273,7 @@ def test_a_model_that_cannot_start_tells_the_room_why(
     room.publish_track("user:abc", SCREEN)
     voices: list[str] = []
 
-    def broken(voice: str) -> _BrokenSession:
+    def broken(voice: str, sampler: object) -> _BrokenSession:
         voices.append(voice)
         return _BrokenSession()
 

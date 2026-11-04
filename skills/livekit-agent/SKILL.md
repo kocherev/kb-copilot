@@ -30,7 +30,7 @@ The browser publishes the microphone and the screen, not the camera. `sessionPub
 
 The agent does not start the model until the session user publishes a screen share. While it waits, its participant attribute `kb.phase` is `waiting_for_screen`. It turns `live` just before `session.start`, so the first turn already has the screen and the greeting describes it. After 5 minutes without a screen share the agent publishes `agent-error` and ends the job. A user who leaves first ends it with no error. The attribute, its values, and the timeout are in `protocol.py`.
 
-`session.room_options` turns video input on. `VoiceActivityVideoSampler` forwards the screen to the model at 1 fps while the user speaks and 0.3 fps otherwise. Frames cost tokens, and each turn logs `image_tokens`.
+`session.room_options` turns video input on. `ScreenSampler` forwards the screen to the model at 1 fps while the user speaks and 0.3 fps otherwise. The greeting waits for its first frame, then one more second, because Gemini Live does not order streamed frames against the greeting turn. Without that pause the greeting is billed no image tokens. Frames cost tokens, and each turn logs `image_tokens`.
 
 `point_at(x, y, label)` publishes a `hud` message. The page draws it inside the video's rendered picture. It does not move the pointer.
 

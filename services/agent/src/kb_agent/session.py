@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Callable
 
 from google.genai import types
+from livekit import rtc
 from livekit.agents import (
     AgentSession,
     ConversationItemAddedEvent,
@@ -24,18 +25,32 @@ GOODBYE = (
 GOODBYE_TIMEOUT_SECONDS = 20
 
 
-def build_session(voice: str) -> AgentSession:
+class ScreenSampler(VoiceActivityVideoSampler):
+    """One frame a second while the user speaks, one per three seconds otherwise.
+
+    sent is set once a frame has gone to the model, so the greeting can wait
+    for it. Without that wait the first reply is generated with no image.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(speaking_fps=1.0, silent_fps=0.3)
+        self.sent = asyncio.Event()
+
+    def __call__(self, frame: rtc.VideoFrame, session: AgentSession) -> bool:
+        sampled = super().__call__(frame, session)
+        if sampled:
+            self.sent.set()
+        return sampled
+
+
+def build_session(voice: str, sampler: ScreenSampler) -> AgentSession:
     model = google.realtime.RealtimeModel(
         model=MODEL,
         voice=voice,
         thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW),
         media_resolution=types.MediaResolution.MEDIA_RESOLUTION_MEDIUM,
     )
-    # One frame a second while the user speaks, one per three seconds otherwise.
-    return AgentSession(
-        llm=model,
-        video_sampler=VoiceActivityVideoSampler(speaking_fps=1.0, silent_fps=0.3),
-    )
+    return AgentSession(llm=model, video_sampler=sampler)
 
 
 def room_options(user: str | None) -> room_io.RoomOptions:
