@@ -141,6 +141,16 @@ function useElementSize() {
 
 type Presence = { text: string; Icon: LucideIcon; live: boolean };
 
+// The floating window already shows the name, so its status line drops it.
+function withoutName(text: string, name: string): string {
+  const prefix = `${name} is `;
+  if (!text.startsWith(prefix)) {
+    return text;
+  }
+  const rest = text.slice(prefix.length);
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
 function presence(phase: RoomPhase, name: string, agentState: string): Presence {
   switch (phase) {
     case "connecting":
@@ -587,7 +597,7 @@ function SessionBody({
             presence={line}
             speaking={phase === "live" && assistant.state === "speaking"}
           />
-          <ConnectionBadge state={state} />
+          {phase === "connecting" ? null : <ConnectionBadge state={state} />}
         </div>
         {agentError ? <InlineError>{agentError}</InlineError> : null}
         {deviceError ? <InlineError>{deviceError}</InlineError> : null}
@@ -623,7 +633,7 @@ function SessionBody({
           <PresenceWindow
             target={presenceWindow.target}
             agentName={agentName}
-            status={line.text || connectionLabel(state)}
+            status={withoutName(line.text, agentName) || connectionLabel(state)}
             live={phase === "live"}
             agentState={assistant.state}
             point={point}

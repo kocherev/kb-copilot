@@ -186,8 +186,15 @@ test("the room joins with the token, mic and screen but no camera", () => {
   );
 });
 
+test("while connecting, only the phase line says so, not a second badge", () => {
+  live.state = "connecting";
+
+  renderRoom();
+
+  expect(screen.queryByRole("status", { name: "Connection" })).toBeNull();
+});
+
 test.each([
-  ["connecting", "Connecting"],
   ["connected", "In the room"],
   ["reconnecting", "Connection lost. Reconnecting"],
   ["signalReconnecting", "Connection lost. Reconnecting"],
@@ -623,7 +630,7 @@ test("keep on top opens a small window with the agent's state, pointer, mute and
   const pip = within(floating.document.body);
   expect(pip.getByRole("heading", { name: "Mina" })).toBeDefined();
   expect(pip.getByRole("status", { name: "Agent" }).textContent).toBe(
-    "Mina is watching your screen",
+    "Watching your screen",
   );
   expect(
     pip.getByText("When Mina points at something on your screen, it shows here."),
