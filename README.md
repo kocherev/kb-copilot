@@ -4,7 +4,7 @@ A voice and screen-share support agent that answers from a knowledge base you up
 
 ![A session with Shawn: the shared billing screen on the left, the spoken answers with their cited sections on the right](docs/images/session-sample.png)
 
-*Sample session. The page is the real session page; the transcript and citations are fixture data.*
+*Sample session. The page is the real session page; the transcript, citations and pointer are fixture data.*
 
 ## What you can do
 
