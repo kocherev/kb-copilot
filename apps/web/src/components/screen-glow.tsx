@@ -12,9 +12,10 @@ const levels = {
   speaking: { colorVariant: "mono", strength: 1, duration: 2.2 },
 } as const;
 
-// Border Beam's light preset is too pale to read on a white page.
+// Border Beam brightens its glow by default, which turns the mono greys white
+// and invisible on a light page. Dimming it keeps a soft grey halo.
 const tuning = {
-  light: { brightness: 1.7, saturation: 2.4 },
+  light: { brightness: 0.5 },
   dark: {},
 } as const;
 
