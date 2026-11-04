@@ -330,7 +330,7 @@ function Moment({
                 href={handoff.issue_url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 rounded-sm font-mono text-meta text-link underline-offset-4 outline-none hover:underline focus-visible:outline-2 focus-visible:outline-ring"
+                className="flex items-center gap-1 rounded-sm font-mono text-meta text-link underline decoration-foreground/30 underline-offset-4 outline-none hover:decoration-current focus-visible:outline-2 focus-visible:outline-ring"
               >
                 {handoff.issue_identifier}
                 <ExternalLink aria-hidden className="size-3" />
