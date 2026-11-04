@@ -258,9 +258,19 @@ export function ProductDocuments({
     null,
   );
 
+  // A load can land after the list is gone, for example when the user leaves the page.
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const refresh = useCallback(
     () =>
       fetchDocuments(apiUrl, productId).then((data) => {
+        if (!mounted.current) return data;
         setLoadError(data === null);
         if (data) {
           setDocuments(data);
