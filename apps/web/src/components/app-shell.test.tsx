@@ -33,7 +33,7 @@ test("shell starts with a skip link and names its navigation", () => {
   expect(screen.getAllByRole("link")[0]?.textContent).toBe("Skip to content");
   expect(screen.getByRole("link", { name: "Skip to content" }).getAttribute("href")).toBe("#content");
   expect(screen.getByRole("navigation", { name: "Main" })).toBeDefined();
-  expect(screen.getByRole("link", { name: "KB Copilot" }).getAttribute("href")).toBe("/");
+  expect(screen.getByRole("link", { name: "Products" }).getAttribute("href")).toBe("/");
   expect(screen.getByRole("group", { name: "Theme" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Sign out" })).toBeDefined();
   expect(screen.getByRole("main").textContent).toBe("Page");

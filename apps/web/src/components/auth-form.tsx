@@ -95,10 +95,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
       <Hero />
       <div className="flex min-w-0 flex-col px-4 py-12 sm:justify-center sm:px-8 lg:py-16">
         <div className="mx-auto flex w-full max-w-sm min-w-0 flex-col gap-8">
-          <div className="flex min-w-0 animate-enter flex-col gap-1.5 lg:hidden">
-            <Brand />
-            <p className="text-meta text-pretty text-muted-foreground">{tagline}</p>
-          </div>
+          <p className="animate-enter text-meta text-pretty text-muted-foreground lg:hidden">
+            {tagline}
+          </p>
           <div className="flex min-w-0 animate-enter flex-col gap-2" style={stagger(1)}>
             <h1 className="font-display text-title text-balance text-foreground">{text.title}</h1>
             <p className="text-body text-pretty text-muted-foreground">{text.lede}</p>
@@ -149,17 +148,6 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
 const tagline = "A support agent that reads your docs and sees your screen.";
 
-function Brand() {
-  return (
-    <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-      <svg viewBox="0 0 24 24" aria-hidden className="size-6 text-primary">
-        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.75" opacity="0.45" />
-        <circle cx="12" cy="12" r="4" fill="currentColor" />
-      </svg>
-      KB Copilot
-    </p>
-  );
-}
 
 // What the product does, shown before anyone has an account. The exchange is
 // an illustration, marked as one.
@@ -167,10 +155,9 @@ function Hero() {
   return (
     <section
       aria-label="About KB Copilot"
-      className="relative hidden min-w-0 flex-col justify-between gap-12 overflow-hidden bg-surface-sunken px-12 py-12 lg:flex xl:px-16"
+      className="hidden min-w-0 flex-col items-center justify-center overflow-hidden bg-surface-sunken px-12 py-16 lg:flex xl:px-16"
     >
-      <Brand />
-      <div className="flex max-w-[30rem] min-w-0 flex-col gap-10">
+      <div className="flex w-full max-w-[30rem] min-w-0 flex-col gap-10">
         <div className="flex animate-enter flex-col gap-4">
           <p className="font-display text-display text-balance text-foreground">
             {tagline}
