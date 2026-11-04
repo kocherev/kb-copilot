@@ -3,24 +3,25 @@
 
 :root,
 [data-theme="light"] {
-  --bg: oklch(0.985 0.003 85);
+  --bg: oklch(0.985 0 0);
   --surface: oklch(1 0 0);
-  --surface-sunken: oklch(0.962 0.004 85);
-  --surface-hover: oklch(0.95 0.005 85);
-  --fg: oklch(0.22 0.01 85);
-  --fg-muted: oklch(0.48 0.012 85);
-  --fg-subtle: oklch(0.6 0.01 85);
-  --line: oklch(0.22 0.01 85 / 0.1);
-  --line-strong: oklch(0.22 0.01 85 / 0.18);
-  --line-control: oklch(0.64 0.01 85);
+  --surface-sunken: oklch(0.97 0 0);
+  --surface-hover: oklch(0.955 0 0);
+  --fg: oklch(0.205 0 0);
+  --fg-muted: oklch(0.5 0 0);
+  --fg-subtle: oklch(0.62 0 0);
+  --line: oklch(0 0 0 / 0.08);
+  --line-strong: oklch(0 0 0 / 0.14);
+  --line-control: oklch(0.87 0 0);
+  --line-control-hover: oklch(0.76 0 0);
 
-  --brand: oklch(0.5 0.085 200);
-  --brand-hover: oklch(0.45 0.075 200);
-  --brand-fg: oklch(1 0 0);
-  --brand-text: oklch(0.5 0.085 200);
-  --brand-soft: oklch(0.955 0.016 200);
-  --brand-soft-fg: oklch(0.4 0.06 200);
-  --focus: oklch(0.56 0.09 200);
+  --brand: oklch(0.205 0 0);
+  --brand-hover: oklch(0.32 0 0);
+  --brand-fg: oklch(0.985 0 0);
+  --brand-text: oklch(0.205 0 0);
+  --brand-soft: oklch(0.955 0 0);
+  --brand-soft-fg: oklch(0.205 0 0);
+  --focus: oklch(0.5 0 0);
 
   --danger: oklch(0.52 0.17 27);
   --danger-hover: oklch(0.47 0.16 27);
@@ -31,36 +32,37 @@
   --warning: oklch(0.52 0.11 70);
   --warning-soft: oklch(0.965 0.025 85);
 
-  --chart-1: oklch(0.5 0.085 200);
-  --chart-2: oklch(0.7 0.09 175);
-  --chart-3: oklch(0.38 0.05 230);
-  --chart-4: oklch(0.78 0.12 85);
-  --chart-5: oklch(0.62 0.1 285);
+  --chart-1: oklch(0.55 0.17 255);
+  --chart-2: oklch(0.6 0.13 155);
+  --chart-3: oklch(0.45 0 0);
+  --chart-4: oklch(0.75 0.14 75);
+  --chart-5: oklch(0.6 0.15 300);
 
   --elev-ring: 0 0 0 1px var(--line);
-  --elev-soft: 0 1px 2px oklch(0.22 0.01 85 / 0.05), 0 4px 12px -2px oklch(0.22 0.01 85 / 0.06);
-  --elev-float: 0 2px 4px oklch(0.22 0.01 85 / 0.06), 0 12px 32px -4px oklch(0.22 0.01 85 / 0.14);
+  --elev-soft: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 12px -2px oklch(0 0 0 / 0.05);
+  --elev-float: 0 2px 4px oklch(0 0 0 / 0.05), 0 12px 32px -4px oklch(0 0 0 / 0.12);
 }
 
 [data-theme="dark"] {
-  --bg: oklch(0.17 0.005 85);
-  --surface: oklch(0.215 0.006 85);
-  --surface-sunken: oklch(0.145 0.005 85);
-  --surface-hover: oklch(0.255 0.006 85);
-  --fg: oklch(0.94 0.006 85);
-  --fg-muted: oklch(0.72 0.01 85);
-  --fg-subtle: oklch(0.58 0.01 85);
+  --bg: oklch(0.145 0 0);
+  --surface: oklch(0.195 0 0);
+  --surface-sunken: oklch(0.17 0 0);
+  --surface-hover: oklch(0.245 0 0);
+  --fg: oklch(0.985 0 0);
+  --fg-muted: oklch(0.71 0 0);
+  --fg-subtle: oklch(0.58 0 0);
   --line: oklch(1 0 0 / 0.09);
-  --line-strong: oklch(1 0 0 / 0.16);
-  --line-control: oklch(0.52 0.01 85);
+  --line-strong: oklch(1 0 0 / 0.15);
+  --line-control: oklch(0.32 0 0);
+  --line-control-hover: oklch(0.42 0 0);
 
-  --brand: oklch(0.74 0.1 195);
-  --brand-hover: oklch(0.79 0.09 195);
-  --brand-fg: oklch(0.18 0.02 200);
-  --brand-text: oklch(0.76 0.1 195);
-  --brand-soft: oklch(0.27 0.04 200);
-  --brand-soft-fg: oklch(0.84 0.08 195);
-  --focus: oklch(0.7 0.11 197);
+  --brand: oklch(0.93 0 0);
+  --brand-hover: oklch(0.86 0 0);
+  --brand-fg: oklch(0.205 0 0);
+  --brand-text: oklch(0.985 0 0);
+  --brand-soft: oklch(0.27 0 0);
+  --brand-soft-fg: oklch(0.985 0 0);
+  --focus: oklch(0.62 0 0);
 
   --danger: oklch(0.71 0.15 25);
   --danger-hover: oklch(0.76 0.13 25);
@@ -71,11 +73,11 @@
   --warning: oklch(0.8 0.12 80);
   --warning-soft: oklch(0.26 0.035 80);
 
-  --chart-1: oklch(0.74 0.1 195);
-  --chart-2: oklch(0.6 0.08 175);
-  --chart-3: oklch(0.85 0.04 220);
-  --chart-4: oklch(0.82 0.12 85);
-  --chart-5: oklch(0.7 0.1 285);
+  --chart-1: oklch(0.68 0.15 255);
+  --chart-2: oklch(0.7 0.13 155);
+  --chart-3: oklch(0.8 0 0);
+  --chart-4: oklch(0.8 0.13 80);
+  --chart-5: oklch(0.7 0.14 300);
 
   --elev-ring: 0 0 0 1px var(--line);
   --elev-soft: 0 1px 2px oklch(0 0 0 / 0.3), 0 4px 12px -2px oklch(0 0 0 / 0.3);
@@ -100,9 +102,8 @@
 
   /* How far things travel. Reduced motion collapses these, so every enter
      and exit becomes a plain fade without each component checking. */
-  --motion-y: 8px;
-  --motion-exit-y: -6px;
-  --motion-blur: 4px;
+  --motion-y: 4px;
+  --motion-exit-y: -4px;
   --motion-scale: 0.97;
 }
 
@@ -110,7 +111,6 @@
   :root {
     --motion-y: 0px;
     --motion-exit-y: 0px;
-    --motion-blur: 0px;
     --motion-scale: 1;
     --duration-enter: 150ms;
     --stagger-step: 0ms;

@@ -56,6 +56,7 @@
   --color-border: var(--line);
   --color-border-strong: var(--line-strong);
   --color-input: var(--line-control);
+  --color-input-hover: var(--line-control-hover);
   --color-ring: var(--focus);
   --color-destructive: var(--danger);
   --color-destructive-foreground: var(--danger-fg);
@@ -69,7 +70,6 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --color-shade: oklch(0 0 0 / 0.06);
 
   --radius-control: 0.625rem;
   --radius-card: 1rem;
@@ -83,7 +83,7 @@
   --ease-in-out: var(--motion-ease-in-out);
   --ease-drawer: var(--motion-ease-drawer);
 
-  /* backwards, not both: a filled last frame keeps a transform and a filter
+  /* backwards, not both: a filled last frame keeps a transform
      on the element, and a position: fixed child then scrolls with it. */
   --animate-enter: enter var(--duration-enter) var(--motion-ease-out) backwards;
   --animate-exit: exit var(--duration-fast) var(--motion-ease-out) both;
@@ -93,14 +93,12 @@
     from {
       opacity: 0;
       transform: translateY(var(--motion-y));
-      filter: blur(var(--motion-blur));
     }
   }
   @keyframes exit {
     to {
       opacity: 0;
       transform: translateY(var(--motion-exit-y));
-      filter: blur(var(--motion-blur));
     }
   }
   @keyframes shimmer {

@@ -17,7 +17,6 @@ test("reduced motion turns every enter and exit into a plain fade", () => {
   const block = reducedMotionBlock(tokens);
   expect(block).toMatch(/--motion-y:\s*0px/);
   expect(block).toMatch(/--motion-exit-y:\s*0px/);
-  expect(block).toMatch(/--motion-blur:\s*0px/);
   expect(block).toMatch(/--motion-scale:\s*1/);
   expect(block).toMatch(/--stagger-step:\s*0ms/);
 });
