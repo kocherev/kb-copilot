@@ -83,10 +83,26 @@ def should_abstain(passages: tuple[Passage, ...], threshold: float | None) -> bo
     return threshold is not None and max(p.score for p in passages) < threshold
 
 
+class IndexModelMismatch(RuntimeError):
+    """The collection holds vectors from a different dense model."""
+
+
 async def ensure_collection(
     client: AsyncQdrantClient, settings: RetrievalSettings = DEFAULT_SETTINGS
 ) -> None:
     if await client.collection_exists(KB_COLLECTION):
+        info = await client.get_collection(KB_COLLECTION)
+        vectors = info.config.params.vectors
+        stored = vectors[DENSE].size if isinstance(vectors, dict) else None
+        if stored != settings.dense.size():
+            # Old vectors cannot be searched with the new model, and the uploaded
+            # files are gone once indexed, so they cannot be rebuilt here.
+            raise IndexModelMismatch(
+                f"{KB_COLLECTION} holds {stored}-dimension vectors but the dense model "
+                f"makes {settings.dense.size()}. Delete the collection "
+                f"(DELETE /collections/{KB_COLLECTION} on Qdrant), then upload "
+                "the documents again."
+            )
         return
     await client.create_collection(
         collection_name=KB_COLLECTION,

@@ -119,6 +119,7 @@ If something is missing, Compose still starts the rest:
 | Start session fails with `LiveKit is not configured` (HTTP 503) | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, or `LIVEKIT_API_SECRET` is empty or `replace-me` | Set them, then `docker compose up -d` |
 | The agent container exits | `docker compose logs agent` names the setting, such as `GOOGLE_API_KEY` | Set it, then `docker compose up -d agent` |
 | A document shows Failed with "indexing failed" | `docker compose logs api` has the cause. One cause is a full Docker disk, which Qdrant reports as `No space left on device` | Free space, then upload the file again |
+| Every upload fails and `docker compose logs api` says `kb_chunks holds 384-dimension vectors` | The search index was built by an older version with a different embedding model | `curl -X DELETE http://localhost:6333/collections/kb_chunks`, then upload the documents again |
 | Product, document and session routes return 401 | The call has no sign-in | See [docs/setup.md](docs/setup.md#use-the-api-from-the-command-line) |
 
 [docs/setup.md](docs/setup.md) covers LiveKit Cloud, other host ports, and the API from the command line. `scripts/smoke.py` walks the same flow against a running stack, up to the agent's first reaction in the room. CI runs it on every pull request and every push to `main`.

@@ -11,6 +11,7 @@ from kb_rag.models import (
 from kb_rag.pipeline import (
     KB_COLLECTION,
     NOT_IN_DOCS,
+    IndexModelMismatch,
     Passage,
     SearchResult,
     delete_source,
@@ -26,6 +27,7 @@ __all__ = [
     "FastEmbedDense",
     "FastEmbedReranker",
     "FastEmbedSparse",
+    "IndexModelMismatch",
     "KB_COLLECTION",
     "NOT_IN_DOCS",
     "Passage",
