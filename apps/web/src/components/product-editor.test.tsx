@@ -94,9 +94,12 @@ test("a product that failed to load says why and offers to try again", () => {
   expect(screen.queryByLabelText("Name")).toBeNull();
 });
 
-test("field hints name the agent, or say the agent when the name is empty", () => {
+test("field hints name the agent, or say the agent when the name is empty", async () => {
   stubApi(() => ({ status: 200, body: [] }));
   render(<ProductEditor apiUrl="http://localhost:8000" loaded={{ status: "ready", product }} />);
+  // Let the documents and sessions loads land before the test ends.
+  await screen.findByText("No documents yet");
+  await screen.findByText("No sessions yet");
 
   expect(screen.getByText("How Shawn should sound, such as “calm and brief”.")).toBeDefined();
   expect(screen.getByText("What Shawn must not do.")).toBeDefined();
