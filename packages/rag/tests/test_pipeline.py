@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from kb_rag import (
     KB_COLLECTION,
+    IndexModelMismatch,
     Source,
     delete_source,
     index_sources,
@@ -13,7 +14,7 @@ from kb_rag import (
     validate_product_id,
 )
 from kb_rag.sources import source_from_bytes
-from kb_rag.testing import HASH_SETTINGS
+from kb_rag.testing import HASH_SETTINGS, HashDense
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
 
@@ -182,3 +183,20 @@ def test_an_opt_in_reranker_reorders_and_sets_the_score() -> None:
     assert [p.title for p in found.passages] == ["Shipping", "Refunds"]
     assert [p.score for p in found.passages] == [5.0, -5.0]
     assert not found.abstained
+
+
+def test_an_index_built_for_another_model_says_how_to_fix_it() -> None:
+    # A stack upgraded to a new embedding model keeps the old collection.
+    bigger = replace(HASH_SETTINGS, dense=HashDense(768))
+
+    async def run():
+        client = AsyncQdrantClient(":memory:")
+        await index_sources(client, "acme", [REFUNDS], settings=HASH_SETTINGS)
+        await index_sources(client, "acme", [REFUNDS], settings=bigger)
+
+    with pytest.raises(IndexModelMismatch) as found:
+        asyncio.run(run())
+
+    assert "384" in str(found.value)
+    assert "768" in str(found.value)
+    assert "DELETE /collections/kb_chunks" in str(found.value)
