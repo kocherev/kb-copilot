@@ -16,3 +16,36 @@ export function letterbox(container: Size, video: Size): Box {
     height,
   };
 }
+
+export type Crop = Box & { cursor: { x: number; y: number } };
+
+const clamp = (value: number, low: number, high: number) =>
+  Math.min(Math.max(value, low), Math.max(low, high));
+
+// A view-shaped region of the frame, 1/zoom of its width, centred on the point
+// unless that would leave the frame. cursor is where the point lands inside
+// the crop, as fractions of it.
+export function cropAround(
+  point: { x: number; y: number },
+  video: Size,
+  view: Size,
+  zoom: number,
+): Crop {
+  let width = video.width / zoom;
+  let height = (width * view.height) / view.width;
+  if (height > video.height) {
+    height = video.height;
+    width = (height * view.width) / view.height;
+  }
+  const x = point.x * video.width;
+  const y = point.y * video.height;
+  const left = clamp(x - width / 2, 0, video.width - width);
+  const top = clamp(y - height / 2, 0, video.height - height);
+  return {
+    left,
+    top,
+    width,
+    height,
+    cursor: { x: (x - left) / width, y: (y - top) / height },
+  };
+}
