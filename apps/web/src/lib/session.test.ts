@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 
 import {
   connectionLabel,
+  roomPhase,
   sessionLoad,
   sessionPublish,
   sourceLabel,
@@ -108,3 +109,23 @@ test("every connection state has a plain label", () => {
     "Session ended",
   ]);
 });
+
+test.each([
+  ["connecting", false, undefined, false, false, "connecting"],
+  ["reconnecting", true, "live", true, false, "reconnecting"],
+  ["signalReconnecting", true, "live", true, false, "reconnecting"],
+  ["disconnected", true, "live", true, false, "ended"],
+  ["connected", false, undefined, true, false, "joining"],
+  ["connected", false, undefined, false, true, "left"],
+  ["connected", true, "waiting_for_screen", false, false, "share"],
+  ["connected", true, "waiting_for_screen", true, false, "share"],
+  ["connected", true, undefined, false, false, "share"],
+  ["connected", true, "live", false, false, "share-stopped"],
+  ["connected", true, "live", true, false, "live"],
+  ["connected", true, undefined, true, false, "live"],
+] as const)(
+  "%s with agent %s, phase %s, sharing %s, failed %s is %s",
+  (state, agentPresent, agentPhase, sharing, agentFailed, phase) => {
+    expect(roomPhase({ state, agentPresent, agentPhase, sharing, agentFailed })).toBe(phase);
+  },
+);

@@ -17,7 +17,6 @@ import {
 import { Track } from "livekit-client";
 import {
   AudioLines,
-  Ear,
   Ellipsis,
   Eye,
   Hourglass,
@@ -26,15 +25,24 @@ import {
   MonitorOff,
   MonitorUp,
   PhoneOff,
+  PictureInPicture2,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { startTransition, useEffect, useRef, useState, ViewTransition } from "react";
+import {
+  startTransition,
+  useEffect,
+  useRef,
+  useState,
+  ViewTransition,
+  type RefObject,
+} from "react";
 
 import { AgentCursor } from "@/components/agent-cursor/agent-cursor";
 import { ApprovalTray } from "@/components/approval-tray";
 import { ConnectMac } from "@/components/connect-mac";
 import { HandoffCard } from "@/components/handoff-card";
+import { PresenceWindow, usePresenceWindow } from "@/components/presence-window";
 import { ScreenGlow } from "@/components/screen-glow";
 import { TranscriptPanel } from "@/components/transcript-panel";
 import { Button } from "@/components/ui/button";
@@ -48,6 +56,7 @@ import {
   COMPUTER_TOPIC,
   ESCALATION_TOPIC,
   HUD_TOPIC,
+  KB_PHASE_ATTRIBUTE,
   decisionMessage,
   parseAgentError,
   parseCitations,
@@ -62,8 +71,10 @@ import {
 } from "@/lib/protocol";
 import {
   connectionLabel,
+  roomPhase,
   sessionPublish,
   transcriptLines,
+  type RoomPhase,
 } from "@/lib/session";
 
 const decode = (payload: Uint8Array) => new TextDecoder().decode(payload);
@@ -130,28 +141,43 @@ function useElementSize() {
 
 type Presence = { text: string; Icon: LucideIcon; live: boolean };
 
-function presence(
-  name: string,
-  connected: boolean,
-  agentPresent: boolean,
-  shared: boolean,
-  agentState: string,
-): Presence {
-  if (!connected) {
-    return { text: "", Icon: UserRound, live: false };
+// The floating window already shows the name, so its status line drops it.
+function withoutName(text: string, name: string): string {
+  const prefix = `${name} is `;
+  if (!text.startsWith(prefix)) {
+    return text;
   }
-  if (!agentPresent) {
-    return { text: `Waiting for ${name} to join`, Icon: Hourglass, live: false };
+  const rest = text.slice(prefix.length);
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
+
+function presence(phase: RoomPhase, name: string, agentState: string): Presence {
+  switch (phase) {
+    case "connecting":
+      return { text: "Connecting", Icon: Hourglass, live: false };
+    case "joining":
+      return { text: `${name} is joining`, Icon: UserRound, live: false };
+    case "share":
+      return { text: `Share your screen so ${name} can see it`, Icon: MonitorUp, live: false };
+    case "share-stopped":
+      return {
+        text: `Screen sharing stopped, so ${name} can’t see your screen`,
+        Icon: MonitorOff,
+        live: false,
+      };
+    case "left":
+      return { text: `${name} left the call`, Icon: PhoneOff, live: false };
+    case "live":
+      if (agentState === "thinking") {
+        return { text: `${name} is thinking`, Icon: Ellipsis, live: true };
+      }
+      if (agentState === "speaking") {
+        return { text: `${name} is speaking`, Icon: AudioLines, live: true };
+      }
+      return { text: `${name} is watching your screen`, Icon: Eye, live: true };
+    default:
+      return { text: "", Icon: UserRound, live: false };
   }
-  if (agentState === "thinking") {
-    return { text: `${name} is thinking`, Icon: Ellipsis, live: true };
-  }
-  if (agentState === "speaking") {
-    return { text: `${name} is speaking`, Icon: AudioLines, live: true };
-  }
-  return shared
-    ? { text: `${name} is watching your screen`, Icon: Eye, live: true }
-    : { text: `${name} is listening`, Icon: Ear, live: true };
 }
 
 // Shawn's state is the first thing to read in the room: an icon that changes
@@ -201,97 +227,142 @@ function ConnectionBadge({ state }: { state: string }) {
   );
 }
 
-function ScreenToggleButton() {
+function SharePrompt({
+  large,
+  note,
+  onShared,
+}: {
+  large: boolean;
+  note: string;
+  onShared: () => void;
+}) {
   const { toggle, pending } = useTrackToggle({ source: Track.Source.ScreenShare });
   return (
-    <Button type="button" variant="outline" disabled={pending} onClick={() => void toggle(true)}>
-      <MonitorUp aria-hidden />
-      Share your screen
-    </Button>
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <Button
+        type="button"
+        size={large ? "xl" : "default"}
+        disabled={pending}
+        onClick={() => void toggle(true).then(onShared)}
+      >
+        <MonitorUp aria-hidden />
+        Share your screen
+      </Button>
+      <p className="max-w-[40ch] text-meta text-pretty text-muted-foreground">{note}</p>
+    </div>
+  );
+}
+
+function StageWaiting({ children }: { children: string }) {
+  return (
+    <div className="flex h-full items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+      <Spinner />
+      {children}
+    </div>
+  );
+}
+
+function StageEnd({ title, onRestart }: { title: string; onRestart: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+      <span className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary-soft-foreground max-sm:hidden">
+        <PhoneOff aria-hidden className="size-5" />
+      </span>
+      <p className="font-display text-xl/tight text-foreground">{title}</p>
+      <p className="max-w-[40ch] text-meta text-pretty text-muted-foreground">
+        The transcript stays on this page until you leave.
+      </p>
+      <Button type="button" onClick={onRestart}>
+        New session
+      </Button>
+    </div>
   );
 }
 
 function StagePlaceholder({
-  state,
+  phase,
   agentName,
   onRestart,
+  onShared,
 }: {
-  state: string;
+  phase: RoomPhase;
   agentName: string;
   onRestart: () => void;
+  onShared: () => void;
 }) {
-  if (state === "disconnected") {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <span className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary-soft-foreground max-sm:hidden">
-          <PhoneOff aria-hidden className="size-5" />
-        </span>
-        <p className="font-display text-xl/tight text-foreground">Session ended</p>
-        <p className="max-w-[40ch] text-meta text-pretty text-muted-foreground">
-          The transcript stays on this page until you leave.
-        </p>
-        <Button type="button" onClick={onRestart}>
-          New session
-        </Button>
-      </div>
-    );
+  switch (phase) {
+    case "ended":
+      return <StageEnd title="Session ended" onRestart={onRestart} />;
+    case "left":
+      return <StageEnd title={`${agentName} left the call`} onRestart={onRestart} />;
+    case "share":
+      return (
+        <SharePrompt
+          large
+          note={`${agentName} starts talking once your screen is shared.`}
+          onShared={onShared}
+        />
+      );
+    case "share-stopped":
+      return (
+        <SharePrompt
+          large={false}
+          note={`${agentName} can’t see your screen until you share it again.`}
+          onShared={onShared}
+        />
+      );
+    case "joining":
+      return <StageWaiting>{`${agentName} is joining…`}</StageWaiting>;
+    case "reconnecting":
+      return <StageWaiting>Reconnecting…</StageWaiting>;
+    default:
+      return <StageWaiting>Connecting…</StageWaiting>;
   }
-  if (state !== "connected") {
-    return (
-      <div className="flex h-full items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
-        <Spinner />
-        Joining the room…
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-      <span className="grid size-10 place-items-center rounded-full bg-primary-soft text-primary-soft-foreground max-sm:hidden">
-        <MonitorUp aria-hidden className="size-5" />
-      </span>
-      <p className="max-w-[40ch] text-sm text-pretty text-muted-foreground">
-        Share your screen so {agentName} can see it.
-      </p>
-      <ScreenToggleButton />
-    </div>
-  );
 }
 
 function ScreenStage({
   point,
   agentName,
-  watching,
+  phase,
   agentState,
   shared,
   video,
-  state,
+  videoRef,
   onRestart,
+  onShared,
 }: {
   point: HudPoint | null;
   agentName: string;
-  watching: boolean;
+  phase: RoomPhase;
   agentState: string;
   shared: TrackReference | undefined;
   video: Size;
-  state: string;
+  videoRef: RefObject<HTMLVideoElement | null>;
   onRestart: () => void;
+  onShared: () => void;
 }) {
   const { ref, size } = useElementSize();
-  const reconnecting = state === "reconnecting" || state === "signalReconnecting";
+  const showVideo = shared !== undefined && (phase === "live" || phase === "reconnecting");
   return (
     <section aria-label="Shared screen" className="flex min-w-0 flex-col gap-2">
-      <ScreenGlow watching={watching} agentState={agentState}>
+      <ScreenGlow watching={phase === "live"} agentState={agentState}>
         <div
           ref={ref}
           className="relative aspect-video w-full overflow-hidden rounded-panel border border-transparent bg-surface-sunken shadow-ring"
         >
-          {shared && state !== "disconnected" ? (
+          {showVideo ? (
             <VideoTrack
+              ref={videoRef}
               trackRef={shared}
-              className={`h-full w-full object-contain transition-opacity duration-200 ease-out ${reconnecting ? "opacity-50" : ""}`}
+              className={`h-full w-full object-contain transition-opacity duration-200 ease-out ${phase === "reconnecting" ? "opacity-50" : ""}`}
             />
           ) : (
-            <StagePlaceholder state={state} agentName={agentName} onRestart={onRestart} />
+            <StagePlaceholder
+              phase={phase}
+              agentName={agentName}
+              onRestart={onRestart}
+              onShared={onShared}
+            />
           )}
           <AgentCursor
             name={agentName}
@@ -302,7 +373,7 @@ function ScreenStage({
           />
         </div>
       </ScreenGlow>
-      {shared && state !== "disconnected" ? (
+      {showVideo ? (
         <p className="text-meta text-pretty text-muted-foreground">
           {agentName}&rsquo;s pointer is drawn on this preview. It moves your mouse only for a
           step you allow.
@@ -351,12 +422,17 @@ function TrackToggleButton({
 
 // Docked to the bottom of the screen on phones, under the stage on desktop.
 function ControlBar({
+  agentName,
+  presenceWindow,
   onEnd,
   onDeviceError,
 }: {
+  agentName: string;
+  presenceWindow: { supported: boolean; open: boolean; toggle: () => void };
   onEnd: () => void;
   onDeviceError: (error: Error) => void;
 }) {
+  const onTop = `Keep ${agentName} on top`;
   return (
     <div className="fixed inset-x-0 bottom-0 z-(--z-overlay) border-t border-border bg-background/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
       <div
@@ -382,6 +458,18 @@ function ControlBar({
           offClass="text-muted-foreground hover:bg-surface-hover"
           onDeviceError={onDeviceError}
         />
+        {presenceWindow.supported ? (
+          <button
+            type="button"
+            aria-label={onTop}
+            aria-pressed={presenceWindow.open}
+            title={onTop}
+            onClick={presenceWindow.toggle}
+            className={`${toggleBase} ${presenceWindow.open ? "bg-primary-soft text-primary-soft-foreground" : "text-muted-foreground hover:bg-surface-hover"}`}
+          >
+            <PictureInPicture2 aria-hidden className="size-5" />
+          </button>
+        ) : null}
         <span aria-hidden className="mx-1 h-6 w-px bg-border" />
         <Button
           type="button"
@@ -485,31 +573,44 @@ function SessionBody({
     }
   });
   const lines = transcriptLines(useTranscriptions(), citations);
-  const connected = state === "connected";
   const ended = state === "disconnected";
-  const agentPresent = assistant.agent !== undefined;
-  const watching = connected && shared !== undefined && agentPresent;
+  const phase = roomPhase({
+    state,
+    agentPresent: assistant.agent !== undefined,
+    agentPhase: assistant.agentAttributes?.[KB_PHASE_ATTRIBUTE],
+    sharing: shared !== undefined,
+    agentFailed: agentError !== null,
+  });
+  const line = presence(phase, agentName, assistant.state);
+  const video = shared?.publication?.dimensions ?? { width: 0, height: 0 };
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const presenceWindow = usePresenceWindow(!ended, agentName);
+  // Opening needs the user's click. After the screen picker that click may
+  // have expired, and then the control bar button stays as the way in.
+  const openPresenceWindow = () => void presenceWindow.open().catch(() => {});
+  const endSession = () => void room.disconnect();
   return (
     <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] lg:items-start">
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex min-w-0 items-center justify-between gap-3">
           <PresenceLine
-            presence={presence(agentName, connected, agentPresent, shared !== undefined, assistant.state)}
-            speaking={connected && agentPresent && assistant.state === "speaking"}
+            presence={line}
+            speaking={phase === "live" && assistant.state === "speaking"}
           />
-          <ConnectionBadge state={state} />
+          {phase === "connecting" ? null : <ConnectionBadge state={state} />}
         </div>
         {agentError ? <InlineError>{agentError}</InlineError> : null}
         {deviceError ? <InlineError>{deviceError}</InlineError> : null}
         <ScreenStage
           point={point}
           agentName={agentName}
-          watching={watching}
+          phase={phase}
           agentState={assistant.state}
           shared={shared}
-          video={shared?.publication?.dimensions ?? { width: 0, height: 0 }}
-          state={state}
+          video={video}
+          videoRef={videoRef}
           onRestart={onRestart}
+          onShared={openPresenceWindow}
         />
         {proposal ? (
           <ViewTransition enter="vt-tray" exit="vt-tray" default="none">
@@ -518,10 +619,50 @@ function SessionBody({
         ) : null}
         {ended ? null : (
           <ControlBar
-            onEnd={() => void room.disconnect()}
+            agentName={agentName}
+            presenceWindow={{
+              supported: presenceWindow.supported,
+              open: presenceWindow.target !== null,
+              toggle: presenceWindow.target ? presenceWindow.close : openPresenceWindow,
+            }}
+            onEnd={endSession}
             onDeviceError={(error) => setDeviceError(deviceMessage(error))}
           />
         )}
+        {presenceWindow.target ? (
+          <PresenceWindow
+            target={presenceWindow.target}
+            agentName={agentName}
+            status={withoutName(line.text, agentName) || connectionLabel(state)}
+            live={phase === "live"}
+            agentState={assistant.state}
+            point={point}
+            video={video}
+            source={videoRef}
+            controls={
+              <>
+                <TrackToggleButton
+                  source={Track.Source.Microphone}
+                  label="Microphone"
+                  on={Mic}
+                  off={MicOff}
+                  onClass="text-foreground hover:bg-surface-hover"
+                  offClass="bg-destructive-soft text-destructive"
+                  onDeviceError={(error) => setDeviceError(deviceMessage(error))}
+                />
+                <button
+                  type="button"
+                  aria-label="End session"
+                  title="End session"
+                  onClick={endSession}
+                  className={`${toggleBase} bg-[color-mix(in_oklch,var(--hui-color-background-danger-emphasis)_90%,black)] text-[var(--hui-color-foreground-danger-emphasis)]`}
+                >
+                  <PhoneOff aria-hidden className="size-5" />
+                </button>
+              </>
+            }
+          />
+        ) : null}
       </div>
       <aside
         aria-label="Session details"

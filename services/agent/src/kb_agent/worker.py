@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import os
 from collections.abc import Callable, Coroutine
+from typing import Literal
 
 from livekit import rtc
 from livekit.agents import (
@@ -28,10 +29,16 @@ from kb_agent.protocol import (
     AGENT_ERROR_TOPIC,
     AGENT_NAME,
     CITATIONS_TOPIC,
+    KB_PHASE_ATTRIBUTE,
+    KB_PHASE_LIVE,
+    KB_PHASE_WAITING_FOR_SCREEN,
+    NO_SCREEN_MESSAGE,
+    SCREEN_WAIT_SECONDS,
     AgentError,
     publish,
 )
 from kb_agent.session import (
+    ScreenSampler,
     attach_logs,
     build_session,
     enforce_time_limit,
@@ -69,13 +76,73 @@ async def wait_for_listener(room: rtc.Room) -> None:
 async def report_failure(room: rtc.Room, exc: Exception) -> None:
     """Tell the page why the agent will not speak, so the room is never just silent."""
     log_json({"event": "agent_error", "error": type(exc).__name__})
-    await wait_for_listener(room)
-    message = (
+    await send_error(
+        room,
         f"The agent could not start ({type(exc).__name__}). "
-        "Try again in a moment. If it keeps failing, check the agent logs."
+        "Try again in a moment. If it keeps failing, check the agent logs.",
     )
+
+
+async def send_error(room: rtc.Room, message: str) -> None:
+    await wait_for_listener(room)
     with contextlib.suppress(Exception):
         await publish(room, AGENT_ERROR_TOPIC, AgentError(message=message))
+
+
+async def wait_for_screen(
+    room: rtc.Room, user: str | None, timeout: float
+) -> Literal["shared", "left", "timeout"]:
+    """Wait until the session user publishes a screen share.
+
+    The user is the participant room_options pins, or the first one in the room
+    when there is no user. A camera, or another participant's screen, does not count.
+    """
+    outcome: asyncio.Future[Literal["shared", "left"]] = (
+        asyncio.get_running_loop().create_future()
+    )
+    identity = user
+
+    def settle(result: Literal["shared", "left"]) -> None:
+        if not outcome.done():
+            outcome.set_result(result)
+
+    def check(
+        publications: list[rtc.RemoteTrackPublication],
+        participant: rtc.RemoteParticipant,
+    ) -> None:
+        nonlocal identity
+        identity = identity or participant.identity
+        screen = rtc.TrackSource.SOURCE_SCREENSHARE
+        if participant.identity == identity and any(
+            p.source == screen for p in publications
+        ):
+            settle("shared")
+
+    def on_joined(participant: rtc.RemoteParticipant) -> None:
+        check(list(participant.track_publications.values()), participant)
+
+    def on_published(
+        publication: rtc.RemoteTrackPublication, participant: rtc.RemoteParticipant
+    ) -> None:
+        check([publication], participant)
+
+    def on_left(participant: rtc.RemoteParticipant) -> None:
+        if participant.identity == identity:
+            settle("left")
+
+    room.on("participant_connected", on_joined)
+    room.on("track_published", on_published)
+    room.on("participant_disconnected", on_left)
+    try:
+        for participant in list(room.remote_participants.values()):
+            on_joined(participant)
+        return await asyncio.wait_for(outcome, timeout)
+    except TimeoutError:
+        return "timeout"
+    finally:
+        room.off("participant_connected", on_joined)
+        room.off("track_published", on_published)
+        room.off("participant_disconnected", on_left)
 
 
 def publish_citations(
@@ -136,7 +203,9 @@ async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
     api_url = os.environ.get("API_URL", "http://localhost:8000")
     limit: asyncio.Task[None] | None = None
+    set_phase = ctx.room.local_participant.set_attributes
     try:
+        await set_phase({KB_PHASE_ATTRIBUTE: KB_PHASE_WAITING_FOR_SCREEN})
         product_id = product_id_from_metadata(ctx.job.metadata)
         user = user_from_metadata(ctx.job.metadata)
         token = os.environ.get("INTERNAL_API_TOKEN", "")
@@ -148,7 +217,8 @@ async def entrypoint(ctx: JobContext) -> None:
         if flush_traces is not None:
             ctx.add_shutdown_callback(flush_traces)
         product = await asyncio.to_thread(fetch_product, api_url, product_id)
-        session = build_session(product.voice)
+        sampler = ScreenSampler()
+        session = build_session(product.voice, sampler)
         agent = SupportAgent(
             instructions=render_system_prompt(product),
             knowledge=knowledge,
@@ -156,6 +226,7 @@ async def entrypoint(ctx: JobContext) -> None:
             api_url=api_url,
             user=user,
             agent_name=product.agent_name,
+            screen_sent=sampler.sent,
         )
         attach_logs(session, turns)
         publish_citations(session, agent, ctx.room, turns)
@@ -168,6 +239,18 @@ async def entrypoint(ctx: JobContext) -> None:
             ctx.shutdown(reason=ev.reason.value)
 
         session.on("close", lambda ev: spawn(closed(ev)))
+        # video_input streams the screen share only once the session starts,
+        # so the greeting would describe nothing if it started earlier.
+        screen = await wait_for_screen(ctx.room, user, SCREEN_WAIT_SECONDS)
+        log_json({"event": "screen_wait", "outcome": screen})
+        if screen == "timeout":
+            await send_error(ctx.room, NO_SCREEN_MESSAGE)
+            ctx.shutdown(reason="no screen share")
+            return
+        if screen == "left":
+            ctx.shutdown(reason="user left")
+            return
+        await set_phase({KB_PHASE_ATTRIBUTE: KB_PHASE_LIVE})
         log_json({"event": "session", "product_id": product_id})
         await session.start(agent=agent, room=ctx.room, room_options=room_options(user))
         limit = asyncio.create_task(

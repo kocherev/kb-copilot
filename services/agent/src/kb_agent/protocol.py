@@ -17,6 +17,17 @@ ESCALATION_TOPIC = "escalation"
 COMPUTER_TOPIC = "computer"
 COMPUTER_DECISION_TOPIC = "computer-decision"
 
+# The agent's own participant attribute. It waits for the user's screen share
+# before it starts the model, so its first words can describe the screen.
+KB_PHASE_ATTRIBUTE = "kb.phase"
+KB_PHASE_WAITING_FOR_SCREEN = "waiting_for_screen"
+KB_PHASE_LIVE = "live"
+SCREEN_WAIT_SECONDS = 300
+NO_SCREEN_MESSAGE = (
+    "No screen was shared, so the session ended. "
+    "Start a new session and share your screen when asked."
+)
+
 LABEL_LIMIT = 80
 SNIPPET_LIMIT = 280
 

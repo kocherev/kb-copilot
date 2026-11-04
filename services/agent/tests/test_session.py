@@ -1,12 +1,19 @@
 import asyncio
+from types import SimpleNamespace
 
 import pytest
+from agent_fakes import FakeRoom, knowledge_over
 from kb_agent import session as live
+from kb_agent import support
+from kb_agent.support import SupportAgent
+from kb_rag.testing import HASH_SETTINGS
+from livekit import rtc
 from livekit.agents import AgentSession
+from qdrant_client import AsyncQdrantClient
 
 
 async def _build(voice: str = "Sulafat") -> AgentSession:
-    return live.build_session(voice)
+    return live.build_session(voice, live.ScreenSampler())
 
 
 def test_the_model_is_gemini_live_with_low_thinking_and_medium_frames(
@@ -102,3 +109,45 @@ def test_nothing_happens_before_the_limit() -> None:
     asyncio.run(run())
 
     assert session.said == []
+
+
+def test_the_sampler_marks_the_first_frame_it_sends_to_the_model() -> None:
+    sampler = live.ScreenSampler()
+    frame = rtc.VideoFrame(1, 1, rtc.VideoBufferType.RGBA, bytes(4))
+    listening = SimpleNamespace(user_state="listening")
+
+    assert not sampler.sent.is_set()
+    assert sampler(frame, listening)  # type: ignore[arg-type]
+    assert sampler.sent.is_set()
+    assert not sampler(frame, listening)  # type: ignore[arg-type]
+
+
+def test_the_greeting_waits_until_the_model_has_a_frame_of_the_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    replies: list[str] = []
+    session = SimpleNamespace(
+        generate_reply=lambda instructions: replies.append(instructions)
+    )
+    monkeypatch.setattr(SupportAgent, "session", property(lambda self: session))
+    monkeypatch.setattr(support, "FRAME_SETTLE_SECONDS", 0)
+
+    async def run() -> None:
+        sent = asyncio.Event()
+        agent = SupportAgent(
+            instructions="x",
+            knowledge=knowledge_over(AsyncQdrantClient(":memory:"), HASH_SETTINGS),
+            room=FakeRoom(),
+            api_url="http://api.test",
+            screen_sent=sent,
+        )
+        greeting = asyncio.create_task(agent.on_enter())
+        await asyncio.sleep(0.05)
+        assert replies == []
+        sent.set()
+        await greeting
+
+    asyncio.run(run())
+
+    [greeting] = replies
+    assert "shared screen" in greeting

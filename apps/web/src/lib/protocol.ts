@@ -7,6 +7,11 @@ export const AGENT_ERROR_TOPIC = "agent-error";
 export const ESCALATION_TOPIC = "escalation";
 export const COMPUTER_TOPIC = "computer";
 export const COMPUTER_DECISION_TOPIC = "computer-decision";
+// The agent sets this participant attribute. It waits for a shared screen
+// before it starts talking, then goes live.
+export const KB_PHASE_ATTRIBUTE = "kb.phase";
+export const KB_PHASE_WAITING_FOR_SCREEN = "waiting_for_screen";
+export const KB_PHASE_LIVE = "live";
 
 // point is a highlight. about-to-click comes from a proposal waiting for the
 // user. clicking means the agent is clicking there on the user's computer.
