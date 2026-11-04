@@ -34,6 +34,49 @@ class FakeRoom:
         self.sent.append((topic, json.loads(payload)))
 
 
+class ScreenRoom(FakeRoom):
+    """A room the session user joins, shares a screen in, or leaves.
+
+    phases records every kb.phase the agent sets, in order.
+    """
+
+    def __init__(self, user: str = "user:abc") -> None:
+        super().__init__()
+        self.remote_participants: dict[str, SimpleNamespace] = {}
+        self.handlers: dict[str, list[Callable[..., None]]] = {}
+        self.phases: list[str] = []
+        self.join(user)
+
+    def on(self, event: str, callback: Callable[..., None]) -> None:
+        self.handlers.setdefault(event, []).append(callback)
+
+    def off(self, event: str, callback: Callable[..., None]) -> None:
+        self.handlers[event].remove(callback)
+
+    def emit(self, event: str, *args: object) -> None:
+        for handler in list(self.handlers.get(event, [])):
+            handler(*args)
+
+    async def set_attributes(self, attributes: dict[str, str]) -> None:
+        self.phases.append(attributes["kb.phase"])
+
+    def join(self, identity: str) -> None:
+        joined = SimpleNamespace(identity=identity, track_publications={})
+        self.remote_participants[identity] = joined
+        self.emit("participant_connected", joined)
+
+    def publish_track(self, identity: str, source: rtc.TrackSource.ValueType) -> None:
+        participant = self.remote_participants[identity]
+        publication = SimpleNamespace(source=source)
+        participant.track_publications[f"TR_{len(participant.track_publications)}"] = (
+            publication
+        )
+        self.emit("track_published", publication, participant)
+
+    def leave(self, identity: str) -> None:
+        self.emit("participant_disconnected", self.remote_participants.pop(identity))
+
+
 def knowledge_over(
     client: AsyncQdrantClient, settings: RetrievalSettings, product: str = "demo"
 ) -> Knowledge:

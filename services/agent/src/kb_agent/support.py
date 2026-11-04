@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 
 import httpx
 from google.genai import Client
@@ -29,6 +30,11 @@ from kb_agent.protocol import (
 )
 from kb_agent.retrieve import retrieval_record, tool_text
 
+FIRST_FRAME_SECONDS = 5
+# ponytail: a fixed pause, measured on a local room (264 image tokens in 3 of 3
+# greetings, 0 without it). Wait on a model-side signal if Gemini Live adds one.
+FRAME_SETTLE_SECONDS = 1.0
+
 NO_COMPUTER = (
     "You cannot act on the user's computer right now: their Mac is not "
     "connected. Offer to guide them step by step with point_at instead. They "
@@ -58,6 +64,7 @@ class SupportAgent(Agent):
         api_url: str,
         user: str | None = None,
         agent_name: str = "Shawn",
+        screen_sent: asyncio.Event | None = None,
     ) -> None:
         self.knowledge = knowledge
         self.room = room
@@ -65,13 +72,24 @@ class SupportAgent(Agent):
         # The participant who started the session. Only they approve actions.
         self.user = user
         self.agent_name = agent_name
+        self.screen_sent = screen_sent
         # Passages the searches of the current user turn returned, by id.
         self.turn_passages: dict[str, Passage] = {}
         super().__init__(instructions=instructions)
 
     async def on_enter(self) -> None:
+        if self.screen_sent is not None:
+            # The greeting describes the screen, so a frame must reach the model
+            # first. Gemini Live does not order streamed frames against the
+            # greeting turn, so the frame also gets a moment to land.
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(self.screen_sent.wait(), FIRST_FRAME_SECONDS)
+            await asyncio.sleep(FRAME_SETTLE_SECONDS)
         self.session.generate_reply(
-            instructions="Greet the user in one sentence and offer to help."
+            instructions=(
+                "In one sentence, greet the user, say in a few words what you "
+                "see on their shared screen, and offer to help."
+            )
         )
 
     @function_tool()

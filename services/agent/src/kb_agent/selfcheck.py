@@ -31,7 +31,7 @@ from kb_agent.knowledge import Knowledge
 from kb_agent.latency import log_json
 from kb_agent.local_api import local_api
 from kb_agent.prompt import ProductPrompt, render_system_prompt
-from kb_agent.session import build_session
+from kb_agent.session import ScreenSampler, build_session
 from kb_agent.support import SupportAgent
 
 PRODUCT_ID = "selfcheck"
@@ -87,7 +87,7 @@ class PrintRoom:
 async def check(image: Path, question: str, docs: Path) -> int:
     client = AsyncQdrantClient(":memory:")
     await index_sources(client, PRODUCT_ID, read_directory(docs))
-    session = build_session(PRODUCT.voice)
+    session = build_session(PRODUCT.voice, ScreenSampler())
     session.input.video = SharedScreen(load_frame(image))
     agent = SupportAgent(
         instructions=render_system_prompt(PRODUCT),
