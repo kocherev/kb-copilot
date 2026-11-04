@@ -1,5 +1,10 @@
 import { errorDetail, type SessionGrant } from "@/lib/api/client";
-import type { Citations, CitedPassage } from "@/lib/protocol";
+import {
+  KB_PHASE_LIVE,
+  KB_PHASE_WAITING_FOR_SCREEN,
+  type Citations,
+  type CitedPassage,
+} from "@/lib/protocol";
 
 export type SessionLoad =
   | { status: "ready"; session: SessionGrant }
@@ -61,6 +66,54 @@ export function connectionLabel(state: string): string {
     default:
       return "Connecting";
   }
+}
+
+export type RoomPhase =
+  | "connecting"
+  | "joining"
+  | "share"
+  | "live"
+  | "share-stopped"
+  | "left"
+  | "reconnecting"
+  | "ended";
+
+// One phase for the whole page. agentPhase is the agent's kb.phase attribute;
+// an agent that never sets it counts as live once the screen is shared.
+export function roomPhase({
+  state,
+  agentPresent,
+  agentPhase,
+  sharing,
+  agentFailed,
+}: {
+  state: string;
+  agentPresent: boolean;
+  agentPhase: string | undefined;
+  sharing: boolean;
+  agentFailed: boolean;
+}): RoomPhase {
+  if (state === "disconnected") {
+    return "ended";
+  }
+  if (state === "reconnecting" || state === "signalReconnecting") {
+    return "reconnecting";
+  }
+  if (state !== "connected") {
+    return "connecting";
+  }
+  if (!agentPresent) {
+    // The agent sends agent-error and leaves when it gives up, for example
+    // when no screen was shared in time.
+    return agentFailed ? "left" : "joining";
+  }
+  if (agentPhase === KB_PHASE_WAITING_FOR_SCREEN) {
+    return "share";
+  }
+  if (!sharing) {
+    return agentPhase === KB_PHASE_LIVE ? "share-stopped" : "share";
+  }
+  return "live";
 }
 
 function normalized(text: string): string {
