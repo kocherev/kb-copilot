@@ -6,10 +6,10 @@ Start the stack with the LiveKit profile, then run:
 
 API_PORT and WEB_PORT pick the host ports, the same variables Compose reads.
 
-The last step joins the new room as the user and waits for the agent to speak or
-to publish an `agent-error` message. CI runs the agent with a made-up
-GOOGLE_API_KEY, so it expects the error. SMOKE_AGENT_TIMEOUT sets the wait in
-seconds, 120 by default. Set SMOKE_AGENT_WAIT=0 to skip the step.
+The last step joins the new room as the user, shares a blank screen, and waits
+for the agent to speak or to publish an `agent-error` message. CI runs the agent
+with a made-up GOOGLE_API_KEY, so it expects the error. SMOKE_AGENT_TIMEOUT sets
+the wait in seconds, 120 by default. Set SMOKE_AGENT_WAIT=0 to skip the step.
 """
 
 from __future__ import annotations
@@ -103,11 +103,25 @@ async def agent_reaction(url: str, token: str, timeout: float) -> str | None:
             settle("the agent spoke")
 
     await room.connect(url, token)
+    # The agent starts the model only once the user shares a screen.
+    screen = rtc.VideoSource(640, 360)
+    track = rtc.LocalVideoTrack.create_video_track("screen", screen)
+    options = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_SCREENSHARE)
+    await room.local_participant.publish_track(track, options)
+    frame = rtc.VideoFrame(640, 360, rtc.VideoBufferType.RGBA, bytes(640 * 360 * 4))
+
+    async def stream() -> None:
+        while True:
+            screen.capture_frame(frame)
+            await asyncio.sleep(0.2)
+
+    streaming = asyncio.create_task(stream())
     try:
         return await asyncio.wait_for(first, timeout)
     except TimeoutError:
         return None
     finally:
+        streaming.cancel()
         await room.disconnect()
 
 
