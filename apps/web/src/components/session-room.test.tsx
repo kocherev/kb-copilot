@@ -14,6 +14,7 @@ const live = vi.hoisted(() => ({
   state: "connected",
   assistant: "listening",
   agentPresent: true,
+  phase: undefined as string | undefined,
   handlers: {} as Record<string, (message: { payload: Uint8Array }) => void>,
   disconnect: vi.fn(),
   dimensions: undefined as { width: number; height: number } | undefined,
@@ -81,6 +82,7 @@ vi.mock("@livekit/components-react", () => ({
   useVoiceAssistant: () => ({
     state: live.assistant,
     agent: live.agentPresent ? {} : undefined,
+    agentAttributes: live.phase ? { "kb.phase": live.phase } : {},
   }),
   useTrackToggle: ({ source }: { source: string }) => ({
     enabled: live.enabled[source] ?? false,
@@ -127,6 +129,7 @@ afterEach(() => {
   live.state = "connected";
   live.assistant = "listening";
   live.agentPresent = true;
+  live.phase = undefined;
   live.handlers = {};
   live.dimensions = undefined;
   live.participants = [];
@@ -134,6 +137,8 @@ afterEach(() => {
   live.enabled = { microphone: true, screen_share: true };
   live.toggled = [];
   live.disconnect.mockReset();
+  document.querySelectorAll("iframe").forEach((frame) => frame.remove());
+  delete document.documentElement.dataset.theme;
 });
 
 function send(topic: string, body: unknown) {
@@ -176,7 +181,9 @@ test("the room joins with the token, mic and screen but no camera", () => {
   expect(screen.getByTestId("agent-audio")).toBeDefined();
   expect(screen.getByRole("button", { name: "Microphone" })).toBeDefined();
   expect(screen.getByRole("button", { name: "Screen share" })).toBeDefined();
-  expect(screen.getByText("Share your screen so Mina can see it.")).toBeDefined();
+  expect(screen.getByRole("status", { name: "Agent" }).textContent).toBe(
+    "Share your screen so Mina can see it",
+  );
 });
 
 test.each([
@@ -272,10 +279,11 @@ test("the glow runs only while connected, sharing, and the agent is in the room,
   const glow = () => screen.getByTestId("room").querySelector("[data-glow]");
   const cases = [
     { state: "connected", shared: true, agent: true, glow: "animated", says: "Mina is watching your screen" },
-    { state: "connecting", shared: true, agent: true, glow: "off", says: "" },
+    { state: "connecting", shared: true, agent: true, glow: "off", says: "Connecting" },
+    { state: "reconnecting", shared: true, agent: true, glow: "off", says: "" },
     { state: "disconnected", shared: true, agent: true, glow: "off", says: "" },
-    { state: "connected", shared: false, agent: true, glow: "off", says: "Mina is listening" },
-    { state: "connected", shared: true, agent: false, glow: "off", says: "Waiting for Mina to join" },
+    { state: "connected", shared: false, agent: true, glow: "off", says: "Share your screen so Mina can see it" },
+    { state: "connected", shared: true, agent: false, glow: "off", says: "Mina is joining" },
   ];
   for (const found of cases) {
     live.state = found.state;
@@ -507,6 +515,190 @@ test("while the room connects the stage says so and the controls stay", () => {
   live.state = "connecting";
   renderRoom();
 
-  expect(screen.getByText("Joining the room…")).toBeDefined();
+  expect(screen.getByText("Connecting…")).toBeDefined();
   expect(screen.getByRole("button", { name: "End session" })).toBeDefined();
+});
+
+test("while the agent waits for the screen the stage asks for it, even if a share is starting", () => {
+  live.phase = "waiting_for_screen";
+  live.dimensions = { width: 1680, height: 1050 };
+  renderRoom();
+
+  expect(screen.getByRole("status", { name: "Agent" }).textContent).toBe(
+    "Share your screen so Mina can see it",
+  );
+  const stage = screen.getByRole("region", { name: "Shared screen" });
+  expect(within(stage).getByText("Mina starts talking once your screen is shared.")).toBeDefined();
+  expect(within(stage).queryByTestId("shared-video")).toBeNull();
+  expect(stage.querySelector("[data-glow]")?.getAttribute("data-glow")).toBe("off");
+
+  fireEvent.click(within(stage).getByRole("button", { name: "Share your screen" }));
+
+  expect(live.toggled).toEqual([{ source: "screen_share", force: true }]);
+});
+
+test("once the agent is live the stage shows the shared screen", () => {
+  live.phase = "live";
+  live.dimensions = { width: 1680, height: 1050 };
+  renderRoom();
+
+  const stage = screen.getByRole("region", { name: "Shared screen" });
+  expect(within(stage).getByTestId("shared-video")).toBeDefined();
+  expect(within(stage).queryByRole("button", { name: "Share your screen" })).toBeNull();
+  expect(screen.getByRole("status", { name: "Agent" }).textContent).toBe(
+    "Mina is watching your screen",
+  );
+});
+
+test("a share that stops mid-call asks for the screen again", () => {
+  live.phase = "live";
+  renderRoom();
+
+  expect(screen.getByRole("status", { name: "Agent" }).textContent).toBe(
+    "Screen sharing stopped, so Mina can’t see your screen",
+  );
+  const stage = screen.getByRole("region", { name: "Shared screen" });
+  expect(
+    within(stage).getByText("Mina can’t see your screen until you share it again."),
+  ).toBeDefined();
+  fireEvent.click(within(stage).getByRole("button", { name: "Share your screen" }));
+  expect(live.toggled).toEqual([{ source: "screen_share", force: true }]);
+});
+
+test("an agent that gives up and leaves is not shown as joining", () => {
+  const onRestart = vi.fn();
+  renderRoom(onRestart);
+  send("agent-error", { message: "No screen was shared, so the session ended." });
+
+  cleanup();
+  live.agentPresent = false;
+  renderRoom(onRestart);
+  send("agent-error", { message: "No screen was shared, so the session ended." });
+
+  expect(screen.getByRole("status", { name: "Agent" }).textContent).toBe("Mina left the call");
+  expect(screen.getByRole("alert").textContent).toBe(
+    "No screen was shared, so the session ended.",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "New session" }));
+  expect(onRestart).toHaveBeenCalledOnce();
+});
+
+test("without Document Picture-in-Picture there is no keep-on-top button", () => {
+  renderRoom();
+
+  expect(screen.queryByRole("button", { name: "Keep Mina on top" })).toBeNull();
+});
+
+// A real jsdom window from an iframe stands in for the floating window.
+function stubPictureInPicture() {
+  const frame = document.createElement("iframe");
+  document.body.append(frame);
+  const floating = frame.contentWindow!;
+  const close = vi.spyOn(floating, "close");
+  const requested: { width: number; height: number }[] = [];
+  vi.stubGlobal("documentPictureInPicture", {
+    requestWindow: async (size: { width: number; height: number }) => {
+      requested.push(size);
+      return floating;
+    },
+  });
+  return { floating, close, requested };
+}
+
+test("keep on top opens a small window with the agent's state, pointer, mute and end", async () => {
+  const { floating, close, requested } = stubPictureInPicture();
+  document.documentElement.dataset.theme = "dark";
+  live.phase = "live";
+  live.dimensions = { width: 1680, height: 1050 };
+  renderRoom();
+
+  const button = screen.getByRole("button", { name: "Keep Mina on top" });
+  expect(button.getAttribute("aria-pressed")).toBe("false");
+  await act(async () => fireEvent.click(button));
+
+  expect(requested).toEqual([{ width: 320, height: 200 }]);
+  expect(button.getAttribute("aria-pressed")).toBe("true");
+  expect(floating.document.title).toBe("Mina");
+  expect(floating.document.documentElement.dataset.theme).toBe("dark");
+  const pip = within(floating.document.body);
+  expect(pip.getByRole("heading", { name: "Mina" })).toBeDefined();
+  expect(pip.getByRole("status", { name: "Agent" }).textContent).toBe(
+    "Mina is watching your screen",
+  );
+  expect(
+    pip.getByText("When Mina points at something on your screen, it shows here."),
+  ).toBeDefined();
+
+  send("computer", step);
+  expect(pip.getByRole("status", { name: "Pointer" }).textContent).toBe(
+    "Waiting for your OKClick Update card",
+  );
+  send("hud", { kind: "point", x: 0.9, y: 0.1, label: "Billing" });
+  expect(pip.getByRole("status", { name: "Pointer" }).textContent).toBe("Look atBilling");
+
+  const controls = pip.getByRole("group", { name: "Session controls" });
+  fireEvent.click(within(controls).getByRole("button", { name: "Microphone" }));
+  expect(live.toggled).toEqual([{ source: "microphone", force: undefined }]);
+  fireEvent.click(within(controls).getByRole("button", { name: "End session" }));
+  expect(live.disconnect).toHaveBeenCalledOnce();
+
+  document.documentElement.dataset.theme = "light";
+  await act(async () => {});
+  expect(floating.document.documentElement.dataset.theme).toBe("light");
+  expect(close).not.toHaveBeenCalled();
+  cleanup();
+  expect(close).toHaveBeenCalled();
+});
+
+test("the window opens right after the user shares the screen, and closes when the session ends", async () => {
+  const { floating, close } = stubPictureInPicture();
+  live.phase = "waiting_for_screen";
+  const view = render(
+    <SessionRoom
+      url="ws://localhost:7880"
+      token="signed-token"
+      room="kb-room-1"
+      apiUrl="http://localhost:8000"
+      agentName="Mina"
+      onRestart={() => {}}
+    />,
+  );
+
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share your screen" })));
+
+  expect(live.toggled).toEqual([{ source: "screen_share", force: true }]);
+  expect(
+    within(floating.document.body).getByRole("status", { name: "Agent" }).textContent,
+  ).toBe("Share your screen so Mina can see it");
+
+  live.state = "disconnected";
+  view.rerender(
+    <SessionRoom
+      url="ws://localhost:7880"
+      token="signed-token"
+      room="kb-room-1"
+      apiUrl="http://localhost:8000"
+      agentName="Mina"
+      onRestart={() => {}}
+    />,
+  );
+  expect(close).toHaveBeenCalled();
+});
+
+test("a window the browser refuses leaves the button to try again", async () => {
+  vi.stubGlobal("documentPictureInPicture", {
+    requestWindow: async () => {
+      throw new DOMException("No user activation", "NotAllowedError");
+    },
+  });
+  live.phase = "waiting_for_screen";
+  renderRoom();
+
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Share your screen" })));
+
+  expect(live.toggled).toEqual([{ source: "screen_share", force: true }]);
+  expect(screen.getByRole("button", { name: "Keep Mina on top" }).getAttribute("aria-pressed")).toBe(
+    "false",
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
 });
